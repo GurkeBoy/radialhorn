@@ -250,15 +250,15 @@ function dxfPolyline(pts, layer) {
   return s;
 }
 
-function dxfPoint(x, y, layer) {
-  return `0\nPOINT\n8\n${layer}\n10\n${x.toFixed(4)}\n20\n${y.toFixed(4)}\n30\n0.0\n`;
+function dxfPoint(x, y, layer, z = 0) {
+  return `0\nPOINT\n8\n${layer}\n10\n${x.toFixed(4)}\n20\n${y.toFixed(4)}\n30\n${z.toFixed(4)}\n`;
 }
 
 function buildDXF(sections) {
   let body = "";
   for (const sec of sections) {
     if (sec.type === "polyline") body += dxfPolyline(sec.pts, sec.layer);
-    else if (sec.type === "point") body += dxfPoint(sec.x, sec.y, sec.layer);
+    else if (sec.type === "point") body += dxfPoint(sec.x, sec.y, sec.layer, sec.z ?? 0);
   }
   return `0\nSECTION\n2\nENTITIES\n${body}0\nENDSEC\n0\nEOF\n`;
 }
@@ -468,6 +468,26 @@ function exportDXF(s, rt, hMouth, curve, hypexT, opts) {
     }
     sections.push({ type: "polyline", pts: flare.map(([z, h]) => [z, 0,  h]), layer: "Seitenprofil_Flare" });
     sections.push({ type: "polyline", pts: flare.map(([z, h]) => [z, 0, -h]), layer: "Seitenprofil_Flare" });
+  }
+  if (opts.uebergang && s.Lt > 0.5) {
+    // Draufsicht: Beginn Traktrix (Throat)
+    sections.push({ type: "point", x: 0,             y:  rt,        layer: "Uebergang" });
+    sections.push({ type: "point", x: 0,             y: -rt,        layer: "Uebergang" });
+    // Draufsicht: Traktrix → linearer Bereich
+    sections.push({ type: "point", x: s.zTrans,      y:  s.xTrans,  layer: "Uebergang" });
+    sections.push({ type: "point", x: s.zTrans,      y: -s.xTrans,  layer: "Uebergang" });
+    // Seitenprofil: Beginn Traktrix (Throat)
+    sections.push({ type: "point", x: 0,            y: 0, z:  rt, layer: "Uebergang" });
+    sections.push({ type: "point", x: 0,            y: 0, z: -rt, layer: "Uebergang" });
+    // Seitenprofil: Throat → vertikale Öffnung
+    sections.push({ type: "point", x: s.zInnerApex, y: 0, z:  rt, layer: "Uebergang" });
+    sections.push({ type: "point", x: s.zInnerApex, y: 0, z: -rt, layer: "Uebergang" });
+    // Draufsicht: Ende linearer Bereich (Mund)
+    sections.push({ type: "point", x: s.zMouth,     y:  s.xMouth, layer: "Uebergang" });
+    sections.push({ type: "point", x: s.zMouth,     y: -s.xMouth, layer: "Uebergang" });
+    // Seitenprofil: Ende linearer Bereich (Mund)
+    sections.push({ type: "point", x: s.zApex,      y: 0, z:  hMouth / 2, layer: "Uebergang" });
+    sections.push({ type: "point", x: s.zApex,      y: 0, z: -hMouth / 2, layer: "Uebergang" });
   }
   const dxf   = buildDXF(sections);
   const deg   = Math.round(ALPHA2 * 2 * 180 / Math.PI);
@@ -1106,6 +1126,7 @@ export default function App() {
   const [expDraufsicht,   setExpDraufsicht]   = useState(true);
   const [expFokus,        setExpFokus]        = useState(true);
   const [expSeitenprofil, setExpSeitenprofil] = useState(true);
+  const [expUebergang,    setExpUebergang]    = useState(true);
 
   const rt = throatDiam / 2;
 
@@ -1245,7 +1266,8 @@ export default function App() {
             <Toggle label="Draufsicht-Wände"  checked={expDraufsicht}   onChange={setExpDraufsicht} />
             <Toggle label="Fokuspunkt"         checked={expFokus}        onChange={setExpFokus} />
             <Toggle label="Seitenprofil"       checked={expSeitenprofil} onChange={setExpSeitenprofil} />
-            <button onClick={() => exportDXF(s, rt, hMouth, curve, hypexT, { draufsicht: expDraufsicht, fokus: expFokus, seitenprofil: expSeitenprofil })}
+            <Toggle label="Übergangspunkt"     checked={expUebergang}    onChange={setExpUebergang} />
+            <button onClick={() => exportDXF(s, rt, hMouth, curve, hypexT, { draufsicht: expDraufsicht, fokus: expFokus, seitenprofil: expSeitenprofil, uebergang: expUebergang })}
               style={{ width: "100%", marginTop: 8, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #a78bfa", background: "rgba(167,139,250,0.15)", color: "#a78bfa", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
               ↓ DXF exportieren
             </button>
