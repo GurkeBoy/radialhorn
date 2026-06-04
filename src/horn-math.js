@@ -43,11 +43,13 @@ function solveHorn(L, Lt, rt, dw, dh) {
 
   const zMouth = zTrans + Ls;
   const xMouth = xTrans + Ls * c;
-  const arcR = Math.sqrt((zMouth - zFocus) ** 2 + xMouth ** 2);
-  const zApex = zFocus + arcR;
-  const arcLen = arcR * 140 * Math.PI / 180;
+  const arcR    = Math.sqrt((zMouth - zFocus) ** 2 + xMouth ** 2);
+  const zApex   = zFocus + arcR;
+  const arcLen  = arcR * 2 * ALPHA2;
+  const rInner     = Math.sqrt((zTrans - zFocus) ** 2 + xTrans ** 2);
+  const zInnerApex = zFocus + rInner;
 
-  return { r0, tTh, Lt, Ls, xTrans, zTrans, xMouth, zMouth, zFocus, arcR, zApex, hatTipZ, arcLen };
+  return { r0, tTh, Lt, Ls, xTrans, zTrans, xMouth, zMouth, zFocus, arcR, zApex, hatTipZ, arcLen, rInner, zInnerApex };
 }
 
 function minL(Lt, rt, dw, dh) {
@@ -79,7 +81,7 @@ function maxLt(L, rt, dw, dh) {
 // xTrans + Ls*tan(α) <= dw/2 + zTrans + Ls + dh
 // Ls*(tan(α)-1) <= dw/2 + dh + zTrans - xTrans
 // Since tan(70°)≈2.747 > 1, this gives a max Ls → max L
-function maxLforRaumecke(Lt, rt, dw, dh) {
+function maxLforRaumecke(Lt, rt, dw, dh, extraBreite = 0) {
   let xTrans, zTrans;
   if (Lt > 0.5) {
     const r0 = solveR0(Lt, rt);
@@ -88,7 +90,7 @@ function maxLforRaumecke(Lt, rt, dw, dh) {
   } else { xTrans = rt; zTrans = 0; }
   // xTrans + Ls*tan(α) = dw/2 + zTrans + Ls + dh
   // Ls*(tan(α)-1) = dw/2 + dh + zTrans - xTrans
-  const LsMax = (dw / 2 + dh + zTrans - xTrans) / (Math.tan(ALPHA2) - 1);
+  const LsMax = (dw / 2 + dh + zTrans - xTrans - extraBreite) / (Math.tan(ALPHA2) - 1);
   if (LsMax <= 0) return null;
   let lo = minL(Lt, rt, dw, dh), hi = lo + 5000;
   for (let i = 0; i < 40; i++) {
