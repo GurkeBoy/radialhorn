@@ -504,16 +504,16 @@ const DOT = 2.5;
 const COLOR = {
   trak:     "#f9a8d4",
   horn:     "#86efac",
-  arc:      "#a78bfa",
+  arc:      "#d6cbb8",
   raum:     "#fdba74",
   dim:      "#5a5a78",
   dimL:     "#6868a0",
   trans:    "#fca5a5",
   driv:     "#888898",
-  text:     "#4a4a68",
-  axisH:    "#2a2a3a",
-  axisS:    "#2a2a38",
-  drivFill: "rgba(22,22,36,0.55)",
+  text:     "#5a5a5a",
+  axisH:    "#3a3a3a",
+  axisS:    "#3a3a3a",
+  drivFill: "rgba(26,26,26,0.55)",
   wand:     "#fcd34d",
 };
 
@@ -555,33 +555,33 @@ function Slider({ label, value, min, max, step, unit, onChange }) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-      <span style={{ minWidth: 128, fontSize: 11, color: "#8b8ba0", fontFamily: "'DM Mono', monospace" }}>{label}</span>
+      <span style={{ minWidth: 128, fontSize: 11, color: "#8a8a8a", fontFamily: "'DM Mono', monospace" }}>{label}</span>
       <input type="range" min={min} max={max} step={step} value={Math.min(Math.max(value, min), max)}
         onChange={e => { onChange(parseFloat(e.target.value)); setDraft(e.target.value); }}
-        style={{ flex: 1, minWidth: 0, accentColor: "#a78bfa" }} />
+        style={{ flex: 1, minWidth: 0, accentColor: "#d6cbb8" }} />
       <input type="number" min={min} max={max} step={step} value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === "Enter") commit(); }}
-        style={{ width: 62, padding: "2px 6px", background: "#1a1a24", border: "1px solid #2e2e3e", borderRadius: 4, color: "#e0f0ff", fontSize: 11, fontFamily: "'DM Mono', monospace", boxSizing: "border-box" }} />
-      <span style={{ minWidth: 24, fontSize: 10, color: "#5a5a78" }}>{unit}</span>
+        style={{ width: 62, padding: "2px 6px", background: "#1c1c1c", border: "1px solid #303030", borderRadius: 4, color: "#e4e4e4", fontSize: 11, fontFamily: "'DM Mono', monospace", boxSizing: "border-box" }} />
+      <span style={{ minWidth: 24, fontSize: 10, color: "#6e6e6e" }}>{unit}</span>
     </div>
   );
 }
 
-function Toggle({ label, checked, onChange, color = "#a78bfa" }) {
+function Toggle({ label, checked, onChange, color = "#d6cbb8" }) {
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 8 }}>
       <div onClick={() => onChange(!checked)} style={{
         width: 36, height: 20, borderRadius: 10, position: "relative", transition: "background 0.2s",
-        background: checked ? color : "#2e2e3e", flexShrink: 0,
+        background: checked ? color : "#303030", flexShrink: 0,
       }}>
         <div style={{
           position: "absolute", top: 2, left: checked ? 16 : 2, width: 14, height: 14,
           borderRadius: "50%", background: "#fff", transition: "left 0.2s",
         }} />
       </div>
-      <span style={{ fontSize: 11, color: checked ? color : "#5a5a78", fontFamily: "'DM Mono', monospace", userSelect: "none" }}>
+      <span style={{ fontSize: 11, color: checked ? color : "#6e6e6e", fontFamily: "'DM Mono', monospace", userSelect: "none" }}>
         {label}
       </span>
     </label>
@@ -594,9 +594,9 @@ function SegBtn({ options, value, onChange }) {
       {options.map(o => (
         <button key={o} onClick={() => onChange(o)} style={{
           flex: 1, padding: "4px 0", borderRadius: 4, fontSize: 10, cursor: "pointer",
-          border: value === o ? "1px solid #a78bfa" : "1px solid #2e2e3e",
-          background: value === o ? "rgba(167,139,250,0.15)" : "#1a1a24",
-          color: value === o ? "#a78bfa" : "#5a5a78",
+          border: value === o ? "1px solid #d6cbb8" : "1px solid #303030",
+          background: value === o ? "rgba(214,203,184,0.15)" : "#1c1c1c",
+          color: value === o ? "#d6cbb8" : "#6e6e6e",
           fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em",
         }}>{CURVE_LABELS[o]}</button>
       ))}
@@ -606,9 +606,9 @@ function SegBtn({ options, value, onChange }) {
 
 function Stat({ label, value }) {
   return (
-    <div style={{ background: "#18181f", border: "1px solid #2a2a38", borderRadius: 6, padding: "8px 10px" }}>
-      <div style={{ fontSize: 9, color: "#404058", marginBottom: 3, letterSpacing: "0.08em" }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>{value}</div>
+    <div style={{ background: "#1c1c1c", border: "1px solid #2e2e2e", borderRadius: 6, padding: "8px 10px" }}>
+      <div style={{ fontSize: 9, color: "#404040", marginBottom: 3, letterSpacing: "0.08em" }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#d6cbb8" }}>{value}</div>
     </div>
   );
 }
@@ -699,8 +699,8 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
           </marker>
         </defs>
 
-        <line x1={cx} y1={toY(hatTipZ - 6)} x2={cx} y2={toY(s.zApex) + 32} stroke="#2a2a3a" strokeWidth="0.6" strokeDasharray="5 4" />
-        <text x={cx} y={14} textAnchor="middle" fontSize="9" fill="#4a4a68" fontFamily="'DM Mono', monospace" letterSpacing="0.12em">DRAUFSICHT · HORIZONTALER SCHNITT</text>
+        <line x1={cx} y1={toY(hatTipZ - 6)} x2={cx} y2={toY(s.zApex) + 32} stroke="#3a3a3a" strokeWidth="0.6" strokeDasharray="5 4" />
+        <text x={cx} y={14} textAnchor="middle" fontSize="9" fill="#5a5a5a" fontFamily="'DM Mono', monospace" letterSpacing="0.12em">DRAUFSICHT · HORIZONTALER SCHNITT</text>
 
         {showRaumecke && <>
           <line x1={hatX} y1={hatY} x2={reRx} y2={reY} stroke={COLOR.raum} strokeWidth="1.8" strokeLinecap="butt" strokeDasharray={`${70*scale} ${9*scale} ${4*scale} ${9*scale}`} />
@@ -714,10 +714,10 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
         </>}
 
         <rect x={toX(-dw / 2)} y={toY(-dh)} width={dw * scale} height={dh * scale}
-          fill="rgba(22,22,36,0.6)" stroke="#363650" strokeWidth="1.3" rx="2" />
+          fill="rgba(26,26,26,0.6)" stroke="#363650" strokeWidth="1.3" rx="2" />
         <line x1={toX(-dw/2)} y1={toY(-dh)} x2={toX(dw/2)} y2={toY(0)} stroke="#303048" strokeWidth="0.5" opacity="0.5" />
         <line x1={toX(dw/2)} y1={toY(-dh)} x2={toX(-dw/2)} y2={toY(0)} stroke="#303048" strokeWidth="0.5" opacity="0.5" />
-        <text x={cx} y={toY(-dh / 2)} textAnchor="middle" dominantBaseline="central" fontSize="10" fill="#4a4a68" fontFamily="'DM Mono', monospace">Treiber</text>
+        <text x={cx} y={toY(-dh / 2)} textAnchor="middle" dominantBaseline="central" fontSize="10" fill="#5a5a5a" fontFamily="'DM Mono', monospace">Treiber</text>
 
         {trakPts.length > 1 && <path d={fillPts(trakPts)} fill="rgba(249,168,212,0.09)" />}
         {hornPts.length > 1 && <path d={fillHorn} fill="rgba(134,239,172,0.08)" />}
@@ -804,7 +804,7 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
         const items = [
           { col: "#f9a8d4", label: "Traktrix",      dash: false },
           { col: "#86efac", label: "Lin. Bereich",  dash: false },
-          { col: "#a78bfa", label: "Teilkreis",     dash: false },
+          { col: "#d6cbb8", label: "Teilkreis",     dash: false },
           { col: "#fca5a5", label: "Übergang",      dot: true   },
           { col: "#363650", label: "Treiber",       fill: true  },
           { col: "#fdba74", label: "Raumecke",      dash: true  },
@@ -889,7 +889,7 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
           </marker>
         </defs>
 
-        <text x={(ml + VW - ml) / 2} y={10} textAnchor="middle" fontSize="9" fill="#4a4a68" fontFamily="'DM Mono', monospace" letterSpacing="0.12em">SEITENRISS · VERTIKALER SCHNITT</text>
+        <text x={(ml + VW - ml) / 2} y={10} textAnchor="middle" fontSize="9" fill="#5a5a5a" fontFamily="'DM Mono', monospace" letterSpacing="0.12em">SEITENRISS · VERTIKALER SCHNITT</text>
 
         <line x1={toX(s.hatTipZ)} y1={toY(0)} x2={toX(s.zApex)} y2={toY(0)} stroke={COLOR.axisS} strokeWidth="0.6" strokeDasharray="5 4" />
 
@@ -1048,7 +1048,7 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
   const mkPath = ps => ps.map((p, i) => `${i===0?'M':'L'}${gx(p.z).toFixed(1)},${gy(p.B).toFixed(1)}`).join(' ');
 
   return (
-    <div style={{ background: "#16161f", borderRadius: 8, border: "1px solid #252535", marginBottom: 8, padding: "4px 0 0 0" }}>
+    <div style={{ background: "#1a1a1a", borderRadius: 8, border: "1px solid #292929", marginBottom: 8, padding: "4px 0 0 0" }}>
       <svg viewBox={`0 0 ${VW} ${VH}`} style={{ width: "100%", display: "block" }}>
         <text x={(ml+VW-mr)/2} y={10} {...S.label} textAnchor="middle" fontSize="8" fill={COLOR.text} letterSpacing="0.1em">QUERSCHNITT A(z) = B·H [mm²]</text>
         <line x1={ml} y1={mt} x2={ml} y2={VH-mb} stroke={COLOR.axisH} strokeWidth="0.7"/>
@@ -1059,11 +1059,11 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
           const b = bMax / 1.08 * f, y = gy(b);
           return <g key={f}>
             <line x1={ml-3} y1={y} x2={ml} y2={y} stroke={COLOR.axisH} strokeWidth="0.5"/>
-            <text x={ml-5} y={y} textAnchor="end" dominantBaseline="central" fontSize="7" fill="#404058" fontFamily="'DM Mono',monospace">{b.toFixed(0)}</text>
+            <text x={ml-5} y={y} textAnchor="end" dominantBaseline="central" fontSize="7" fill="#404040" fontFamily="'DM Mono',monospace">{b.toFixed(0)}</text>
           </g>;
         })}
         {[
-          { z: 0,      label: "0",                 col: "#404058"  },
+          { z: 0,      label: "0",                 col: "#404040"  },
           ...(s.Lt > 0.5 && zAchseTrans !== null ? [{ z: zAchseTrans, label: `Lt=${s.Lt.toFixed(0)}`, col: COLOR.trak }] : []),
           { z: zMouth, label: zMouth.toFixed(0),   col: COLOR.horn },
         ].map(t => <g key={t.z}>
@@ -1084,8 +1084,8 @@ function FullscreenPanel({ children }) {
   const btn = (
     <button onClick={() => setFull(f => !f)} style={{
       position: "absolute", top: 6, right: 6, zIndex: 10,
-      background: "rgba(20,20,29,0.85)", border: "1px solid #2e2e3e",
-      borderRadius: 4, color: "#5a5a78", cursor: "pointer",
+      background: "rgba(20,20,20,0.85)", border: "1px solid #303030",
+      borderRadius: 4, color: "#6e6e6e", cursor: "pointer",
       width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: 12, lineHeight: 1,
     }}>
@@ -1093,7 +1093,7 @@ function FullscreenPanel({ children }) {
     </button>
   );
   if (full) return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#0f0f17", display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#121212", display: "flex", flexDirection: "column" }}>
       <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
         {btn}{children}
       </div>
@@ -1155,40 +1155,40 @@ export default function App() {
   const s = solveHorn(LClamped, LtClamped, rt, dw, dh);
 
   return (
-    <div style={{ background: "#0f0f17", height: "100vh", overflow: "hidden", color: "#e2e2ec", fontFamily: "'DM Mono', monospace", display: "flex" }}>
+    <div style={{ background: "#121212", height: "100vh", overflow: "hidden", color: "#e4e4e4", fontFamily: "'DM Mono', monospace", display: "flex" }}>
 
       {/* Sidebar */}
-      <div style={{ width: 368, flexShrink: 0, borderRight: "1px solid #222232", overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: 368, flexShrink: 0, borderRight: "1px solid #262626", overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column" }}>
 
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.1em" }}>RADIALHORN</div>
-          <div style={{ fontSize: 9, color: "#3a3a58", letterSpacing: "0.2em", marginTop: 1 }}>KONFIGURATOR · {openingAngle}° · v4</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#d6cbb8", letterSpacing: "0.1em" }}>RADIALHORN</div>
+          <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.2em", marginTop: 1 }}>KONFIGURATOR · {openingAngle}° · v4</div>
         </div>
 
-        <div style={{ background: "#16161f", borderRadius: 8, padding: "12px 14px", border: "1px solid #252535", marginBottom: 8 }}>
+        <div style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: "1px solid #292929", marginBottom: 8 }}>
           <Toggle label="Raumecke" checked={showRaumecke} onChange={setShowRaumecke} />
-          {showRaumecke && <div style={{ fontSize: 9, color: "#3a3a58", paddingLeft: 46, marginTop: -6, marginBottom: 4 }}>Hornbreite auf Raumecken-Diagonale begrenzt</div>}
+          {showRaumecke && <div style={{ fontSize: 9, color: "#3a3a3a", paddingLeft: 46, marginTop: -6, marginBottom: 4 }}>Hornbreite auf Raumecken-Diagonale begrenzt</div>}
           <Toggle label="Wandstärke" checked={showWandstaerke} onChange={setShowWandstaerke} />
           {showWandstaerke && <Slider label="Wandstärke" value={wandstaerke} min={1} max={100} step={1} unit="mm" onChange={setWandstaerke} />}
         </div>
 
-        <div style={{ background: "#16161f", borderRadius: 8, padding: "12px 14px", border: "1px solid #252535", marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: "#3a3a58", letterSpacing: "0.15em", marginBottom: 8 }}>THROAT</div>
+        <div style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: "1px solid #292929", marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.15em", marginBottom: 8 }}>THROAT</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {THROAT_SIZES.map(t => (
               <button key={t.val} onClick={() => setThroatDiam(t.val)} style={{
                 padding: "4px 12px", borderRadius: 4, fontSize: 11, cursor: "pointer",
-                border: throatDiam === t.val ? "1px solid #a78bfa" : "1px solid #2e2e3e",
-                background: throatDiam === t.val ? "rgba(167,139,250,0.14)" : "#1a1a26",
-                color: throatDiam === t.val ? "#a78bfa" : "#5a5a78",
+                border: throatDiam === t.val ? "1px solid #d6cbb8" : "1px solid #303030",
+                background: throatDiam === t.val ? "rgba(214,203,184,0.14)" : "#1e1e1e",
+                color: throatDiam === t.val ? "#d6cbb8" : "#6e6e6e",
                 fontFamily: "'DM Mono', monospace",
               }}>{t.label}</button>
             ))}
           </div>
         </div>
 
-        <div style={{ background: "#16161f", borderRadius: 8, padding: "12px 14px", border: "1px solid #252535", marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: "#3a3a58", letterSpacing: "0.15em", marginBottom: 8 }}>HORNGEOMETRIE</div>
+        <div style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: "1px solid #292929", marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.15em", marginBottom: 8 }}>HORNGEOMETRIE</div>
           <Slider label="Öffnungswinkel" value={openingAngle} min={60} max={160} step={1} unit="°" onChange={setOpeningAngle} />
           <Slider label="Gesamtlänge L" value={LClamped} min={Lmin} max={Lmax} step={5} unit="mm" onChange={setL} />
           {atRaumeckeLimit && <Warn>⚠ Raumecken-Limit ({LMaxRaumecke.toFixed(0)} mm)</Warn>}
@@ -1197,16 +1197,16 @@ export default function App() {
           {atLtMin && <Warn>⚠ Lₜ-Minimum (Raumecke: {LtMin.toFixed(0)} mm)</Warn>}
         </div>
 
-        <div style={{ background: "#16161f", borderRadius: 8, padding: "12px 14px", border: "1px solid #252535", marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: "#3a3a58", letterSpacing: "0.15em", marginBottom: 8 }}>TREIBER</div>
+        <div style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: "1px solid #292929", marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.15em", marginBottom: 8 }}>TREIBER</div>
           <Slider label="Breite dw" value={dw} min={10} max={300} step={1} unit="mm" onChange={setDw} />
           <Slider label="Tiefe dh" value={dh} min={10} max={250} step={1} unit="mm" onChange={setDh} />
         </div>
 
-        <div style={{ background: "#16161f", borderRadius: 8, padding: "12px 14px", border: "1px solid #252535", marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: "#3a3a58", letterSpacing: "0.15em", marginBottom: 8 }}>VERTIKALES PROFIL</div>
+        <div style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: "1px solid #292929", marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.15em", marginBottom: 8 }}>VERTIKALES PROFIL</div>
           <Slider label="Mund-Höhe hₘ" value={hMouth} min={Math.ceil(rt * 2)} max={600} step={1} unit="mm" onChange={setHMouth} />
-          <div style={{ fontSize: 9, color: "#3a3a58", letterSpacing: "0.12em", marginBottom: 6, marginTop: 4 }}>Aufweitungskurve</div>
+          <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.12em", marginBottom: 6, marginTop: 4 }}>Aufweitungskurve</div>
           <SegBtn options={CURVES} value={curve} onChange={setCurve} />
           {curve === "hypex" && <Slider label="Hypex T" value={hypexT} min={0} max={2} step={0.05} unit="" onChange={setHypexT} />}
         </div>
@@ -1238,19 +1238,19 @@ export default function App() {
           const fcCut = c * m / (4 * Math.PI);
           const FreqStat = ({ label, value }) => (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: "#5a5a78", fontFamily: "'DM Mono', monospace" }}>{label}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#6868a0", fontFamily: "'DM Mono', monospace" }}>
+              <span style={{ fontSize: 10, color: "#6e6e6e", fontFamily: "'DM Mono', monospace" }}>{label}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#9a9a9a", fontFamily: "'DM Mono', monospace" }}>
                 {value >= 1000 ? (value / 1000).toFixed(2) + " k" : value.toFixed(0)} Hz
               </span>
             </div>
           );
           return (
-            <div style={{ background: "#16161f", borderRadius: 8, padding: "12px 14px", border: "1px solid #252535", marginBottom: 8 }}>
-              <div style={{ fontSize: 9, color: "#3a3a58", letterSpacing: "0.15em", marginBottom: 8 }}>FREQUENZEN (NÄHERUNG)</div>
+            <div style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: "1px solid #292929", marginBottom: 8 }}>
+              <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.15em", marginBottom: 8 }}>FREQUENZEN (NÄHERUNG)</div>
               <FreqStat label="fc_low  — Mund (λ=2πR)" value={fcLow}  />
               <FreqStat label="fc_cut  — Horn-Cutoff"   value={fcCut}  />
               <FreqStat label="fc_high — Throat (λ=2r)" value={fcHigh} />
-              <div style={{ fontSize: 8, color: "#2a2a3a", marginTop: 6, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 8, color: "#3a3a3a", marginTop: 6, lineHeight: 1.4 }}>
                 Bandbreite: {fcLow.toFixed(0)} – {fcHigh >= 1000 ? (fcHigh/1000).toFixed(1)+"k" : fcHigh.toFixed(0)} Hz
               </div>
             </div>
@@ -1260,19 +1260,19 @@ export default function App() {
         {s && <CrossSectionGraph s={s} rt={rt} hMouth={hMouth} curve={curve} hypexT={hypexT} />}
 
         {s && (
-          <div style={{ background: "#16161f", borderRadius: 8, padding: "12px 14px", border: "1px solid #252535", marginBottom: 8 }}>
-            <div style={{ fontSize: 9, color: "#3a3a58", letterSpacing: "0.15em", marginBottom: 8 }}>EXPORT</div>
-            <div style={{ fontSize: 9, color: "#3a3a58", marginBottom: 6 }}>DXF — Kurven (mm)</div>
+          <div style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: "1px solid #292929", marginBottom: 8 }}>
+            <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.15em", marginBottom: 8 }}>EXPORT</div>
+            <div style={{ fontSize: 9, color: "#3a3a3a", marginBottom: 6 }}>DXF — Kurven (mm)</div>
             <Toggle label="Draufsicht-Wände"  checked={expDraufsicht}   onChange={setExpDraufsicht} />
             <Toggle label="Fokuspunkt"         checked={expFokus}        onChange={setExpFokus} />
             <Toggle label="Seitenprofil"       checked={expSeitenprofil} onChange={setExpSeitenprofil} />
             <Toggle label="Übergangspunkt"     checked={expUebergang}    onChange={setExpUebergang} />
             <button onClick={() => exportDXF(s, rt, hMouth, curve, hypexT, { draufsicht: expDraufsicht, fokus: expFokus, seitenprofil: expSeitenprofil, uebergang: expUebergang })}
-              style={{ width: "100%", marginTop: 8, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #a78bfa", background: "rgba(167,139,250,0.15)", color: "#a78bfa", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
+              style={{ width: "100%", marginTop: 8, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #d6cbb8", background: "rgba(214,203,184,0.15)", color: "#d6cbb8", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
               ↓ DXF exportieren
             </button>
             <button onClick={() => exportPDF(s, rt, dw, dh, LClamped, hMouth, curve, hypexT, openingAngle, showRaumecke, showWandstaerke, wandstaerke)}
-              style={{ width: "100%", marginTop: 6, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #2e2e3e", background: "#1a1a26", color: "#5a5a78", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
+              style={{ width: "100%", marginTop: 6, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #303030", background: "#1e1e1e", color: "#6e6e6e", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
               ↓ PDF (Zeichnungen)
             </button>
           </div>
@@ -1281,12 +1281,12 @@ export default function App() {
 
       {/* Hauptbereich */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 10, gap: 8, overflow: "hidden", minWidth: 0 }}>
-        <div style={{ flex: 6, background: "#14141d", borderRadius: 8, border: "1px solid #222232", overflow: "hidden", minHeight: 0 }}>
+        <div style={{ flex: 6, background: "#161616", borderRadius: 8, border: "1px solid #262626", overflow: "hidden", minHeight: 0 }}>
           <FullscreenPanel>
             <HornSVG s={s} rt={rt} dw={dw} dh={dh} L={LClamped} showRaumecke={showRaumecke} showWandstaerke={showWandstaerke} wandstaerke={wandstaerke} openingAngle={openingAngle} />
           </FullscreenPanel>
         </div>
-        <div style={{ flex: 5, background: "#14141d", borderRadius: 8, border: "1px solid #222232", overflow: "hidden", minHeight: 0 }}>
+        <div style={{ flex: 5, background: "#161616", borderRadius: 8, border: "1px solid #262626", overflow: "hidden", minHeight: 0 }}>
           <FullscreenPanel>
             <SeitenrissSVG s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} curve={curve} hypexT={hypexT} />
           </FullscreenPanel>
