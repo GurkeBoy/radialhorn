@@ -216,6 +216,21 @@ function genDraufsichtWand(s) {
   return pts;
 }
 
+// Traktrix-Kurve und gerader Kegelabschnitt getrennt (für DXF-Export: unterschiedliche
+// Entity-Typen je nach tatsächlicher Geometrie, statt alles als eine facettierte Polylinie).
+function genDraufsichtWandSplit(s) {
+  const trak = [];
+  if (s.Lt > 0.5) {
+    for (let i = 0; i <= 80; i++) {
+      const t = s.tTh + (T_TRANS - s.tTh) * i / 80;
+      const z = s.r0 * (zN(s.tTh) - zN(t));
+      const x = s.r0 * xN(t);
+      trak.push([x, z]);
+    }
+  }
+  return { trak, coneStart: [s.xTrans, s.zTrans], coneEnd: [s.xMouth, s.zMouth] };
+}
+
 function genSeitenprofilThroat(s, rt) {
   if (s.Lt <= 0.5) return [];
   return [[0, rt], [s.zInnerApex, rt]];
@@ -237,17 +252,131 @@ function genSeitenprofil(s, rt, hMouth, curve, hypexT) {
   return [...genSeitenprofilThroat(s, rt), ...genSeitenprofilFlare(s, rt, hMouth, curve, hypexT)];
 }
 
-function dxfPolyline(pts, layer) {
-  const is3D = pts.some(p => p[2] !== undefined && p[2] !== 0);
-  const flag = is3D ? 8 : 0;
-  let s = `0\nPOLYLINE\n8\n${layer}\n66\n1\n70\n${flag}\n`;
-  for (const p of pts) {
-    const a = p[0], b = p[1], c = p[2] || 0;
-    const vflag = is3D ? 32 : 0;
-    s += `0\nVERTEX\n8\n${layer}\n10\n${a.toFixed(4)}\n20\n${b.toFixed(4)}\n30\n${c.toFixed(4)}\n70\n${vflag}\n`;
+// ──────────────────────────────────────────────────────────────────
+// DXF: kubische B-Spline-Interpolation (Piegl & Tiller, "The NURBS Book", Kap. 9.2.1)
+// Erzeugt eine echte analytische SPLINE-Entity (Kontrollpunkte + Knotenvektor) durch
+// die gegebenen Punkte, statt sie als facettierte Polylinie zu exportieren. Das ist
+// der Grund, warum aus DXF-Kurven erzeugte Solids in CAD-Systemen (z.B. NX) bislang
+// eckig/facettiert statt glatt wurden: POLYLINE/VERTEX ist immer stückweise linear.
+// ──────────────────────────────────────────────────────────────────
+
+function findSpan(n, p, u, U) {
+  if (u >= U[n + 1]) return n;
+  if (u <= U[p]) return p;
+  let lo = p, hi = n + 1, mid = Math.floor((lo + hi) / 2);
+  while (u < U[mid] || u >= U[mid + 1]) {
+    if (u < U[mid]) hi = mid; else lo = mid;
+    mid = Math.floor((lo + hi) / 2);
   }
-  s += `0\nSEQEND\n8\n${layer}\n`;
+  return mid;
+}
+
+function basisFuns(span, u, p, U) {
+  const N = [1];
+  const left = [0], right = [0];
+  for (let j = 1; j <= p; j++) {
+    left[j] = u - U[span + 1 - j];
+    right[j] = U[span + j] - u;
+    let saved = 0;
+    for (let r = 0; r < j; r++) {
+      const temp = N[r] / (right[r + 1] + left[j - r]);
+      N[r] = saved + right[r + 1] * temp;
+      saved = left[j - r] * temp;
+    }
+    N[j] = saved;
+  }
+  return N;
+}
+
+// Passt einen geklemmten kubischen B-Spline (Sehnenlängen-Parametrisierung, Averaging-
+// Knotenvektor) exakt durch alle Punkte. Löst dazu ein lineares Gleichungssystem
+// (Gauß-Elimination mit Partial Pivoting, gemeinsame Matrix für alle Dimensionen).
+function fitBSpline(ptsIn) {
+  const pts = [ptsIn[0]];
+  for (let i = 1; i < ptsIn.length; i++) {
+    const a = pts[pts.length - 1], b = ptsIn[i];
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1], (b[2] || 0) - (a[2] || 0));
+    if (d > 1e-6) pts.push(b);
+  }
+  const n = pts.length - 1;
+  const p = Math.min(3, n);
+  if (p < 1) return null;
+  const dim = pts[0].length;
+
+  const dist = [0];
+  let total = 0;
+  for (let k = 1; k <= n; k++) {
+    let d = 0;
+    for (let c = 0; c < dim; c++) d += (pts[k][c] - pts[k - 1][c]) ** 2;
+    total += Math.sqrt(d);
+    dist.push(total);
+  }
+  const t = dist.map(d => (total > 0 ? d / total : 0));
+  t[0] = 0; t[n] = 1;
+
+  const m = n + p + 1;
+  const U = new Array(m + 1);
+  for (let i = 0; i <= p; i++) U[i] = 0;
+  for (let i = 0; i <= p; i++) U[m - i] = 1;
+  for (let j = 1; j <= n - p; j++) {
+    let s = 0;
+    for (let i = j; i <= j + p - 1; i++) s += t[i];
+    U[j + p] = s / p;
+  }
+
+  const N = Array.from({ length: n + 1 }, () => new Array(n + 1).fill(0));
+  for (let k = 0; k <= n; k++) {
+    const span = findSpan(n, p, t[k], U);
+    const basis = basisFuns(span, t[k], p, U);
+    for (let i = 0; i <= p; i++) N[k][span - p + i] = basis[i];
+  }
+
+  const rhs = Array.from({ length: dim }, (_, c) => pts.map(pt => pt[c] || 0));
+  const A = N.map(row => row.slice());
+  for (let col = 0; col <= n; col++) {
+    let piv = col;
+    for (let r = col + 1; r <= n; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    if (piv !== col) {
+      [A[col], A[piv]] = [A[piv], A[col]];
+      for (let c = 0; c < dim; c++) [rhs[c][col], rhs[c][piv]] = [rhs[c][piv], rhs[c][col]];
+    }
+    const pv = A[col][col];
+    for (let r = col + 1; r <= n; r++) {
+      const f = A[r][col] / pv;
+      if (f === 0) continue;
+      for (let c = col; c <= n; c++) A[r][c] -= f * A[col][c];
+      for (let c = 0; c < dim; c++) rhs[c][r] -= f * rhs[c][col];
+    }
+  }
+  const P = Array.from({ length: n + 1 }, () => new Array(dim).fill(0));
+  for (let r = n; r >= 0; r--) {
+    for (let c = 0; c < dim; c++) {
+      let sum = rhs[c][r];
+      for (let cc = r + 1; cc <= n; cc++) sum -= A[r][cc] * P[cc][c];
+      P[r][c] = sum / A[r][r];
+    }
+  }
+  return { degree: p, knots: U, controlPoints: P, fitPoints: pts };
+}
+
+function dxfSpline(pts, layer) {
+  const fit = fitBSpline(pts);
+  if (!fit) return "";
+  const { degree, knots, controlPoints, fitPoints } = fit;
+  let s = `0\nSPLINE\n8\n${layer}\n100\nAcDbSpline\n210\n0\n220\n0\n230\n1\n`;
+  s += `70\n8\n71\n${degree}\n72\n${knots.length}\n73\n${controlPoints.length}\n74\n${fitPoints.length}\n`;
+  for (const k of knots) s += `40\n${k.toFixed(8)}\n`;
+  for (const cp of controlPoints) s += `10\n${cp[0].toFixed(4)}\n20\n${cp[1].toFixed(4)}\n30\n${(cp[2] || 0).toFixed(4)}\n`;
+  for (const fp of fitPoints) s += `11\n${fp[0].toFixed(4)}\n21\n${fp[1].toFixed(4)}\n31\n${(fp[2] || 0).toFixed(4)}\n`;
   return s;
+}
+
+function dxfLine(p1, p2, layer) {
+  return `0\nLINE\n8\n${layer}\n10\n${p1[0].toFixed(4)}\n20\n${p1[1].toFixed(4)}\n30\n${(p1[2] || 0).toFixed(4)}\n11\n${p2[0].toFixed(4)}\n21\n${p2[1].toFixed(4)}\n31\n${(p2[2] || 0).toFixed(4)}\n`;
+}
+
+function dxfArc(cx, cy, r, startDeg, endDeg, layer) {
+  return `0\nARC\n8\n${layer}\n100\nAcDbCircle\n10\n${cx.toFixed(4)}\n20\n${cy.toFixed(4)}\n30\n0\n40\n${r.toFixed(4)}\n100\nAcDbArc\n50\n${startDeg.toFixed(4)}\n51\n${endDeg.toFixed(4)}\n`;
 }
 
 function dxfPoint(x, y, layer, z = 0) {
@@ -257,8 +386,10 @@ function dxfPoint(x, y, layer, z = 0) {
 function buildDXF(sections) {
   let body = "";
   for (const sec of sections) {
-    if (sec.type === "polyline") body += dxfPolyline(sec.pts, sec.layer);
-    else if (sec.type === "point") body += dxfPoint(sec.x, sec.y, sec.layer, sec.z ?? 0);
+    if (sec.type === "point") body += dxfPoint(sec.x, sec.y, sec.layer, sec.z ?? 0);
+    else if (sec.type === "line") body += dxfLine(sec.p1, sec.p2, sec.layer);
+    else if (sec.type === "spline") body += dxfSpline(sec.pts, sec.layer);
+    else if (sec.type === "arc") body += dxfArc(sec.cx, sec.cy, sec.r, sec.start, sec.end, sec.layer);
   }
   return `0\nSECTION\n2\nENTITIES\n${body}0\nENDSEC\n0\nEOF\n`;
 }
@@ -444,17 +575,25 @@ function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRa
 function exportDXF(s, rt, hMouth, curve, hypexT, opts) {
   const sections = [];
   if (opts.draufsicht) {
-    const wall = genDraufsichtWand(s);
-    sections.push({ type: "polyline", pts: wall.map(([x, z]) => [z, x]),  layer: "Draufsicht_Wand" });
-    sections.push({ type: "polyline", pts: wall.map(([x, z]) => [z, -x]), layer: "Draufsicht_Wand" });
+    const { trak, coneStart, coneEnd } = genDraufsichtWandSplit(s);
+    for (const sign of [1, -1]) {
+      if (trak.length > 1) {
+        sections.push({ type: "spline", pts: trak.map(([x, z]) => [z, sign * x]), layer: "Draufsicht_Wand" });
+      }
+      sections.push({
+        type: "line",
+        p1: [coneStart[1], sign * coneStart[0]],
+        p2: [coneEnd[1],   sign * coneEnd[0]],
+        layer: "Draufsicht_Wand",
+      });
+    }
   }
   if (opts.mundbogen) {
-    const arc = [];
-    for (let i = 0; i <= 80; i++) {
-      const a = -ALPHA2 + 2 * ALPHA2 * i / 80;
-      arc.push([s.zFocus + s.arcR * Math.cos(a), s.arcR * Math.sin(a)]);
-    }
-    sections.push({ type: "polyline", pts: arc, layer: "Mundbogen" });
+    sections.push({
+      type: "arc", cx: s.zFocus, cy: 0, r: s.arcR,
+      start: -ALPHA2 * 180 / Math.PI, end: ALPHA2 * 180 / Math.PI,
+      layer: "Mundbogen",
+    });
   }
   if (opts.fokus) {
     sections.push({ type: "point", x: s.zFocus, y: 0, layer: "Fokus" });
@@ -463,11 +602,18 @@ function exportDXF(s, rt, hMouth, curve, hypexT, opts) {
     const throat = genSeitenprofilThroat(s, rt);
     const flare  = genSeitenprofilFlare(s, rt, hMouth, curve, hypexT);
     if (throat.length) {
-      sections.push({ type: "polyline", pts: throat.map(([z, h]) => [z, 0,  h]), layer: "Seitenprofil_Throat" });
-      sections.push({ type: "polyline", pts: throat.map(([z, h]) => [z, 0, -h]), layer: "Seitenprofil_Throat" });
+      for (const sign of [1, -1]) {
+        sections.push({ type: "line", p1: [throat[0][0], 0, sign * throat[0][1]], p2: [throat[1][0], 0, sign * throat[1][1]], layer: "Seitenprofil_Throat" });
+      }
     }
-    sections.push({ type: "polyline", pts: flare.map(([z, h]) => [z, 0,  h]), layer: "Seitenprofil_Flare" });
-    sections.push({ type: "polyline", pts: flare.map(([z, h]) => [z, 0, -h]), layer: "Seitenprofil_Flare" });
+    for (const sign of [1, -1]) {
+      if (curve === "linear") {
+        const a = flare[0], b = flare[flare.length - 1];
+        sections.push({ type: "line", p1: [a[0], 0, sign * a[1]], p2: [b[0], 0, sign * b[1]], layer: "Seitenprofil_Flare" });
+      } else {
+        sections.push({ type: "spline", pts: flare.map(([z, h]) => [z, 0, sign * h]), layer: "Seitenprofil_Flare" });
+      }
+    }
   }
   if (opts.uebergang && s.Lt > 0.5) {
     // Draufsicht: Beginn Traktrix (Throat)
@@ -984,58 +1130,54 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
   const VW = 310, VH = 200;
   const ml = 38, mr = 8, mt = 16, mb = 20;
 
-  const z_FV    = s.Lt > 0.5 ? -s.r0 * Math.tanh(s.tTh) : 0;
-  const Rv_min  = Math.sqrt(z_FV ** 2 + rt * rt);
-  const Rv_max  = Math.sqrt((s.zApex - z_FV) ** 2 + (hMouth / 2) ** 2);
-  const hWall   = zw => verticalHalfHeight(zw, s, rt, hMouth, curve, hypexT);
-
-  const findZwand = Rv => {
-    const f = zw => (zw - z_FV) ** 2 + hWall(zw) ** 2 - Rv * Rv;
-    let lo = 0, hi = s.zApex;
-    if (f(lo) > 0 || f(hi) < 0) return null;
-    for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; f(mid) < 0 ? (lo = mid) : (hi = mid); }
-    return (lo + hi) / 2;
-  };
-
-  const Rv_trans    = s.Lt > 0.5 ? Math.sqrt((s.r0 * (zN(s.tTh) - T_TRANS + 1) - z_FV) ** 2 + rt * rt) : 0;
-  const zAchse_trans = z_FV + Rv_trans;
-
-  const calcB = zw => {
+  // B(z) (Horizontal-Breite) wird an der Wand-Kontakt-Position der Wellenfront berechnet,
+  // aber der A(z)-Graph braucht die Achsen-Position dieser Wellenfront (wo H(z) über
+  // verticalHalfHeight ausgewertet wird). Im Kegelbereich ist das "zFocus + Abstand zum
+  // Fokus" (Fokus-Kegel-Strahl, konstanter Winkel ALPHA2). Auf der Traktrix gibt es keinen
+  // gemeinsamen Fokus – dort gilt die klassische Traktrix-Eigenschaft: die Tangente jedes
+  // Kurvenpunkts trifft die Achse in einem eigenen "virtuellen Fokus", und das
+  // Tangentensegment bis zum Kurvenpunkt hat konstant Länge r0. Achsen-Position also:
+  // Tangentenfuß + r0 (siehe horn-math.cross-validate.test.js, "Traktrix – definierende
+  // Eigenschaft"). Für z=0 (Treiber selbst) ist keine Wellenfront definiert; A(z) wird dort
+  // auf den Wert an der kleinsten definierten Achsen-Position gehalten (siehe unten).
+  const calcBZAxis = zw => {
     if (s.Lt > 0.5 && zw <= s.zTrans) {
       let lo = s.tTh, hi = T_TRANS;
       for (let i = 0; i < 60; i++) {
         const tm = (lo + hi) / 2;
         s.r0 * (zN(s.tTh) - zN(tm)) < zw ? (lo = tm) : (hi = tm);
       }
-      return 2 * s.r0 * Math.atan(1 / Math.sinh((lo + hi) / 2));
+      const t = (lo + hi) / 2;
+      const zAxis = s.r0 * (zN(s.tTh) - t + 1);
+      return { B: 2 * s.r0 * Math.atan(1 / Math.sinh(t)), zAxis };
     }
     const frac  = (zw - s.zTrans) / (s.Ls || 1);
     const xWall = s.xTrans + frac * s.Ls * Math.tan(ALPHA2);
-    return Math.sqrt((zw - s.zFocus) ** 2 + xWall ** 2) * 2 * ALPHA2;
+    const R = Math.sqrt((zw - s.zFocus) ** 2 + xWall ** 2);
+    return { B: R * 2 * ALPHA2, zAxis: s.zFocus + R };
   };
 
-  const z0  = z_FV + Rv_min;
   const pts = [];
-  let zAchseTrans = null;
+  const zAchseTrans = s.Lt > 0.5 ? s.zInnerApex : null;
 
   for (let i = 0; i <= 100; i++) {
-    const Rv      = Rv_min + (Rv_max - Rv_min) * i / 100;
-    const zAchse  = z_FV + Rv;
-    const zw      = findZwand(Rv);
-    if (zw === null) continue;
-    const h     = hWall(zw), dz2 = zw - z_FV;
-    const theta = dz2 > 0 ? 2 * Math.atan(h / dz2) : Math.PI;
-    const col   = zAchse <= zAchse_trans ? COLOR.trak : COLOR.horn;
-    if (zAchseTrans === null && col === COLOR.horn) zAchseTrans = zAchse - z0;
-    pts.push({ z: zAchse - z0, B: calcB(zw) * Rv * theta, col });
+    const zWall = s.zMouth * i / 100;
+    const { B, zAxis } = calcBZAxis(zWall);
+    const H = 2 * verticalHalfHeight(zAxis, s, rt, hMouth, curve, hypexT);
+    const col = zWall <= s.zTrans ? COLOR.trak : COLOR.horn;
+    pts.push({ z: zAxis, B: B * H, col });
   }
 
   if (pts.length < 2) return null;
-  pts[0].z = 0;
 
+  // Für z < pts[0].z (kleinste Position mit definierter Wellenfront) existiert keine
+  // Wellenfront-Geometrie – A(z) wird bis z=0 (Treiberebene) flach auf diesem Wert gehalten.
+  pts.unshift({ z: 0, B: pts[0].B, col: pts[0].col });
+
+  const zStart = pts[0].z;
   const zMouth = pts[pts.length - 1].z;
   const bMax   = pts.reduce((m, p) => p.B > m ? p.B : m, 0) * 1.08;
-  const gx     = z => ml + (z / zMouth) * (VW - ml - mr);
+  const gx     = z => ml + ((z - zStart) / (zMouth - zStart)) * (VW - ml - mr);
   const gy     = b => mt + (1 - b / bMax) * (VH - mt - mb);
 
   const segs = [];
@@ -1063,8 +1205,8 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
           </g>;
         })}
         {[
-          { z: 0,      label: "0",                 col: "#404040"  },
-          ...(s.Lt > 0.5 && zAchseTrans !== null ? [{ z: zAchseTrans, label: `Lt=${s.Lt.toFixed(0)}`, col: COLOR.trak }] : []),
+          { z: zStart, label: zStart.toFixed(0),   col: "#404040"  },
+          ...(s.Lt > 0.5 && zAchseTrans !== null ? [{ z: zAchseTrans, label: zAchseTrans.toFixed(0), col: COLOR.trak }] : []),
           { z: zMouth, label: zMouth.toFixed(0),   col: COLOR.horn },
         ].map(t => <g key={t.z}>
           <line x1={gx(t.z)} y1={VH-mb} x2={gx(t.z)} y2={VH-mb+3} stroke={COLOR.axisH} strokeWidth="0.5"/>
@@ -1124,6 +1266,7 @@ export default function App() {
   const [showWandstaerke, setShowWandstaerke] = useState(false);
   const [wandstaerke,     setWandstaerke]     = useState(20);
   const [expDraufsicht,   setExpDraufsicht]   = useState(true);
+  const [expMundbogen,    setExpMundbogen]    = useState(true);
   const [expFokus,        setExpFokus]        = useState(true);
   const [expSeitenprofil, setExpSeitenprofil] = useState(true);
   const [expUebergang,    setExpUebergang]    = useState(true);
@@ -1264,10 +1407,11 @@ export default function App() {
             <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.15em", marginBottom: 8 }}>EXPORT</div>
             <div style={{ fontSize: 9, color: "#3a3a3a", marginBottom: 6 }}>DXF — Kurven (mm)</div>
             <Toggle label="Draufsicht-Wände"  checked={expDraufsicht}   onChange={setExpDraufsicht} />
+            <Toggle label="Mundbogen"          checked={expMundbogen}    onChange={setExpMundbogen} />
             <Toggle label="Fokuspunkt"         checked={expFokus}        onChange={setExpFokus} />
             <Toggle label="Seitenprofil"       checked={expSeitenprofil} onChange={setExpSeitenprofil} />
             <Toggle label="Übergangspunkt"     checked={expUebergang}    onChange={setExpUebergang} />
-            <button onClick={() => exportDXF(s, rt, hMouth, curve, hypexT, { draufsicht: expDraufsicht, fokus: expFokus, seitenprofil: expSeitenprofil, uebergang: expUebergang })}
+            <button onClick={() => exportDXF(s, rt, hMouth, curve, hypexT, { draufsicht: expDraufsicht, mundbogen: expMundbogen, fokus: expFokus, seitenprofil: expSeitenprofil, uebergang: expUebergang })}
               style={{ width: "100%", marginTop: 8, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #d6cbb8", background: "rgba(214,203,184,0.15)", color: "#d6cbb8", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
               ↓ DXF exportieren
             </button>
