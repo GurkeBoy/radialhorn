@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "radialhorn",
+  "productName": "Radialhorn",
   "version": "0.1.0",
   "identifier": "com.pilch.radialhorn",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "radialhorn",
-        "width": 800,
-        "height": 600
+        "title": "Radialhorn-Konfigurator",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 640
       }
     ],
     "security": {
