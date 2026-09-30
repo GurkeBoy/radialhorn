@@ -19,17 +19,20 @@ Vor jedem Commit: `npm run lint` und `npm test` grün.
 src/
   main.jsx, App.jsx        — Einstieg; App: Zustand, abgeleitete Geometrie (useMemo), Layout
   horn-math.js             — gesamte Geometrie-Mathematik, rein funktional
+  horn-mesh.js             — 3D-Körper (Luftvolumen) als strukturierte Flächengitter
   theme.js                 — Farben (UI, COLOR), Schrift, SVG-Stile, Raumecken-Strichmuster
   utils.js                 — linspace, clamp, svgPath, niceTicks
   hooks.js                 — useSize, useZoomPan
   components/
     ui.jsx                 — Card, Slider, Toggle, SegmentedButtons, Stat, Warn, ZoomControls, FullscreenPanel, ArrowMarker
     Dim.jsx                — Bemaßungen Dim (waagerecht/senkrecht) und DimAligned (schräg)
-    Draufsicht.jsx, Seitenriss.jsx, Querschnitt.jsx — die drei Ansichten
+    Draufsicht.jsx, Seitenriss.jsx, Querschnitt.jsx — 2D-Ansichten und Diagramm
+    Ansicht3D.jsx          — 3D-Ansicht (three.js, OrbitControls, Zeichnen nur bei Bedarf)
   export/
     bspline.js             — kubische B-Spline-Interpolation für DXF-SPLINEs
     dxf.js                 — DXF-Writer (buildDXF) und Export
     pdf.js                 — PDF-Datenblatt (buildDatasheet) und Export
+    stl.js                 — STL-Export (binär) des Luftvolumens
     download.js            — Datei-Download
   *.test.js                — Vitest, neben dem getesteten Modul
 ```
@@ -52,6 +55,8 @@ Horizontale Kontur in drei Abschnitten:
 2. **Gerade Wand** (zTrans → zMouth): unter ALPHA2, radial zum Fokuspunkt
 3. **Mundbogen**: Kreisbogen mit Radius arcR um den Fokus zFocus
 
+**Treiber:** Zylinder mit Durchmesser dw und Länge dh, Achse = Hornachse z, Front bei z = 0 (in beiden Schnitten ein Rechteck dw × dh).
+
 **L** wird von der Hut-Spitze der Raumecke (`hatTipZ = −dh − dw/2`) bis zum Mundscheitel `zApex` gemessen.
 
 **Seitenriss-Profil** (`verticalHalfHeight`): waagerechter Throat (h = rt) bis zInnerApex, danach Aufweitung Linear/Exponential/Hypex bis hMouth/2. Der Hypex-Exponent wird gecacht (der Verrundungs-Solver wertet das Profil zehntausendfach aus).
@@ -59,6 +64,13 @@ Horizontale Kontur in drei Abschnitten:
 **Verrundung des Übergangs** (`computeFillet`): Kreis tangential an Throat und Aufweitung, Mittelpunkt (zc, rt + R) außerhalb der Wand, Tangentenpunkt T2 per Bisektion. Zu große Radien werden auf den größten machbaren begrenzt (`limited`). Wirkt auf Seitenriss, Querschnitt, PDF und DXF; Sektionsfarben und Maße bleiben an zInnerApex getrennt. Nur mit Traktrix-Eingang.
 
 **Querschnitt** (`crossSection`): A = B·H; B aus der Wellenfront (gerader Bereich: Kreisbogen um den Fokus; Traktrix: Tangentenfuß + r0), H aus dem Profil an derselben Achsenposition. Der Übergang Traktrix → gerade Wand ist eigener Stützpunkt.
+
+**3D-Körper** (`horn-mesh.js`, vereinbarte Konstruktion):
+- Traktrix-Sektion: senkrechte Wände entlang der Traktrix, Grundfläche wie in der Draufsicht bis zum inneren Teilkreis (Radius rInner um den Fokus).
+- Gerader Bereich: senkrechte Wände im Öffnungswinkel; Deckel und Boden = Rotation des Seitenprofils um die senkrechte Achse durch den Fokus.
+- Eine Höhenregel für den ganzen Körper: halbe Höhe = Profil(zFocus + Abstand zum Fokus). Im Prisma ergibt das rt; mit Verrundung steigt der Deckel im Ringband vor dem inneren Teilkreis an (Variante a – wie im Seitenriss).
+- Flächen als Gitter: Traktrix-Grundfläche als Coons-Fläche (Ränder Throat, Traktrix links/rechts, innerer Teilkreis), gerader Bereich als Polargitter; Nachbarflächen teilen die Randpunkte exakt → wasserdicht. Kappen an Throat und Mund schließen das Volumen (nur für die STL).
+- Die Wellenfront-Betrachtung für den Querschnitt im Traktrix-Bereich ist noch offen.
 
 **Kennwerte:** `mouthArea`, `verticalMouthAngle`, `frequencyEstimates` (Näherungen nach Olson/Beranek).
 
@@ -122,6 +134,8 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 
 **PDF** (`export/pdf.js`): HTML mit zwei maßstäblichen Zeichnungen (1:1, 1:2, 1:5, …) und Kennwerten in neuem Fenster → Druckdialog → Als PDF speichern. Die Hut-Spitze wird nicht gezeichnet; Längenmaße zeigen die gezeichnete Strecke, L steht in den Kennwerten. Die Kurven-Toggles steuern auch das PDF, zusätzlich „Bemaßungen“.
 
+**STL** (`export/stl.js`): Luftvolumen als geschlossener Körper (Innenform, ohne Wandstärke), binär, mm. Achsen X = Breite, Y = Hornachse, Z = Höhe; der Achsentausch ist eine Spiegelung, deshalb wird dabei die Umlaufrichtung getauscht (Normalen nach außen).
+
 **Kurvenauflösung:** Bildschirm/PDF fein (Traktrix 600 bzw. 500 Punkte, Aufweitung 500). Der DXF-Spline-Fit bekommt bewusst weniger Stützpunkte (Traktrix 80, Aufweitung 100) – der Fit ist O(n³), die Splines bleiben schlank.
 
 ## Tests
@@ -130,5 +144,6 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `horn-math.angles.test.js` – Geometrie bei 90°/120°/160°, Unabhängigkeit der Winkel-Instanzen
 - `horn-math.profile.test.js` – Seitenriss-Profil, Verrundung (Tangentialität, C¹-Stetigkeit, Radiusbegrenzung)
 - `horn-math.sampling.test.js` – Abtastung, Querschnitt, Kennwerte, Hypex-Cache
+- `horn-mesh.test.js` – 3D-Körper: wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format
 - `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung), PDF (Kennwerte, Maßstab, Layer)
 - `utils.test.js`

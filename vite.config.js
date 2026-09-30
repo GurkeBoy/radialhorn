@@ -9,6 +9,8 @@ export default defineConfig({
     environment: "node",
   },
   plugins: [react()],
+  // Desktop-App: das Bundle wird lokal geladen, three.js macht es bewusst > 500 kB
+  build: { chunkSizeWarningLimit: 1000 },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
