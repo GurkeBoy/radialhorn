@@ -43,6 +43,7 @@ Globale Geometrie-Variablen (werden per `openingAngle` gesetzt): `ALPHA2`, `T_TR
 - In den Ansichten: `scale = scale0 * k`, Offsets/`toX`/`toY` entsprechend transformiert
 - Nur die Geometrie skaliert; Bemaßungsabstände, Text, Punkte und Strichstärken sind Pixelwerte und bleiben konstant
 - Titelzeilen bleiben fest (nutzen Basis-Koordinaten, z.B. `cx0`)
+- Querschnittsgraph: Daten-Zoom mit `minZoom: 1` und `unitsPerPx` (SVG per viewBox skaliert). Achsen sitzen im Datenursprung und wandern beim Verschieben mit (am Plotrand festgehalten, wenn der Ursprung aus dem Bild läuft), Kurve per `clipPath` beschnitten; Übergang Traktrix → linear ist eigener Stützpunkt (Farbwechsel exakt bei zInnerApex); Achsenwerte = markante Werte (Start, Traktrix-Ende, Mund; 0/½/max) plus beim Zoomen runde Zwischenwerte (`niceTicks`). Zurück auf 100 % setzt auch die Verschiebung zurück.
 
 **DXF-Export**
 - Draufsicht: Wandpunkte `[x, z]` → `[z, x]` (DXF x=Tiefe, y=Breite)
