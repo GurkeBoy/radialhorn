@@ -11,8 +11,10 @@ import {
 import { Draufsicht } from "./components/Draufsicht.jsx";
 import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
+import { Ansicht3D } from "./components/Ansicht3D.jsx";
 import { exportDXF } from "./export/dxf.js";
 import { exportPDF } from "./export/pdf.js";
+import { exportSTL } from "./export/stl.js";
 
 const THROAT_SIZES = [
   { label: '1"',  diameter: 25.4 },
@@ -158,16 +160,22 @@ export default function App() {
             <Toggle label="Bemaßungen"       checked={exportLayers.bemassung}    onChange={setLayer("bemassung")} />
             <ExportButton primary onClick={() => exportDXF(design, exportLayers)}>↓ DXF exportieren</ExportButton>
             <ExportButton onClick={() => exportPDF(design, exportLayers)}>↓ PDF (Zeichnungen)</ExportButton>
+            <ExportButton onClick={() => exportSTL(design)}>↓ STL (3D, Luftvolumen)</ExportButton>
           </Card>
         </>}
       </div>
 
-      {/* Ansichten */}
+      {/* Ansichten: oben Draufsicht und 3D, unten Seitenriss über die volle Breite */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 10, gap: 8, overflow: "hidden", minWidth: 0 }}>
-        <ViewPanel flex={6}>
-          <Draufsicht s={s} rt={rt} dw={dw} dh={dh} L={LClamped}
-            showRaumecke={showRaumecke} showWandstaerke={showWandstaerke} wandstaerke={wandstaerke} />
-        </ViewPanel>
+        <div style={{ flex: 6, display: "flex", gap: 8, minHeight: 0 }}>
+          <ViewPanel flex={1}>
+            <Draufsicht s={s} rt={rt} dw={dw} dh={dh} L={LClamped}
+              showRaumecke={showRaumecke} showWandstaerke={showWandstaerke} wandstaerke={wandstaerke} />
+          </ViewPanel>
+          <ViewPanel flex={1}>
+            <Ansicht3D s={s} rt={rt} dw={dw} dh={dh} hMouth={hMouth} profile={profile} fillet={fillet} showRaumecke={showRaumecke} />
+          </ViewPanel>
+        </div>
         <ViewPanel flex={5}>
           <Seitenriss s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} profile={profile} fillet={fillet} />
         </ViewPanel>
@@ -178,7 +186,7 @@ export default function App() {
 
 function ViewPanel({ flex, children }) {
   return (
-    <div style={{ flex, background: UI.panel, borderRadius: 8, border: `1px solid ${UI.border}`, overflow: "hidden", minHeight: 0 }}>
+    <div style={{ flex, background: UI.panel, borderRadius: 8, border: `1px solid ${UI.border}`, overflow: "hidden", minHeight: 0, minWidth: 0 }}>
       <FullscreenPanel>{children}</FullscreenPanel>
     </div>
   );
