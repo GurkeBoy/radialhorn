@@ -9,9 +9,12 @@ React + Vite + Tauri App zur Berechnung und Visualisierung von Radialhörnern mi
 ```
 src/
   App.jsx        — UI, SVG-Komponenten, PDF/DXF-Export (alles in einer Datei)
-  horn-math.js   — Geometrie-Mathematik (zN, xN, solveR0, solveHorn, ...)
-  horn-math.test.js / horn-math.cross-validate.test.js — Vitest-Tests
+  horn-math.js   — Geometrie-Mathematik (zN, xN, solveR0, solveHorn, ..., verticalHalfHeight, computeFillet)
+  horn-math.test.js / horn-math.cross-validate.test.js — Vitest-Tests Draufsicht-Geometrie
+  horn-math.profile.test.js — Vitest-Tests Seitenriss-Profil und Verrundung
 ```
+
+**Achtung, doppelte Mathematik:** `App.jsx` importiert aus `horn-math.js` nur `verticalHalfHeight` und `computeFillet`. Alle übrigen Geometrie-Funktionen (`solveHorn`, `minL`, `maxLt`, …) existieren als **eigene Kopie in App.jsx** (mit einstellbarem Öffnungswinkel über `let ALPHA2`), während `horn-math.js` fest mit 140° rechnet. Die Tests für diese Funktionen prüfen also die Kopie in `horn-math.js`, nicht den App-Code. Änderungen an der Draufsicht-Mathematik in beiden Dateien nachziehen – oder die Duplikate zusammenführen.
 
 ## Mathematik
 
@@ -21,6 +24,9 @@ Die Traktrix-Kurve wird in drei Abschnitte unterteilt:
    - `zN(t) = t - tanh(t)`, `xN(t) = 1/cosh(t)`
 2. **Linearer Bereich** (zTrans → zMouth): gerade Flanken mit Winkel ALPHA2, radial zum Fokuspunkt
 3. **Teilkreis** (Mundbogen): Kreisbogen mit Radius arcR um den Fokuspunkt zFocus
+
+**Seitenriss-Profil** (`verticalHalfHeight`): waagerechter Throat (h = rt) bis zInnerApex, danach Aufweitung Linear/Exponential/Hypex bis hMouth/2.
+Optionale **Verrundung des Übergangs** (`computeFillet`, Toggle + Radius): Kreis tangential an Throat und Aufweitung, Mittelpunkt (zc, rt + R) außerhalb der Wand, Tangentenpunkt T2 per Bisektion. Zu große Radien werden auf den größten machbaren begrenzt (`limited`). Die Verrundung wird als `fillet`-Parameter an `verticalHalfHeight` durchgereicht und wirkt auf Seitenriss, Querschnitt A(z), PDF und DXF. Sektionsfarben und Maße bleiben an zInnerApex getrennt. Nur mit Traktrix-Eingang (Lt > 0.5).
 
 Globale Geometrie-Variablen (werden per `openingAngle` gesetzt): `ALPHA2`, `T_TRANS`, `PHI_TOTAL`
 
@@ -119,7 +125,7 @@ const COLOR = {
 
 ## Export
 
-**DXF** (`exportDXF`): Traktrix und Exponential/Hypex-Flare als echte SPLINE-Entities (kubische B-Spline-Interpolation, `fitBSpline`), Mundbogen als ARC, gerade Abschnitte als LINE, Konstruktionspunkte als POINT. Layer `Draufsicht_Wand`, `Mundbogen`, `Fokus`, `Seitenprofil_Throat`, `Seitenprofil_Flare`, `Uebergang`. Steuerbar über Toggles im UI.
+**DXF** (`exportDXF`): Traktrix und Exponential/Hypex-Flare als echte SPLINE-Entities (kubische B-Spline-Interpolation, `fitBSpline`), Mundbogen als ARC, gerade Abschnitte als LINE, Konstruktionspunkte als POINT. Layer `Draufsicht_Wand`, `Mundbogen`, `Fokus`, `Seitenprofil_Throat`, `Seitenprofil_Flare`, `Seitenprofil_Verrundung`, `Uebergang`. Bögen im Seitenprofil (Ebene y = 0) als ARC mit Extrusion (0,-1,0): OCS-x = Welt-X, OCS-y = Welt-Z; Throat-LINE endet an T1, Flare-SPLINE beginnt an T2. Steuerbar über Toggles im UI.
 
 **PDF** (`exportPDF`): Öffnet HTML mit zwei SVG-Zeichnungen (Draufsicht + Seitenprofil) in neuem Fenster → Strg+P → Als PDF speichern. Maßstab wird automatisch gewählt (1:1, 1:2, 1:5, 1:10, ...). Bemaßungen als Template-Literal-Funktionen `dimH`/`dimV`/`dimParallel` (kein React). Die Kurven-Toggles des Exports steuern auch das PDF; zusätzlich Toggle „Bemaßungen“. Maßbeschriftungen zeigen immer die tatsächlich überspannte Strecke (wie am Bildschirm).
 

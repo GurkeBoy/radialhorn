@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { verticalHalfHeight, computeFillet } from "./horn-math.js";
 
 // Hook: misst die Größe eines DOM-Elements via ResizeObserver
 function useSize(ref) {
@@ -228,50 +229,8 @@ function minLtForRaumecke(L, rt, dw, dh, extraBreite = 0) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// VERTIKALES PROFIL
+// VERTIKALES PROFIL: verticalHalfHeight, computeFillet → horn-math.js
 // ──────────────────────────────────────────────────────────────────
-
-function verticalHalfHeight(z, s, rt, hMouth, curve, hypexT) {
-  const h0 = rt;
-  const h1 = hMouth / 2;
-  const z0 = s.zInnerApex;
-  const z1 = s.zApex;
-
-  if (z <= z0) return h0;
-  if (z >= z1) return h1;
-
-  const u = (z - z0) / (z1 - z0);
-
-  if (curve === "linear") {
-    return h0 + (h1 - h0) * u;
-  }
-  if (curve === "exponential") {
-    if (h0 <= 0) return h1;
-    return h0 * Math.exp(Math.log(h1 / h0) * u);
-  }
-  if (curve === "hypex") {
-    const T = hypexT;
-    const ratio = h1 / h0;
-    if (ratio <= 0) return h0;
-    let m;
-    const fVal = mv => Math.cosh(mv) + T * Math.sinh(mv);
-    if (Math.abs(ratio - 1) < 1e-9) {
-      m = 0;
-    } else if (ratio > 1) {
-      let lo = 0, hi = Math.log(ratio * 2 + 2) + 1;
-      for (let i = 0; i < 80; i++) {
-        const mid = (lo + hi) / 2;
-        fVal(mid) < ratio ? (lo = mid) : (hi = mid);
-      }
-      m = (lo + hi) / 2;
-    } else {
-      return h0 + (h1 - h0) * u;
-    }
-    if (m < 1e-10) return h0 + (h1 - h0) * u;
-    return h0 * fVal(m * u);
-  }
-  return h0 + (h1 - h0) * u;
-}
 
 // ──────────────────────────────────────────────────────────────────
 // EXPORT: Punktgenerierung + DXF/PDF
@@ -313,14 +272,18 @@ function genDraufsichtWandSplit(s) {
   return { trak, coneStart: [s.xTrans, s.zTrans], coneEnd: [s.xMouth, s.zMouth] };
 }
 
+
+// Gleichmäßig verteilte Werte von a bis b (n Intervalle)
+const linspace = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a + (b - a) * i / n);
+
 function genSeitenprofilThroat(s, rt) {
   if (s.Lt <= 0.5) return [];
   return [[0, rt], [s.zInnerApex, rt]];
 }
 
-function genSeitenprofilFlare(s, rt, hMouth, curve, hypexT, n = 100) {
+function genSeitenprofilFlare(s, rt, hMouth, curve, hypexT, n = 100, zFrom = null) {
   const pts = [];
-  const zStart = s.Lt > 0.5 ? s.zInnerApex : 0;
+  const zStart = zFrom ?? (s.Lt > 0.5 ? s.zInnerApex : 0);
   for (let i = 0; i <= n; i++) {
     const z = zStart + (s.zApex - zStart) * i / n;
     const h = verticalHalfHeight(z, s, rt, hMouth, curve, hypexT);
@@ -329,8 +292,11 @@ function genSeitenprofilFlare(s, rt, hMouth, curve, hypexT, n = 100) {
   return pts;
 }
 
-function genSeitenprofil(s, rt, hMouth, curve, hypexT) {
-  return [...genSeitenprofilThroat(s, rt), ...genSeitenprofilFlare(s, rt, hMouth, curve, hypexT, 500)];
+function genSeitenprofil(s, rt, hMouth, curve, hypexT, fillet = null) {
+  if (!fillet) return [...genSeitenprofilThroat(s, rt), ...genSeitenprofilFlare(s, rt, hMouth, curve, hypexT, 500)];
+  // Mit Verrundung: Throat bis T1, dann Bogen und Aufweitung als ein Linienzug
+  return [[0, rt], ...linspace(fillet.zT1, s.zApex, 500)
+    .map(z => [z, verticalHalfHeight(z, s, rt, hMouth, curve, hypexT, fillet)])];
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -456,8 +422,12 @@ function dxfLine(p1, p2, layer) {
   return `0\nLINE\n8\n${layer}\n10\n${p1[0].toFixed(4)}\n20\n${p1[1].toFixed(4)}\n30\n${(p1[2] || 0).toFixed(4)}\n11\n${p2[0].toFixed(4)}\n21\n${p2[1].toFixed(4)}\n31\n${(p2[2] || 0).toFixed(4)}\n`;
 }
 
-function dxfArc(cx, cy, r, startDeg, endDeg, layer) {
-  return `0\nARC\n8\n${layer}\n100\nAcDbCircle\n10\n${cx.toFixed(4)}\n20\n${cy.toFixed(4)}\n30\n0\n40\n${r.toFixed(4)}\n100\nAcDbArc\n50\n${startDeg.toFixed(4)}\n51\n${endDeg.toFixed(4)}\n`;
+// normal: Extrusionsrichtung (OCS). Für Bögen im Seitenprofil (Ebene y = 0) wird
+// (0,-1,0) verwendet: nach dem Arbitrary-Axis-Algorithmus ist dann OCS-x = Welt-X
+// und OCS-y = Welt-Z, cx/cy/Winkel also direkt in (z, h) angebbar.
+function dxfArc(cx, cy, r, startDeg, endDeg, layer, normal = null) {
+  const ext = normal ? `210\n${normal[0]}\n220\n${normal[1]}\n230\n${normal[2]}\n` : "";
+  return `0\nARC\n8\n${layer}\n100\nAcDbCircle\n10\n${cx.toFixed(4)}\n20\n${cy.toFixed(4)}\n30\n0\n40\n${r.toFixed(4)}\n${ext}100\nAcDbArc\n50\n${startDeg.toFixed(4)}\n51\n${endDeg.toFixed(4)}\n`;
 }
 
 function dxfPoint(x, y, layer, z = 0) {
@@ -470,7 +440,7 @@ function buildDXF(sections) {
     if (sec.type === "point") body += dxfPoint(sec.x, sec.y, sec.layer, sec.z ?? 0);
     else if (sec.type === "line") body += dxfLine(sec.p1, sec.p2, sec.layer);
     else if (sec.type === "spline") body += dxfSpline(sec.pts, sec.layer);
-    else if (sec.type === "arc") body += dxfArc(sec.cx, sec.cy, sec.r, sec.start, sec.end, sec.layer);
+    else if (sec.type === "arc") body += dxfArc(sec.cx, sec.cy, sec.r, sec.start, sec.end, sec.layer, sec.normal);
   }
   return `0\nSECTION\n2\nENTITIES\n${body}0\nENDSEC\n0\nEOF\n`;
 }
@@ -499,7 +469,7 @@ function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRa
   const wallPts = genDraufsichtWand(s);
   const maxX = Math.max(...wallPts.map(p => p[0])) * 2;
   const maxZ = s.zApex;
-  const profPts = genSeitenprofil(s, rt, hMouth, curve, hypexT);
+  const profPts = genSeitenprofil(s, rt, hMouth, curve, hypexT, opts.fillet);
   const profMaxH = Math.max(...profPts.map(p => p[1])) * 2;
 
   const sheetMM = 170;
@@ -592,7 +562,7 @@ function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRa
 
   const aMouth = (s.arcR * 2 * ALPHA2 * hMouth / 1e6).toFixed(4);
   const dzv = Math.max(0.5, (s.zApex - (s.Lt > 0.5 ? s.zInnerApex : 0)) * 0.01);
-  const slope = (verticalHalfHeight(s.zApex, s, rt, hMouth, curve, hypexT) - verticalHalfHeight(s.zApex - dzv, s, rt, hMouth, curve, hypexT)) / dzv;
+  const slope = (verticalHalfHeight(s.zApex, s, rt, hMouth, curve, hypexT, opts.fillet) - verticalHalfHeight(s.zApex - dzv, s, rt, hMouth, curve, hypexT, opts.fillet)) / dzv;
   const vertAngle = (2 * Math.atan(slope) * 180 / Math.PI).toFixed(1);
   const curveLabels = { linear: "Linear", exponential: "Exponential", hypex: "Hypex" };
   const today = new Date().toLocaleDateString("de-DE");
@@ -608,6 +578,7 @@ function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRa
     ["Mundfläche A", aMouth + " m²"],
     ["Teilkreis-Radius", s.arcR.toFixed(1) + " mm"],
     ["Aufweitung", curveLabels[curve] + (curve === "hypex" ? ` (T=${hypexT})` : "")],
+    ["Verrundung Übergang", opts.fillet ? "R " + opts.fillet.R.toFixed(1) + " mm" : "–"],
     ["Raumecke", showRaumecke ? "ja" : "nein"],
     ["Wandstärke", showWandstaerke ? wandstaerke + " mm" : "–"],
   ];
@@ -709,8 +680,15 @@ function exportDXF(s, rt, hMouth, curve, hypexT, opts) {
     sections.push({ type: "point", x: s.zFocus, y: 0, layer: "Fokus" });
   }
   if (opts.seitenprofil) {
-    const throat = genSeitenprofilThroat(s, rt);
-    const flare  = genSeitenprofilFlare(s, rt, hMouth, curve, hypexT);
+    const fl     = opts.fillet;
+    // Mit Verrundung: Throat endet an T1, Aufweitung beginnt an T2, dazwischen ein ARC
+    const throat = fl ? [[0, rt], [fl.zT1, rt]] : genSeitenprofilThroat(s, rt);
+    const flare  = genSeitenprofilFlare(s, rt, hMouth, curve, hypexT, 100, fl ? fl.zT2 : null);
+    if (fl) {
+      const a2 = Math.atan2(fl.hT2 - fl.hc, fl.zT2 - fl.zc) * 180 / Math.PI;   // −90° … 0°
+      sections.push({ type: "arc", cx: fl.zc, cy:  fl.hc, r: fl.R, start: 270, end: 360 + a2, normal: [0, -1, 0], layer: "Seitenprofil_Verrundung" });
+      sections.push({ type: "arc", cx: fl.zc, cy: -fl.hc, r: fl.R, start: -a2, end: 90,       normal: [0, -1, 0], layer: "Seitenprofil_Verrundung" });
+    }
     if (throat.length) {
       for (const sign of [1, -1]) {
         sections.push({ type: "line", p1: [throat[0][0], 0, sign * throat[0][1]], p2: [throat[1][0], 0, sign * throat[1][1]], layer: "Seitenprofil_Throat" });
@@ -738,6 +716,14 @@ function exportDXF(s, rt, hMouth, curve, hypexT, opts) {
     // Seitenprofil: Throat → vertikale Öffnung
     sections.push({ type: "point", x: s.zInnerApex, y: 0, z:  rt, layer: "Uebergang" });
     sections.push({ type: "point", x: s.zInnerApex, y: 0, z: -rt, layer: "Uebergang" });
+    // Seitenprofil: Tangentenpunkte der Verrundung
+    if (opts.fillet) {
+      const fl = opts.fillet;
+      for (const sign of [1, -1]) {
+        sections.push({ type: "point", x: fl.zT1, y: 0, z: sign * rt,     layer: "Uebergang" });
+        sections.push({ type: "point", x: fl.zT2, y: 0, z: sign * fl.hT2, layer: "Uebergang" });
+      }
+    }
     // Draufsicht: Ende linearer Bereich (Mund)
     sections.push({ type: "point", x: s.zMouth,     y:  s.xMouth, layer: "Uebergang" });
     sections.push({ type: "point", x: s.zMouth,     y: -s.xMouth, layer: "Uebergang" });
@@ -1133,7 +1119,7 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
 // SEITENRISS SVG
 // ──────────────────────────────────────────────────────────────────
 
-function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
+function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT, fillet }) {
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
@@ -1166,17 +1152,17 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
 
   const ml = portrait ? (VW - contentH) / 2 : (VW - contentW) / 2;
 
-  const nPts = 120;
-  const profilePts = [];
+  const vh = z => verticalHalfHeight(z, s, rt, hMouth, curve, hypexT, fillet);
   const zProfileStart = s.Lt > 0.5 ? s.zInnerApex : 0;
-  for (let i = 0; i <= nPts; i++) {
-    const z = zProfileStart + (s.zApex - zProfileStart) * i / nPts;
-    const h = verticalHalfHeight(z, s, rt, hMouth, curve, hypexT);
-    profilePts.push([toX(z), toY(h), toX(z), toY(-h)]);
-  }
-
-  const upperPath = profilePts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[1]}`).join(" ");
-  const lowerPath = profilePts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[3]}`).join(" ");
+  // Sektionen bleiben farblich an zInnerApex getrennt; mit Verrundung liegt der Bogen
+  // zur Hälfte in der Throat- (rosa) und zur Hälfte in der Aufweitungssektion (grün)
+  const zThroat = fillet ? [0, ...linspace(fillet.zT1, s.zInnerApex, 30)] : [0, s.zInnerApex];
+  const zFlare  = fillet
+    ? [...linspace(s.zInnerApex, fillet.zT2, 30), ...linspace(fillet.zT2, s.zApex, 120).slice(1)]
+    : linspace(zProfileStart, s.zApex, 120);
+  const wallPath = (zs, sign) => zs.map((z, i) => `${i === 0 ? "M" : "L"}${toX(z)},${toY(sign * vh(z))}`).join(" ");
+  const upperPath = wallPath(zFlare, 1), lowerPath = wallPath(zFlare, -1);
+  const hTrans = vh(s.zInnerApex);
 
   const bxo        = toX(s.zApex) + 18;
   const dimThroatAx = toX(s.hatTipZ) - 18;
@@ -1217,10 +1203,23 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
         <circle cx={toX(0)} cy={toY(-throatH/2)} r={DOT} fill={COLOR.trak} />
 
         {s.Lt > 0.5 && <>
-          <line x1={toX(0)} y1={toY(throatH/2)} x2={toX(s.zInnerApex)} y2={toY(throatH/2)} stroke={COLOR.trak} strokeWidth="1.2" strokeLinecap="round" />
-          <line x1={toX(0)} y1={toY(-throatH/2)} x2={toX(s.zInnerApex)} y2={toY(-throatH/2)} stroke={COLOR.trak} strokeWidth="1.2" strokeLinecap="round" />
-          <circle cx={toX(s.zInnerApex)} cy={toY(throatH/2)} r={DOT} fill={COLOR.trans} />
-          <circle cx={toX(s.zInnerApex)} cy={toY(-throatH/2)} r={DOT} fill={COLOR.trans} />
+          {[1, -1].map(sign =>
+            <path key={sign} d={wallPath(zThroat, sign)} fill="none" stroke={COLOR.trak} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          )}
+          <circle cx={toX(s.zInnerApex)} cy={toY(hTrans)} r={DOT} fill={COLOR.trans} />
+          <circle cx={toX(s.zInnerApex)} cy={toY(-hTrans)} r={DOT} fill={COLOR.trans} />
+          {fillet && <>
+            {/* Tangentenpunkte der Verrundung + Radius-Angabe (oben, außerhalb der Wand) */}
+            {[1, -1].map(sign => <g key={sign}>
+              <circle cx={toX(fillet.zT1)} cy={toY(sign * rt)}         r={DOT * 0.7} fill={COLOR.trak} />
+              <circle cx={toX(fillet.zT2)} cy={toY(sign * fillet.hT2)} r={DOT * 0.7} fill={COLOR.horn} />
+            </g>)}
+            <line x1={toX(fillet.zc)} y1={toY(fillet.hc)} x2={toX(s.zInnerApex)} y2={toY(hTrans)}
+              {...S.dimRef} stroke={COLOR.trans} />
+            <text x={toX(fillet.zc)} y={toY(fillet.hc) - 6} {...S.label} textAnchor="middle" fill={COLOR.trans}>
+              R {fillet.R.toFixed(fillet.R % 1 ? 1 : 0)}
+            </text>
+          </>}
         </>}
 
         <path d={upperPath} {...S.hornWall} />
@@ -1244,10 +1243,10 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
           arrowPos={dimDrivTopAy} color={COLOR.driv} marker="url(#arrV)" label={`${dh} mm`} />
         {/* Oben 2. Lage: Kette Traktrix → Mund (axiale Längen) */}
         {s.Lt > 0.5 &&
-          <Dim p1={[toX(0), toY(throatH/2)]}     p2={[toX(s.zInnerApex), toY(throatH/2)]}
+          <Dim p1={[toX(0), toY(throatH/2)]}     p2={[toX(s.zInnerApex), toY(hTrans)]} orient="h"
             arrowPos={dimTrakAy} color={COLOR.trak} marker="url(#arrV)" label={`${s.zInnerApex.toFixed(0)} mm`} />
         }
-        <Dim p1={[toX(zProfileStart), toY(verticalHalfHeight(zProfileStart, s, rt, hMouth, curve, hypexT))]}
+        <Dim p1={[toX(zProfileStart), toY(vh(zProfileStart))]} orient="h"
           p2={[toX(s.zApex), toY(hMouth/2)]}
           arrowPos={dimTrakAy} color={COLOR.horn} marker="url(#arrV)" label={`${(s.zApex - zProfileStart).toFixed(0)} mm`} />
       </svg>
@@ -1339,7 +1338,7 @@ function niceTicks(lo, hi, count = 4) {
   return out;
 }
 
-function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
+function CrossSectionGraph({ s, rt, hMouth, curve, hypexT, fillet }) {
   const VW = 310, VH = 200;
   const ml = 38, mr = 8, mt = 26, mb = 20;
   const svgRef = useRef(null);
@@ -1386,7 +1385,7 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
 
   for (const zWall of zWalls) {
     const { B, zAxis } = calcBZAxis(zWall);
-    const H = 2 * verticalHalfHeight(zAxis, s, rt, hMouth, curve, hypexT);
+    const H = 2 * verticalHalfHeight(zAxis, s, rt, hMouth, curve, hypexT, fillet);
     const col = zWall <= s.zTrans ? COLOR.trak : COLOR.horn;
     pts.push({ z: zAxis, B: B * H, col });
   }
@@ -1526,6 +1525,8 @@ export default function App() {
   const [expSeitenprofil, setExpSeitenprofil] = useState(true);
   const [expUebergang,    setExpUebergang]    = useState(true);
   const [expBemassung,    setExpBemassung]    = useState(true);
+  const [filletOn,        setFilletOn]        = useState(false);
+  const [filletR,         setFilletR]         = useState(100);
 
   const rt = throatDiam / 2;
 
@@ -1552,6 +1553,7 @@ export default function App() {
   const atLtMin         = showRaumecke && LtMinRaumecke !== null && Lt <= LtMin + 0.5;
 
   const s = solveHorn(LClamped, LtClamped, rt, dw, dh);
+  const fillet = filletOn ? computeFillet(s, rt, hMouth, curve, hypexT, filletR) : null;
 
   return (
     <div style={{ background: "#121212", height: "100vh", overflow: "hidden", color: "#e4e4e4", fontFamily: "'DM Mono', monospace", display: "flex" }}>
@@ -1608,12 +1610,16 @@ export default function App() {
           <div style={{ fontSize: 9, color: "#3a3a3a", letterSpacing: "0.12em", marginBottom: 6, marginTop: 4 }}>Aufweitungskurve</div>
           <SegBtn options={CURVES} value={curve} onChange={setCurve} />
           {curve === "hypex" && <Slider label="Hypex T" value={hypexT} min={0} max={2} step={0.05} unit="" onChange={setHypexT} />}
+          <Toggle label="Verrundung Übergang" checked={filletOn} onChange={setFilletOn} />
+          {filletOn && <Slider label="Radius r" value={filletR} min={1} max={1000} step={1} unit="mm" onChange={setFilletR} />}
+          {filletOn && s && !(s.Lt > 0.5) && <Warn>Verrundung nur mit Traktrix-Eingang (Lₜ &gt; 0)</Warn>}
+          {fillet?.limited && <Warn>Radius zu groß – begrenzt auf {fillet.R.toFixed(1)} mm</Warn>}
         </div>
 
         {s && (() => {
           const zEnd = s.zApex;
           const dz = Math.max(0.5, (s.zApex - (s.Lt > 0.5 ? s.zInnerApex : 0)) * 0.01);
-          const slope = (verticalHalfHeight(zEnd, s, rt, hMouth, curve, hypexT) - verticalHalfHeight(zEnd - dz, s, rt, hMouth, curve, hypexT)) / dz;
+          const slope = (verticalHalfHeight(zEnd, s, rt, hMouth, curve, hypexT, fillet) - verticalHalfHeight(zEnd - dz, s, rt, hMouth, curve, hypexT, fillet)) / dz;
           const vertAngle = 2 * Math.atan(slope) * 180 / Math.PI;
           return (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
@@ -1656,7 +1662,7 @@ export default function App() {
           );
         })()}
 
-        {s && <CrossSectionGraph s={s} rt={rt} hMouth={hMouth} curve={curve} hypexT={hypexT} />}
+        {s && <CrossSectionGraph s={s} rt={rt} hMouth={hMouth} curve={curve} hypexT={hypexT} fillet={fillet} />}
 
         {s && (
           <div style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: "1px solid #292929", marginBottom: 8 }}>
@@ -1669,11 +1675,11 @@ export default function App() {
             <Toggle label="Übergangspunkt"     checked={expUebergang}    onChange={setExpUebergang} />
             <div style={{ fontSize: 9, color: "#3a3a3a", margin: "8px 0 6px" }}>PDF — zusätzlich zu Kurven oben</div>
             <Toggle label="Bemaßungen"         checked={expBemassung}    onChange={setExpBemassung} />
-            <button onClick={() => exportDXF(s, rt, hMouth, curve, hypexT, { draufsicht: expDraufsicht, mundbogen: expMundbogen, fokus: expFokus, seitenprofil: expSeitenprofil, uebergang: expUebergang })}
+            <button onClick={() => exportDXF(s, rt, hMouth, curve, hypexT, { draufsicht: expDraufsicht, mundbogen: expMundbogen, fokus: expFokus, seitenprofil: expSeitenprofil, uebergang: expUebergang, fillet })}
               style={{ width: "100%", marginTop: 8, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #d6cbb8", background: "rgba(214,203,184,0.15)", color: "#d6cbb8", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
               ↓ DXF exportieren
             </button>
-            <button onClick={() => exportPDF(s, rt, dw, dh, LClamped, hMouth, curve, hypexT, openingAngle, showRaumecke, showWandstaerke, wandstaerke, { draufsicht: expDraufsicht, mundbogen: expMundbogen, fokus: expFokus, seitenprofil: expSeitenprofil, bemassung: expBemassung })}
+            <button onClick={() => exportPDF(s, rt, dw, dh, LClamped, hMouth, curve, hypexT, openingAngle, showRaumecke, showWandstaerke, wandstaerke, { draufsicht: expDraufsicht, mundbogen: expMundbogen, fokus: expFokus, seitenprofil: expSeitenprofil, bemassung: expBemassung, fillet })}
               style={{ width: "100%", marginTop: 6, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #303030", background: "#1e1e1e", color: "#6e6e6e", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
               ↓ PDF (Zeichnungen)
             </button>
@@ -1690,7 +1696,7 @@ export default function App() {
         </div>
         <div style={{ flex: 5, background: "#161616", borderRadius: 8, border: "1px solid #262626", overflow: "hidden", minHeight: 0 }}>
           <FullscreenPanel>
-            <SeitenrissSVG s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} curve={curve} hypexT={hypexT} />
+            <SeitenrissSVG s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} curve={curve} hypexT={hypexT} fillet={fillet} />
           </FullscreenPanel>
         </div>
       </div>
