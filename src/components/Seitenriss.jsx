@@ -1,7 +1,7 @@
 // Seitenriss (vertikaler Schnitt): Throat, Aufweitung, optionale Verrundung, Treiber, Raumecke.
 import { useRef } from "react";
 import { hasTraktrix } from "../horn-math.js";
-import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
+import { COLOR, DOT, FONT, S, raumDash, raumDashCenter } from "../theme.js";
 import { linspace } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker } from "./ui.jsx";
@@ -69,7 +69,7 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet }) {
         {[halfMax, -halfMax].map(hEnd =>
           <line key={hEnd} x1={toX(s.hatTipZ)} y1={toY(0)} x2={toX(s.hatTipZ)} y2={toY(hEnd)}
             stroke={COLOR.raum} strokeWidth="1.2" strokeLinecap="butt"
-            strokeDasharray={raumDash(scale)} strokeDashoffset={35*scale} />
+            strokeDasharray={raumDash(scale)} strokeDashoffset={raumDashCenter(scale)} />
         )}
 
         <circle cx={toX(0)} cy={toY(rt)} r={DOT} fill={COLOR.trak} />

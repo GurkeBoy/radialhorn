@@ -59,5 +59,9 @@ export const S = {
   label:    { fontSize: "9", fontFamily: FONT },
 };
 
-/** Strichpunkt der Raumecke: ein Zyklus ≈ 92 mm, gibt beim Ablesen ein Maßgefühl. */
-export const raumDash = scale => `${70 * scale} ${9 * scale} ${4 * scale} ${9 * scale}`;
+/** Strichpunkt der Raumecke: Strich 75 + Lücke 10 + Punkt 5 + Lücke 10 = 100 mm pro Zyklus,
+ *  gibt beim Ablesen ein Maßgefühl (1 Strich + Punkt = 10 cm). */
+export const RAUM_DASH_MM = [75, 10, 5, 10];
+export const raumDash = scale => RAUM_DASH_MM.map(mm => mm * scale).join(" ");
+/** Versatz, der die Mitte eines Strichs auf den Linienanfang legt (Muster symmetrisch zur Achse). */
+export const raumDashCenter = scale => RAUM_DASH_MM[0] / 2 * scale;
