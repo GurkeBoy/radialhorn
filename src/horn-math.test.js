@@ -10,11 +10,6 @@ const DW = 120;
 const DH = 100;
 const L  = 500;
 const LT = 60;
-const EPS = 1e-6;  // Toleranz für Floating-Point-Vergleiche
-
-// ─── Hilfsfunktion: bequemer Näherungsvergleich ───────────────────
-const near = (a, b, tol = EPS) => Math.abs(a - b) < tol;
-
 // ──────────────────────────────────────────────────────────────────
 // 1. GEOMETRIE-KONSTANTEN
 // ──────────────────────────────────────────────────────────────────
