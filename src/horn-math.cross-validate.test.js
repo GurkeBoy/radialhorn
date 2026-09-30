@@ -11,14 +11,14 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  ALPHA2, T_TRANS, zN, xN,
-  solveHorn, minL, maxLt,
+  ALPHA2, T_TRANS, SPEED_OF_SOUND, zN, xN,
+  solveHorn, frequencyEstimates, mouthArea,
 } from "./horn-math.js";
 
 const RT  = 25.4;   // 1" Throat-Radius
 const DW  = 120;
 const DH  = 100;
-const C   = 343000; // Schallgeschwindigkeit [mm/s]
+const C   = SPEED_OF_SOUND;
 
 // ──────────────────────────────────────────────────────────────────
 // 1. DEFINIERENDE EIGENSCHAFT DER TRAKTRIX
@@ -183,64 +183,43 @@ describe("Bogenlänge und Winkelbeziehungen", () => {
 describe("Akustische Plausibilitätschecks", () => {
   const LT = 60;
   const s  = solveHorn(500, LT, RT, DW, DH);
-  const H_MOUTH = 200; // Annahme für Öffnungshöhe [mm]
+  const f  = frequencyEstimates(s, RT);
+
+  it("frequencyEstimates entspricht den Näherungsformeln", () => {
+    // fc_low: Mundumfang = Wellenlänge; fc_high: Throat-Durchmesser = halbe Wellenlänge;
+    // fc_cut: Flare-Konstante m = ln(B_Mund / B_Throat) / L mit B = horizontale Breite
+    const m = Math.log(s.arcLen / (2 * RT)) / (s.zApex - s.hatTipZ);
+    expect(f.fcLow).toBeCloseTo(C / (2 * Math.PI * s.arcR), 9);
+    expect(f.fcHigh).toBeCloseTo(C / (2 * RT), 9);
+    expect(f.fcCut).toBeCloseTo(C * m / (4 * Math.PI), 9);
+  });
 
   it("Mundbreite >> Throat-Durchmesser (Horn öffnet sich deutlich)", () => {
-    const ratio = (2 * s.xMouth) / (2 * RT);
-    expect(ratio).toBeGreaterThan(2);
+    expect((2 * s.xMouth) / (2 * RT)).toBeGreaterThan(2);
   });
 
-  it("fc_low (λ=2πR) liegt unter 300 Hz für typische Horn-Parameter", () => {
-    // Untere Grenzfrequenz aus dem Mundradius: fc = c / (2π·arcR)
-    // Typische Radialh–rner: 100–500 Hz
-    const fcLow = C / (2 * Math.PI * s.arcR);
-    expect(fcLow).toBeLessThan(300);
-    expect(fcLow).toBeGreaterThan(50);
+  it("fc_low liegt für typische Radialhörner zwischen 50 und 300 Hz", () => {
+    expect(f.fcLow).toBeLessThan(300);
+    expect(f.fcLow).toBeGreaterThan(50);
   });
 
-  it("fc_high (λ=2r) liegt im kHz-Bereich (Treiber-Grenze)", () => {
-    // Obere Grenze: λ = Throat-Durchmesser → fc = c / (2·rt)
-    const fcHigh = C / (2 * RT);
-    expect(fcHigh).toBeGreaterThan(1000);   // > 1 kHz
-    expect(fcHigh).toBeLessThan(20000);     // < 20 kHz (Hörgrenze)
+  it("fc_high liegt im kHz-Bereich (Treiber-Grenze)", () => {
+    expect(f.fcHigh).toBeGreaterThan(1000);
+    expect(f.fcHigh).toBeLessThan(20000);
   });
 
-  it("Horn-Cutoff (Flare-Konstante) liegt unterhalb fc_low", () => {
-    // Flare-Konstante m ≈ ln(Bmouth/Bthroat) / L
-    // wobei B = Breite (horizontaler Querschnitt)
-    const Bthroat = 2 * RT;
-    const Bmouth  = s.arcLen;   // = arcR · 2·ALPHA2
-    const hornLen = s.zApex - s.hatTipZ;
-    const m       = Math.log(Bmouth / Bthroat) / hornLen;
-    const fcCut   = C * m / (4 * Math.PI);
+  it("Horn-Cutoff ist positiv und liegt nicht deutlich über fc_low", () => {
+    expect(f.fcCut).toBeGreaterThan(0);
+    expect(f.fcCut).toBeLessThan(f.fcLow * 1.5);   // Näherung, daher großzügige Toleranz
+  });
 
-    const fcLow   = C / (2 * Math.PI * s.arcR);
-    // Cutoff-Frequenz soll unter der Mundfrequenz liegen (sinnvolles Horn)
-    expect(fcCut).toBeLessThan(fcLow * 1.5);  // Näherung, daher großzügige Toleranz
-    expect(fcCut).toBeGreaterThan(0);
+  it("mouthArea = Bogenlänge × Mundhöhe", () => {
+    expect(mouthArea(s, 200)).toBeCloseTo(s.arcLen * 200, 6);
   });
 
   it("Mundfläche (horiz.) / Throatfläche > 4 für guten Wirkungsgrad", () => {
-    // Faustregel: Flächenverhältnis >= 4 für sinnvollen Hornbetrieb
-    // Horizontale Mundfläche: Kreissektor = arcR² · ALPHA2
-    // Horizontale Throatfläche: Kreissektor = rThroat² · ALPHA2 (bei Lt>0: innerer Bogen)
-    const Smouth  = s.arcR * s.arcR * ALPHA2;
-    const Sthroat = s.rInner * s.rInner * ALPHA2;
-    expect(Smouth / Sthroat).toBeGreaterThan(4);
-  });
-
-  it("Flächenaufweitung ist stetig (keine Sprünge im Querschnitt)", () => {
-    // Querschnittsbreite B(z) wächst monoton von Throat zu Mund.
-    const nPoints = 20;
-    const widths  = [];
-    for (let i = 0; i <= nPoints; i++) {
-      const z = s.zTrans + (s.Ls * i) / nPoints;
-      const x = s.xTrans + (s.Ls * i) / nPoints * Math.tan(ALPHA2);
-      widths.push(x);
-    }
-    for (let i = 1; i < widths.length; i++) {
-      expect(widths[i]).toBeGreaterThan(widths[i - 1]);
-    }
+    // Faustregel: Flächenverhältnis ≥ 4. Horizontal als Kreissektoren um den Fokus.
+    expect((s.arcR ** 2 * ALPHA2) / (s.rInner ** 2 * ALPHA2)).toBeGreaterThan(4);
   });
 });
 

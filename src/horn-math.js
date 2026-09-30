@@ -1,208 +1,298 @@
-// ──────────────────────────────────────────────────────────────────
-// Geometrie-Mathematik des Radialhorns – einzige Quelle, von App.jsx importiert.
-//
-// Der Öffnungswinkel ist einstellbar: setOpeningAngle(deg) setzt ALPHA2 (halber
-// Winkel), T_TRANS und PHI_TOTAL. Diese werden als ES-Modul-"live bindings"
-// exportiert – Importeure sehen immer den aktuellen Wert. Standard: 140°.
-// ──────────────────────────────────────────────────────────────────
-
-// ── Geometrie-Konstanten (werden zur Laufzeit gesetzt) ─────────────────────
-let ALPHA2    = 70 * Math.PI / 180;
-let T_TRANS   = Math.asinh(1 / Math.tan(ALPHA2));
-let PHI_TOTAL = 2 * ALPHA2;
-
-function setOpeningAngle(deg) {
-  ALPHA2    = (deg / 2) * Math.PI / 180;
-  T_TRANS   = Math.asinh(1 / Math.tan(ALPHA2));
-  PHI_TOTAL = deg * Math.PI / 180;
-}
-
-const zN = t => t - Math.tanh(t);
-const xN = t => 1 / Math.cosh(t);
+/**
+ * Geometrie-Mathematik des Radialhorn-Konfigurators – einzige Quelle für alle
+ * Berechnungen, rein funktional (kein globaler Zustand).
+ *
+ * Konventionen
+ *   - Längen in mm, Winkel intern in Radiant (Öffnungswinkel-Parameter in Grad).
+ *   - Draufsicht: z = Hornachse (Treiberfront bei z = 0, Mund bei z = zApex),
+ *     x = halbe Breite.  Seitenriss: z wie oben, h = halbe Höhe.
+ *   - Horizontale Kontur: Traktrix-Eingang (0 … Lt) → gerade Wand unter dem halben
+ *     Öffnungswinkel, radial zum Fokuspunkt → Mundbogen (Teilkreis um den Fokus).
+ *   - Die Gesamtlänge L wird von der Hut-Spitze der Raumecke (hatTipZ = −dh − dw/2)
+ *     bis zum Scheitel des Mundbogens gemessen.
+ *
+ * Aufbau
+ *   createHornMath(openingAngle) liefert die winkelabhängigen Funktionen (Solver und
+ *   Grenzen). Das Ergebnis von solveHorn trägt seinen Winkel mit (alpha2, tTrans),
+ *   alle nachgelagerten Funktionen brauchen deshalb nur dieses Objekt.
+ */
 
 // ──────────────────────────────────────────────────────────────────
-// SOLVER
+// KONSTANTEN UND GRUNDFUNKTIONEN
 // ──────────────────────────────────────────────────────────────────
 
-function solveR0(Lt, rt) {
-  const f = r0 => {
-    if (r0 <= rt) return -Lt;
-    const tTh = Math.acosh(r0 / rt);
-    if (tTh <= T_TRANS) return -Lt;
-    return r0 * (zN(tTh) - zN(T_TRANS)) - Lt;
-  };
-  let hi = rt * 2;
-  for (let i = 0; i < 80 && f(hi) < 0; i++) hi *= 2;
-  if (f(hi) < 0) return null;
-  let lo = rt * (1 + 1e-9);
-  for (let i = 0; i < 90; i++) {
-    const m = (lo + hi) / 2;
-    f(m) < 0 ? (lo = m) : (hi = m);
+/** Unterhalb dieser Traktrix-Länge [mm] gilt der Eingang als abgeschaltet (konisches Horn). */
+export const LT_MIN = 0.5;
+
+/** Standard-Öffnungswinkel [°]. */
+export const DEFAULT_OPENING_ANGLE = 140;
+
+/** Schallgeschwindigkeit [mm/s]. */
+export const SPEED_OF_SOUND = 343000;
+
+/** Normierte Traktrix (r0 = 1), Parameter t: axiale Position und Radius. */
+export const zN = t => t - Math.tanh(t);
+export const xN = t => 1 / Math.cosh(t);
+
+/** Hat die Lösung einen Traktrix-Eingang? */
+export const hasTraktrix = s => s.Lt > LT_MIN;
+
+// ──────────────────────────────────────────────────────────────────
+// WINKELABHÄNGIGE GEOMETRIE (Draufsicht)
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * Erzeugt die an einen Öffnungswinkel gebundenen Geometrie-Funktionen.
+ * @param {number} openingAngle  horizontaler Öffnungswinkel [°]
+ */
+export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE) {
+  const ALPHA2    = (openingAngle / 2) * Math.PI / 180;   // halber Öffnungswinkel
+  const T_TRANS   = Math.asinh(1 / Math.tan(ALPHA2));    // Traktrix-Parameter, bei dem die Tangente ALPHA2 erreicht
+  const PHI_TOTAL = openingAngle * Math.PI / 180;
+  const TAN       = Math.tan(ALPHA2);
+
+  /** Traktrix-Radius r0, für den der Eingang von rt bis zum Übergang genau Lt lang ist (Bisektion). */
+  function solveR0(Lt, rt) {
+    const f = r0 => {
+      if (r0 <= rt) return -Lt;
+      const tTh = Math.acosh(r0 / rt);
+      if (tTh <= T_TRANS) return -Lt;
+      return r0 * (zN(tTh) - zN(T_TRANS)) - Lt;
+    };
+    let hi = rt * 2;
+    for (let i = 0; i < 80 && f(hi) < 0; i++) hi *= 2;
+    if (f(hi) < 0) return null;
+    let lo = rt * (1 + 1e-9);
+    for (let i = 0; i < 90; i++) {
+      const m = (lo + hi) / 2;
+      f(m) < 0 ? (lo = m) : (hi = m);
+    }
+    return (lo + hi) / 2;
   }
-  return (lo + hi) / 2;
-}
 
-function solveHorn(L, Lt, rt, dw, dh) {
-  let r0 = null, tTh = null, xTrans, zTrans;
-
-  if (Lt > 0.5) {
-    r0 = solveR0(Lt, rt);
+  /** Übergang Traktrix → gerade Wand; ohne Traktrix beginnt die Wand direkt am Throat. null = unlösbar. */
+  function transition(Lt, rt) {
+    if (!(Lt > LT_MIN)) return { r0: null, tTh: null, xTrans: rt, zTrans: 0 };
+    const r0 = solveR0(Lt, rt);
     if (!r0) return null;
-    tTh    = Math.acosh(r0 / rt);
-    xTrans = r0 * xN(T_TRANS);
-    zTrans = Lt;
-  } else {
-    xTrans = rt;
-    zTrans = 0;
+    return { r0, tTh: Math.acosh(r0 / rt), xTrans: r0 * xN(T_TRANS), zTrans: Lt };
   }
 
-  const zFocus  = zTrans - xTrans / Math.tan(ALPHA2);
-  const hatTipZ = -dh - dw / 2;
-  const Rtarget = L - dh - dw / 2 - zFocus;
-  if (Rtarget <= 0) return null;
+  /** Fokuspunkt (Schnitt der verlängerten Wand mit der Achse) und Abstand Übergang–Fokus. */
+  function focusOf({ xTrans, zTrans }) {
+    const zFocus = zTrans - xTrans / TAN;
+    return { zFocus, rInner: Math.sqrt((zTrans - zFocus) ** 2 + xTrans ** 2) };
+  }
 
-  const a = zTrans - zFocus, b = xTrans, c = Math.tan(ALPHA2);
-  const A = 1 + c * c, B = 2 * (a + b * c), C = a * a + b * b - Rtarget * Rtarget;
-  const disc = B * B - 4 * A * C;
-  if (disc < 0) return null;
-  const Ls = (-B + Math.sqrt(disc)) / (2 * A);
-  if (Ls < 0) return null;
+  /**
+   * Löst die Horngeometrie für Gesamtlänge L, Traktrix-Länge Lt, Throat-Radius rt und
+   * Treibermaße dw × dh. Gibt null zurück, wenn die Parameter geometrisch unmöglich sind.
+   */
+  function solveHorn(L, Lt, rt, dw, dh) {
+    const tr = transition(Lt, rt);
+    if (!tr) return null;
+    const { r0, tTh, xTrans, zTrans } = tr;
 
-  const zMouth = zTrans + Ls;
-  const xMouth = xTrans + Ls * c;
-  const arcR   = Math.sqrt((zMouth - zFocus) ** 2 + xMouth ** 2);
-  const zApex  = zFocus + arcR;
-  const arcLen = arcR * PHI_TOTAL;
+    const { zFocus, rInner } = focusOf(tr);
+    const hatTipZ = -dh - dw / 2;
+    const Rtarget = L - dh - dw / 2 - zFocus;
+    if (Rtarget <= 0) return null;
 
-  const rInner     = Math.sqrt((zTrans - zFocus) ** 2 + xTrans ** 2);
-  const zInnerApex = zFocus + rInner;
+    // Länge Ls der geraden Wand so, dass der Mundpunkt genau Rtarget vom Fokus entfernt liegt
+    const a = zTrans - zFocus, b = xTrans, c = TAN;
+    const A = 1 + c * c, B = 2 * (a + b * c), C = a * a + b * b - Rtarget * Rtarget;
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) return null;
+    const Ls = (-B + Math.sqrt(disc)) / (2 * A);
+    if (Ls < 0) return null;
+
+    const zMouth = zTrans + Ls;
+    const xMouth = xTrans + Ls * c;
+    const arcR   = Math.sqrt((zMouth - zFocus) ** 2 + xMouth ** 2);
+
+    return {
+      openingAngle, alpha2: ALPHA2, tTrans: T_TRANS,
+      r0, tTh, Lt, Ls,
+      xTrans, zTrans,
+      xMouth, zMouth,
+      zFocus, arcR, zApex: zFocus + arcR,
+      hatTipZ, arcLen: arcR * PHI_TOTAL,
+      rInner, zInnerApex: zFocus + rInner,
+    };
+  }
+
+  /** Kleinste Gesamtlänge, bei der der Mundbogen gerade hinter dem Übergang liegt (+10 mm Reserve). */
+  function minL(Lt, rt, dw, dh) {
+    const tr = transition(Lt, rt);
+    if (!tr) return dh + dw / 2 + 50;
+    const { zFocus, rInner } = focusOf(tr);
+    return Math.ceil(dh + dw / 2 + zFocus + rInner) + 10;
+  }
+
+  /** Größte Traktrix-Länge, für die solveHorn bei Gesamtlänge L noch lösbar ist. */
+  function maxLt(L, rt, dw, dh) {
+    if (!solveHorn(L, 0, rt, dw, dh)) return 0;
+    let lo = 0, hi = L;
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      solveHorn(L, mid, rt, dw, dh) ? (lo = mid) : (hi = mid);
+    }
+    return lo;
+  }
+
+  /**
+   * Größte Gesamtlänge, bei der die Mundkante (plus extraBreite, z.B. Wandstärke) noch
+   * innerhalb der 45°-Raumecke liegt, die an der Treiberecke (dw/2, −dh) beginnt.
+   * null, wenn die Wand die Raumecke nie erreicht (Öffnungswinkel ≤ 90°).
+   */
+  function maxLforRaumecke(Lt, rt, dw, dh, extraBreite = 0) {
+    const tr = transition(Lt, rt);
+    if (!tr) return null;
+    const { xTrans, zTrans } = tr;
+    // Mundkante auf der Raumecke: xTrans + Ls·tan = dw/2 + (zTrans + Ls) + dh − extraBreite
+    const LsMax = (dw / 2 + dh + zTrans - xTrans - extraBreite) / (TAN - 1);
+    if (LsMax <= 0) return null;
+    let lo = minL(Lt, rt, dw, dh), hi = lo + 5000;
+    for (let i = 0; i < 40; i++) {
+      const sv = solveHorn(hi, Lt, rt, dw, dh);
+      if (sv && sv.Ls >= LsMax) break;
+      hi *= 2;
+    }
+    for (let i = 0; i < 80; i++) {
+      const mid = (lo + hi) / 2;
+      const sv  = solveHorn(mid, Lt, rt, dw, dh);
+      sv && sv.Ls < LsMax ? (lo = mid) : (hi = mid);
+    }
+    return (lo + hi) / 2;
+  }
+
+  /** Kleinste Traktrix-Länge, mit der Gesamtlänge L noch in die Raumecke passt; null = gar nicht. */
+  function minLtForRaumecke(L, rt, dw, dh, extraBreite = 0) {
+    const fits = lt => {
+      const r = maxLforRaumecke(lt, rt, dw, dh, extraBreite);
+      return r !== null && r >= L;
+    };
+    if (fits(0)) return 0;
+    let lo = 0, hi = L;
+    if (!fits(hi)) return null;
+    for (let i = 0; i < 80; i++) {
+      const m = (lo + hi) / 2;
+      fits(m) ? (hi = m) : (lo = m);
+    }
+    return hi;
+  }
 
   return {
-    r0, tTh, Lt, Ls,
-    xTrans, zTrans,
-    xMouth, zMouth,
-    zFocus, arcR, zApex,
-    hatTipZ, arcLen,
-    rInner, zInnerApex,
-    Fv: zFocus,
+    openingAngle, ALPHA2, T_TRANS, PHI_TOTAL,
+    solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke,
   };
 }
 
-function minL(Lt, rt, dw, dh) {
-  let xTrans, zTrans;
-  if (Lt > 0.5) {
-    const r0 = solveR0(Lt, rt);
-    if (!r0) return dh + dw / 2 + 50;
-    xTrans = r0 * xN(T_TRANS); zTrans = Lt;
-  } else { xTrans = rt; zTrans = 0; }
-  const zFocus = zTrans - xTrans / Math.tan(ALPHA2);
-  const rInner = Math.sqrt((zTrans - zFocus) ** 2 + xTrans ** 2);
-  return Math.ceil(dh + dw / 2 + zFocus + rInner) + 10;
+/** Geometrie-Funktionen für den Standardwinkel (140°). */
+export const {
+  ALPHA2, T_TRANS, PHI_TOTAL,
+  solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke,
+} = createHornMath();
+
+// ──────────────────────────────────────────────────────────────────
+// ABTASTUNG DER DRAUFSICHT
+// ──────────────────────────────────────────────────────────────────
+
+/** n+1 Punkte [x, z] der Traktrix vom Throat bis zum Übergang; leer ohne Traktrix. */
+export function traktrixPoints(s, n) {
+  if (!hasTraktrix(s)) return [];
+  const z0 = zN(s.tTh);
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const t = s.tTh + (s.tTrans - s.tTh) * i / n;
+    return [s.r0 * xN(t), s.r0 * (z0 - zN(t))];
+  });
 }
 
-function maxLt(L, rt, dw, dh) {
-  if (!solveHorn(L, 0, rt, dw, dh)) return 0;
-  let lo = 0, hi = L;
-  for (let i = 0; i < 60; i++) {
-    const mid = (lo + hi) / 2;
-    solveHorn(L, mid, rt, dw, dh) ? (lo = mid) : (hi = mid);
-  }
-  return lo;
+/** n+1 Punkte [x, z] der geraden Wand vom Übergang bis zum Mund. */
+export function linearWallPoints(s, n) {
+  const tan = Math.tan(s.alpha2);
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const f = i / n;
+    return [s.xTrans + f * s.Ls * tan, s.zTrans + f * s.Ls];
+  });
 }
 
-function maxLforRaumecke(Lt, rt, dw, dh, extraBreite = 0) {
-  let xTrans, zTrans;
-  if (Lt > 0.5) {
-    const r0 = solveR0(Lt, rt);
-    if (!r0) return null;
-    xTrans = r0 * xN(T_TRANS); zTrans = Lt;
-  } else { xTrans = rt; zTrans = 0; }
-  const LsMax = (dw / 2 + dh + zTrans - xTrans - extraBreite) / (Math.tan(ALPHA2) - 1);
-  if (LsMax <= 0) return null;
-  let lo = minL(Lt, rt, dw, dh), hi = lo + 5000;
-  for (let i = 0; i < 40; i++) {
-    const sv = solveHorn(hi, Lt, rt, dw, dh);
-    if (sv && sv.Ls >= LsMax) break;
-    hi *= 2;
-  }
+// ──────────────────────────────────────────────────────────────────
+// VERTIKALES PROFIL (Seitenriss)
+// ──────────────────────────────────────────────────────────────────
+
+/** Aufweitungskurven des Seitenrisses. */
+export const CURVES = ["linear", "exponential", "hypex"];
+
+// Der Hypex-Exponent hängt nur von (h1/h0, T) ab, wird aber pro Profilpunkt benötigt –
+// der Solver für die Verrundung wertet das Profil zehntausendfach aus. Einfacher Cache
+// für die zuletzt benutzte Kombination.
+let hypexCache = { ratio: NaN, T: NaN, m: 0 };
+
+function hypexExponent(ratio, T) {
+  if (hypexCache.ratio === ratio && hypexCache.T === T) return hypexCache.m;
+  const fVal = mv => Math.cosh(mv) + T * Math.sinh(mv);
+  let lo = 0, hi = Math.log(ratio * 2 + 2) + 1;
   for (let i = 0; i < 80; i++) {
     const mid = (lo + hi) / 2;
-    const sv  = solveHorn(mid, Lt, rt, dw, dh);
-    sv && sv.Ls < LsMax ? (lo = mid) : (hi = mid);
+    fVal(mid) < ratio ? (lo = mid) : (hi = mid);
   }
-  return (lo + hi) / 2;
+  hypexCache = { ratio, T, m: (lo + hi) / 2 };
+  return hypexCache.m;
 }
 
-function minLtForRaumecke(L, rt, dw, dh, extraBreite = 0) {
-  const check = lt => { const r = maxLforRaumecke(lt, rt, dw, dh, extraBreite); return r !== null && r >= L; };
-  if (check(0)) return 0;
-  let lo = 0, hi = L;
-  if (!check(hi)) return null;
-  for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; check(m) ? (hi = m) : (lo = m); }
-  return hi;
-}
-
-// ──────────────────────────────────────────────────────────────────
-// VERTIKALES PROFIL (Seitenriss) – von App.jsx importiert
-// ──────────────────────────────────────────────────────────────────
-
-// fillet (optional, aus computeFillet): Verrundung des Übergangs Throat → Aufweitung.
-// Zwischen den Tangentenpunkten zT1..zT2 liegt die Wand auf dem Verrundungsbogen.
-function verticalHalfHeight(z, s, rt, hMouth, curve, hypexT, fillet = null) {
+/**
+ * Halbe Höhe des Horns im Seitenriss an der Stelle z: waagerechter Throat (h = rt) bis
+ * zInnerApex, danach Aufweitung bis hMouth/2 am Mundscheitel zApex.
+ * Mit fillet (aus computeFillet) liegt die Wand zwischen den Tangentenpunkten auf dem
+ * Verrundungsbogen.
+ */
+export function verticalHalfHeight(z, s, rt, hMouth, curve, hypexT, fillet = null) {
   if (fillet && z > fillet.zT1 && z < fillet.zT2) {
     return fillet.hc - Math.sqrt(Math.max(0, fillet.R ** 2 - (z - fillet.zc) ** 2));
   }
-  const h0 = rt;
-  const h1 = hMouth / 2;
-  const z0 = s.zInnerApex;
-  const z1 = s.zApex;
-
+  const h0 = rt, h1 = hMouth / 2;
+  const z0 = s.zInnerApex, z1 = s.zApex;
   if (z <= z0) return h0;
   if (z >= z1) return h1;
 
   const u = (z - z0) / (z1 - z0);
+  const linear = h0 + (h1 - h0) * u;
 
-  if (curve === "linear") {
-    return h0 + (h1 - h0) * u;
-  }
   if (curve === "exponential") {
-    if (h0 <= 0) return h1;
-    return h0 * Math.exp(Math.log(h1 / h0) * u);
+    return h0 <= 0 ? h1 : h0 * Math.exp(Math.log(h1 / h0) * u);
   }
   if (curve === "hypex") {
-    const T = hypexT;
+    // h = h0·(cosh(m·u) + T·sinh(m·u)), m so gewählt, dass h(1) = h1
     const ratio = h1 / h0;
     if (ratio <= 0) return h0;
-    let m;
-    const fVal = mv => Math.cosh(mv) + T * Math.sinh(mv);
-    if (Math.abs(ratio - 1) < 1e-9) {
-      m = 0;
-    } else if (ratio > 1) {
-      let lo = 0, hi = Math.log(ratio * 2 + 2) + 1;
-      for (let i = 0; i < 80; i++) {
-        const mid = (lo + hi) / 2;
-        fVal(mid) < ratio ? (lo = mid) : (hi = mid);
-      }
-      m = (lo + hi) / 2;
-    } else {
-      return h0 + (h1 - h0) * u;
-    }
-    if (m < 1e-10) return h0 + (h1 - h0) * u;
-    return h0 * fVal(m * u);
+    if (Math.abs(ratio - 1) < 1e-9 || ratio < 1) return linear;
+    const m = hypexExponent(ratio, hypexT);
+    if (m < 1e-10) return linear;
+    return h0 * (Math.cosh(m * u) + hypexT * Math.sinh(m * u));
   }
-  return h0 + (h1 - h0) * u;
+  return linear;
 }
 
-// Verrundung des Knicks zwischen waagerechtem Throat (h = rt) und Aufweitungskurve f(z)
-// im Seitenriss: Kreis mit Radius R, tangential an beide. Mittelpunkt (zc, rt + R) liegt
-// außerhalb der Wand; Tangentenpunkt T2 auf f ist die Stelle, an der der Mittelpunkt
-// genau R entlang der Normalen liegt: f(z2) + R/√(1+f'²) = rt + R  (Bisektion).
-// Ist R zu groß (T1 vor dem Throat oder T2 hinter dem Mund), wird der größte machbare
-// Radius genommen und limited = true gesetzt.
-function computeFillet(s, rt, hMouth, curve, hypexT, R) {
-  if (!s || !(s.Lt > 0.5) || !(R > 0)) return null;
+/** Profilfunktion z ↦ halbe Höhe für einen festen Parametersatz. */
+export function makeProfile(s, rt, hMouth, curve, hypexT, fillet = null) {
+  return z => verticalHalfHeight(z, s, rt, hMouth, curve, hypexT, fillet);
+}
+
+/**
+ * Verrundung des Knicks zwischen waagerechtem Throat (h = rt) und Aufweitungskurve f(z):
+ * Kreis mit Radius R, tangential an beide. Der Mittelpunkt (zc, rt + R) liegt außerhalb
+ * der Wand; der Tangentenpunkt T2 auf f ist die Stelle, an der der Mittelpunkt genau R
+ * entlang der Normalen liegt: f(z2) + R/√(1+f'²) = rt + R (Bisektion).
+ * Ist R zu groß (T1 vor dem Throat oder T2 hinter dem Mund), wird der größte machbare
+ * Radius genommen und limited = true gesetzt.
+ *
+ * @returns {{R, zc, hc, zT1, zT2, hT2, limited} | null}  null ohne Traktrix oder bei R ≤ 0
+ */
+export function computeFillet(s, rt, hMouth, curve, hypexT, R) {
+  if (!s || !hasTraktrix(s) || !(R > 0)) return null;
   const z0 = s.zInnerApex, z1 = s.zApex, h0 = rt;
-  const f  = z => verticalHalfHeight(z, s, rt, hMouth, curve, hypexT);
+  const f  = makeProfile(s, rt, hMouth, curve, hypexT);
   const d  = Math.max(1e-4, (z1 - z0) * 1e-5);
   const df = z => {
     const a = Math.max(z0, z - d), b = Math.min(z1, z + d);
@@ -221,18 +311,93 @@ function computeFillet(s, rt, hMouth, curve, hypexT, R) {
     if (zc < 0) return null;
     return { R: r, zc, hc: h0 + r, zT1: zc, zT2: z2, hT2: f(z2) };
   };
+
   const full = solve(R);
   if (full) return { ...full, limited: false };
-  let lo = 0, hi = R;
+
+  let lo = 0, hi = R, best = null;
   for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2;
-    solve(mid) ? (lo = mid) : (hi = mid);
+    const sol = solve(mid);
+    if (sol) { lo = mid; best = sol; } else hi = mid;
   }
-  return lo > 0.1 ? { ...solve(lo), limited: true } : null;
+  return lo > 0.1 ? { ...best, limited: true } : null;
 }
 
-export {
-  ALPHA2, T_TRANS, PHI_TOTAL, setOpeningAngle,
-  zN, xN, solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke,
-  verticalHalfHeight, computeFillet,
-};
+// ──────────────────────────────────────────────────────────────────
+// QUERSCHNITT A(z)
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * Horizontale Wellenfront-Breite B zu einem Wandpunkt bei zWall und die Achsenposition
+ * dieser Wellenfront. Im geraden Bereich ist die Wellenfront ein Kreisbogen um den Fokus
+ * (Achsenposition zFocus + Radius). Auf der Traktrix trifft die Tangente jedes Kurvenpunkts
+ * die Achse in einem eigenen Fußpunkt, das Tangentensegment ist konstant r0 lang
+ * (definierende Traktrix-Eigenschaft) – Achsenposition also Tangentenfuß + r0.
+ */
+function wavefrontAt(s, zWall) {
+  if (hasTraktrix(s) && zWall <= s.zTrans) {
+    let lo = s.tTh, hi = s.tTrans;
+    for (let i = 0; i < 60; i++) {
+      const tm = (lo + hi) / 2;
+      s.r0 * (zN(s.tTh) - zN(tm)) < zWall ? (lo = tm) : (hi = tm);
+    }
+    const t = (lo + hi) / 2;
+    return { B: 2 * s.r0 * Math.atan(1 / Math.sinh(t)), zAxis: s.r0 * (zN(s.tTh) - t + 1) };
+  }
+  const frac  = (zWall - s.zTrans) / (s.Ls || 1);
+  const xWall = s.xTrans + frac * s.Ls * Math.tan(s.alpha2);
+  const R = Math.sqrt((zWall - s.zFocus) ** 2 + xWall ** 2);
+  return { B: R * 2 * s.alpha2, zAxis: s.zFocus + R };
+}
+
+/**
+ * Querschnittsfläche A = B·H entlang der Achse. B aus der Wellenfront (s.o.), H aus dem
+ * Profil an derselben Achsenposition. Abgetastet an n+1 Wandpunkten plus exakt am
+ * Übergang Traktrix → gerade Wand. Vor der ersten definierten Wellenfront (Treiberebene)
+ * wird A bis z = 0 konstant gehalten.
+ *
+ * @param profile  z ↦ halbe Höhe (makeProfile)
+ * @returns {{z: number, A: number, traktrix: boolean}[]}  aufsteigend in z
+ */
+export function crossSection(s, profile, n = 100) {
+  const zWalls = Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
+  if (hasTraktrix(s)) zWalls.push(s.zTrans);
+  zWalls.sort((a, b) => a - b);
+
+  const pts = zWalls.map(zWall => {
+    const { B, zAxis } = wavefrontAt(s, zWall);
+    return { z: zAxis, A: B * (2 * profile(zAxis)), traktrix: zWall <= s.zTrans };
+  });
+  return [{ ...pts[0], z: 0 }, ...pts];
+}
+
+// ──────────────────────────────────────────────────────────────────
+// KENNWERTE
+// ──────────────────────────────────────────────────────────────────
+
+/** Mundfläche (Bogenlänge × Mundhöhe) [mm²]. */
+export const mouthArea = (s, hMouth) => s.arcR * 2 * s.alpha2 * hMouth;
+
+/** Vertikaler Öffnungswinkel am Mund [°], aus der Profilsteigung kurz vor dem Mundscheitel. */
+export function verticalMouthAngle(s, profile) {
+  const dz = Math.max(0.5, (s.zApex - (hasTraktrix(s) ? s.zInnerApex : 0)) * 0.01);
+  const slope = (profile(s.zApex) - profile(s.zApex - dz)) / dz;
+  return 2 * Math.atan(slope) * 180 / Math.PI;
+}
+
+/**
+ * Grobe akustische Grenzfrequenzen [Hz] (Näherungen nach Olson/Beranek):
+ *   fcLow  – Mundumfang ≈ Wellenlänge (λ = 2π·arcR)
+ *   fcCut  – Horn-Cutoff aus der mittleren Flare-Konstante m = ln(B_Mund / B_Throat) / L
+ *   fcHigh – Throat-Durchmesser ≈ halbe Wellenlänge (λ = 2·rt)
+ */
+export function frequencyEstimates(s, rt) {
+  const c = SPEED_OF_SOUND;
+  const m = Math.log(s.arcR * 2 * s.alpha2 / (2 * rt)) / (s.zApex - s.hatTipZ);
+  return {
+    fcLow:  c / (2 * Math.PI * s.arcR),
+    fcCut:  c * m / (4 * Math.PI),
+    fcHigh: c / (2 * rt),
+  };
+}
