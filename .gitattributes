@@ -1,0 +1,8 @@
+# Einheitliche Zeilenenden: Textdateien immer mit LF, im Repo und in der
+# Arbeitskopie – unabhängig von der core.autocrlf-Einstellung des Rechners.
+* text=auto eol=lf
+
+# Binärdateien nie anfassen
+*.png  binary
+*.ico  binary
+*.icns binary
