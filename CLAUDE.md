@@ -9,12 +9,15 @@ React + Vite + Tauri App zur Berechnung und Visualisierung von Radialhörnern mi
 ```
 src/
   App.jsx        — UI, SVG-Komponenten, PDF/DXF-Export (alles in einer Datei)
-  horn-math.js   — Geometrie-Mathematik (zN, xN, solveR0, solveHorn, ..., verticalHalfHeight, computeFillet)
-  horn-math.test.js / horn-math.cross-validate.test.js — Vitest-Tests Draufsicht-Geometrie
-  horn-math.profile.test.js — Vitest-Tests Seitenriss-Profil und Verrundung
+  horn-math.js   — gesamte Geometrie-Mathematik, einzige Quelle (von App.jsx importiert):
+                   Öffnungswinkel (setOpeningAngle), zN/xN, solveR0, solveHorn, minL, maxLt,
+                   maxLforRaumecke, minLtForRaumecke, verticalHalfHeight, computeFillet
+  horn-math.test.js / horn-math.cross-validate.test.js — Draufsicht-Geometrie bei 140°
+  horn-math.angles.test.js  — Geometrie bei 90°/120°/160° + setOpeningAngle-Mechanismus
+  horn-math.profile.test.js — Seitenriss-Profil und Verrundung
 ```
 
-**Achtung, doppelte Mathematik:** `App.jsx` importiert aus `horn-math.js` nur `verticalHalfHeight` und `computeFillet`. Alle übrigen Geometrie-Funktionen (`solveHorn`, `minL`, `maxLt`, …) existieren als **eigene Kopie in App.jsx** (mit einstellbarem Öffnungswinkel über `let ALPHA2`), während `horn-math.js` fest mit 140° rechnet. Die Tests für diese Funktionen prüfen also die Kopie in `horn-math.js`, nicht den App-Code. Änderungen an der Draufsicht-Mathematik in beiden Dateien nachziehen – oder die Duplikate zusammenführen.
+**Öffnungswinkel:** `horn-math.js` hält `ALPHA2` (halber Winkel), `T_TRANS` und `PHI_TOTAL` als Modul-Variablen und exportiert sie als ES-Modul-live-bindings. `App()` setzt sie bei jedem Render über `applyOpeningAngle(openingAngle)`. **Achtung:** In `App.jsx` heißt der Import bewusst `setOpeningAngle as applyOpeningAngle`, weil `App` einen gleichnamigen React-State-Setter `setOpeningAngle` hat – der Originalname würde verdeckt und der Aufruf beim Rendern löste eine Render-Endlosschleife aus. Neue Mathematik gehört nach `horn-math.js`, nicht in `App.jsx`.
 
 ## Mathematik
 
