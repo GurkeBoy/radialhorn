@@ -273,8 +273,8 @@ function verticalHalfHeight(z, s, rt, hMouth, curve, hypexT) {
 function genDraufsichtWand(s) {
   const pts = [];
   if (s.Lt > 0.5) {
-    for (let i = 0; i <= 80; i++) {
-      const t = s.tTh + (T_TRANS - s.tTh) * i / 80;
+    for (let i = 0; i <= 500; i++) {
+      const t = s.tTh + (T_TRANS - s.tTh) * i / 500;
       const z = s.r0 * (zN(s.tTh) - zN(t));
       const x = s.r0 * xN(t);
       pts.push([x, z]);
@@ -311,10 +311,9 @@ function genSeitenprofilThroat(s, rt) {
   return [[0, rt], [s.zInnerApex, rt]];
 }
 
-function genSeitenprofilFlare(s, rt, hMouth, curve, hypexT) {
+function genSeitenprofilFlare(s, rt, hMouth, curve, hypexT, n = 100) {
   const pts = [];
   const zStart = s.Lt > 0.5 ? s.zInnerApex : 0;
-  const n = 100;
   for (let i = 0; i <= n; i++) {
     const z = zStart + (s.zApex - zStart) * i / n;
     const h = verticalHalfHeight(z, s, rt, hMouth, curve, hypexT);
@@ -324,7 +323,7 @@ function genSeitenprofilFlare(s, rt, hMouth, curve, hypexT) {
 }
 
 function genSeitenprofil(s, rt, hMouth, curve, hypexT) {
-  return [...genSeitenprofilThroat(s, rt), ...genSeitenprofilFlare(s, rt, hMouth, curve, hypexT)];
+  return [...genSeitenprofilThroat(s, rt), ...genSeitenprofilFlare(s, rt, hMouth, curve, hypexT, 500)];
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -488,7 +487,7 @@ function downloadFile(content, filename, mime) {
   }
 }
 
-function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRaumecke, showWandstaerke, wandstaerke) {
+function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRaumecke, showWandstaerke, wandstaerke, opts) {
   const scales = [1, 2, 5, 10, 20, 50];
   const wallPts = genDraufsichtWand(s);
   const maxX = Math.max(...wallPts.map(p => p[0])) * 2;
@@ -516,10 +515,33 @@ function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRa
     <line x1="${x-tick}" y1="${y1}" x2="${x+tick}" y2="${y1}" stroke="${DIM}" stroke-width="0.25"/>
     <line x1="${x-tick}" y1="${y2}" x2="${x+tick}" y2="${y2}" stroke="${DIM}" stroke-width="0.25"/>
     <text x="${x + (right ? ts*0.6 : -ts*0.6)}" y="${(y1+y2)/2}" font-size="${ts}" fill="${DIMTXT}" text-anchor="${right ? 'start' : 'end'}" dominant-baseline="middle" font-family="monospace" transform="rotate(-90 ${x + (right ? ts*0.6 : -ts*0.6)} ${(y1+y2)/2})">${label}</text>`;
+  // Schräge Bemaßung parallel zur Strecke; offset positiv = links von (x1,y1)→(x2,y2)
+  const dimParallel = (x1, y1, x2, y2, offset, label) => {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 0.01) return '';
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+    const nx = uy, ny = -ux;
+    const d1x = x1 + nx*offset, d1y = y1 + ny*offset;
+    const d2x = x2 + nx*offset, d2y = y2 + ny*offset;
+    let angle = Math.atan2(uy, ux) * 180 / Math.PI;
+    if (angle > 90) angle -= 180;
+    if (angle < -90) angle += 180;
+    const tx = (d1x + d2x)/2 + nx*ts*0.9, ty = (d1y + d2y)/2 + ny*ts*0.9;
+    const sg = Math.sign(offset || 1) * 0.8;
+    const f = v => v.toFixed(2);
+    return `
+    <line x1="${f(x1+nx*sg)}" y1="${f(y1+ny*sg)}" x2="${f(d1x+nx*sg)}" y2="${f(d1y+ny*sg)}" stroke="${DIM}" stroke-width="0.15"/>
+    <line x1="${f(x2+nx*sg)}" y1="${f(y2+ny*sg)}" x2="${f(d2x+nx*sg)}" y2="${f(d2y+ny*sg)}" stroke="${DIM}" stroke-width="0.15"/>
+    <line x1="${f(d1x)}" y1="${f(d1y)}" x2="${f(d2x)}" y2="${f(d2y)}" stroke="${DIM}" stroke-width="0.25"/>
+    <line x1="${f(d1x-uy*tick)}" y1="${f(d1y+ux*tick)}" x2="${f(d1x+uy*tick)}" y2="${f(d1y-ux*tick)}" stroke="${DIM}" stroke-width="0.25"/>
+    <line x1="${f(d2x-uy*tick)}" y1="${f(d2y+ux*tick)}" x2="${f(d2x+uy*tick)}" y2="${f(d2y-ux*tick)}" stroke="${DIM}" stroke-width="0.25"/>
+    <text x="${f(tx)}" y="${f(ty)}" font-size="${ts}" fill="${DIMTXT}" text-anchor="middle" dominant-baseline="central" font-family="monospace" transform="rotate(${angle.toFixed(1)} ${f(tx)} ${f(ty)})">${label}</text>`;
+  };
 
   const dimPad = massstab * 14;
-  const dsW = maxX + 20 + dimPad * 2, dsH = maxZ + 20 + dimPad;
-  const dsOX = dsW / 2, dsOY = 10;
+  const dsTopPad = massstab * 8;
+  const dsW = maxX + 20 + dimPad * 2, dsH = maxZ + dsTopPad + dimPad;
+  const dsOX = dsW / 2, dsOY = dsTopPad;
   const wallR = wallPts.map(([x, z]) => [dsOX + x, dsOY + z]);
   const wallL = wallPts.map(([x, z]) => [dsOX - x, dsOY + z]);
   const arcPts = [];
@@ -532,27 +554,33 @@ function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRa
   const dsSVG = `
     <svg width="${dsW * mm2px}px" height="${dsH * mm2px}px" viewBox="0 0 ${dsW} ${dsH}" xmlns="http://www.w3.org/2000/svg">
       <line x1="${dsOX}" y1="${dsOY}" x2="${dsOX}" y2="${dsOY + maxZ}" stroke="#c8c8d0" stroke-width="0.2" stroke-dasharray="3 2"/>
-      <path d="${pathFromPts(wallR)}" fill="none" stroke="#1a1a24" stroke-width="0.5"/>
-      <path d="${pathFromPts(wallL)}" fill="none" stroke="#1a1a24" stroke-width="0.5"/>
-      <path d="${pathFromPts(arcPts)}" fill="none" stroke="#7c5cff" stroke-width="0.5"/>
-      <circle cx="${dsOX}" cy="${dsOY + s.zFocus}" r="0.7" fill="#7c5cff"/>
-      ${dimH(dsOX - rt, dsOX + rt, dsOY - massstab*3, "Ø" + (rt*2).toFixed(1), false)}
-      ${dimH(dsOX - halfMundB, dsOX + halfMundB, dsOY + maxZ + massstab*5, mundB, true)}
-      ${dimV(dsOY, dsOY + maxZ, dsOX - halfMundB - dimPad*0.5, "L=" + L, false)}
+      ${opts.draufsicht ? `<path d="${pathFromPts(wallR)}" fill="none" stroke="#1a1a24" stroke-width="0.5"/>
+      <path d="${pathFromPts(wallL)}" fill="none" stroke="#1a1a24" stroke-width="0.5"/>` : ''}
+      ${opts.mundbogen ? `<path d="${pathFromPts(arcPts)}" fill="none" stroke="#7c5cff" stroke-width="0.5"/>` : ''}
+      ${opts.fokus ? `<circle cx="${dsOX}" cy="${dsOY + s.zFocus}" r="0.7" fill="#7c5cff"/>` : ''}
+      ${opts.bemassung ? dimH(dsOX - rt, dsOX + rt, dsOY - massstab*5, "Ø" + (rt*2).toFixed(1), false) : ''}
+      ${opts.bemassung ? dimH(dsOX - halfMundB, dsOX + halfMundB, dsOY + maxZ + massstab*5, mundB, true) : ''}
+      ${opts.bemassung ? dimV(dsOY, dsOY + maxZ, dsOX - halfMundB - dimPad*0.5, s.zApex.toFixed(0), false) : ''}
+      ${opts.bemassung && s.Lt > 0.5 ? dimV(dsOY, dsOY + s.zInnerApex, dsOX + halfMundB + dimPad*0.5, s.zInnerApex.toFixed(0), true) : ''}
+      ${opts.bemassung ? dimParallel(dsOX - s.xMouth, dsOY + s.zMouth, dsOX - s.xTrans, dsOY + s.zTrans, massstab*5, (s.arcR - s.rInner).toFixed(0)) : ''}
     </svg>`;
 
-  const spW = maxZ + 20 + dimPad, spH = profMaxH + 20 + dimPad * 2;
-  const spOX = 10, spOY = spH / 2;
+  const spLeftPad = massstab * 8;
+  const spW = maxZ + spLeftPad + dimPad, spH = profMaxH + 20 + dimPad * 2;
+  const spOX = spLeftPad, spOY = spH / 2;
+  const spZStart = s.Lt > 0.5 ? s.zInnerApex : 0;
   const profU = profPts.map(([z, h]) => [spOX + z, spOY - h]);
   const profD = profPts.map(([z, h]) => [spOX + z, spOY + h]);
   const spSVG = `
     <svg width="${spW * mm2px}px" height="${spH * mm2px}px" viewBox="0 0 ${spW} ${spH}" xmlns="http://www.w3.org/2000/svg">
       <line x1="${spOX}" y1="${spOY}" x2="${spOX + maxZ}" y2="${spOY}" stroke="#c8c8d0" stroke-width="0.2" stroke-dasharray="3 2"/>
-      <path d="${pathFromPts(profU)}" fill="none" stroke="#1a1a24" stroke-width="0.5"/>
-      <path d="${pathFromPts(profD)}" fill="none" stroke="#1a1a24" stroke-width="0.5"/>
-      ${dimV(spOY - hMouth/2, spOY + hMouth/2, spOX + maxZ + massstab*5, hMouth + "", true)}
-      ${dimV(spOY - rt, spOY + rt, spOX - massstab*3, "Ø" + (rt*2).toFixed(1), false)}
-      ${dimH(spOX, spOX + maxZ, spOY + profMaxH/2 + massstab*8, "L=" + L, true)}
+      ${opts.seitenprofil ? `<path d="${pathFromPts(profU)}" fill="none" stroke="#1a1a24" stroke-width="0.5"/>
+      <path d="${pathFromPts(profD)}" fill="none" stroke="#1a1a24" stroke-width="0.5"/>` : ''}
+      ${opts.bemassung ? dimV(spOY - hMouth/2, spOY + hMouth/2, spOX + maxZ + massstab*5, hMouth + "", true) : ''}
+      ${opts.bemassung ? dimV(spOY - rt, spOY + rt, spOX - massstab*5, "Ø" + (rt*2).toFixed(1), false) : ''}
+      ${opts.bemassung ? dimH(spOX, spOX + maxZ, spOY + profMaxH/2 + massstab*8, s.zApex.toFixed(0), true) : ''}
+      ${opts.bemassung && s.Lt > 0.5 ? dimH(spOX, spOX + s.zInnerApex, spOY - profMaxH/2 - massstab*5, s.zInnerApex.toFixed(0), false) : ''}
+      ${opts.bemassung ? dimH(spOX + spZStart, spOX + s.zApex, spOY - profMaxH/2 - massstab*5, (s.zApex - spZStart).toFixed(0), false) : ''}
     </svg>`;
 
   const aMouth = (s.arcR * 2 * ALPHA2 * hMouth / 1e6).toFixed(4);
@@ -623,15 +651,15 @@ function exportPDF(s, rt, dw, dh, L, hMouth, curve, hypexT, openingAngle, showRa
         <table>${kvRows}</table>
       </div>
       <div>
-        <div class="section-label">DRAUFSICHT · HORIZONTALSCHNITT</div>
-        <div class="drawing">${dsSVG}</div>
-        <div class="section-label">SEITENRISS · VERTIKALSCHNITT</div>
-        <div class="drawing">${spSVG}</div>
+        ${opts.draufsicht || opts.mundbogen || opts.fokus ? `<div class="section-label">DRAUFSICHT · HORIZONTALSCHNITT</div>
+        <div class="drawing">${dsSVG}</div>` : ''}
+        ${opts.seitenprofil ? `<div class="section-label">SEITENRISS · VERTIKALSCHNITT</div>
+        <div class="drawing">${spSVG}</div>` : ''}
       </div>
     </div>
     <div class="footer">
       <span>Radialhorn-Konfigurator · Traktrix + linearer Bereich + Teilkreis</span>
-      <span>Throat → Teilkreis-Scheitelpunkt = L</span>
+      <span>L = Raumecke (Hut-Spitze) → Teilkreis-Scheitelpunkt</span>
     </div>
   </div>
 </body></html>`;
@@ -739,8 +767,8 @@ const COLOR = {
 };
 
 const S = {
-  trakWall: { fill: "none", stroke: COLOR.trak, strokeWidth: "2.2", strokeLinejoin: "round" },
-  hornWall: { fill: "none", stroke: COLOR.horn, strokeWidth: "2.2", strokeLinejoin: "round" },
+  trakWall: { fill: "none", stroke: COLOR.trak, strokeWidth: "1.4", strokeLinejoin: "round" },
+  hornWall: { fill: "none", stroke: COLOR.horn, strokeWidth: "1.4", strokeLinejoin: "round" },
   dimRef:   { strokeWidth: "0.35", strokeDasharray: "3 3" },
   dimArrow: { strokeWidth: "0.7" },
   label:    { fontSize: "9", fontFamily: "'DM Mono', monospace" },
@@ -876,8 +904,8 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
 
   const trakPts = [];
   if (s.Lt > 0.5 && s.r0 && s.tTh) {
-    for (let i = 0; i <= 180; i++) {
-      const t = s.tTh + (T_TRANS - s.tTh) * i / 180;
+    for (let i = 0; i <= 600; i++) {
+      const t = s.tTh + (T_TRANS - s.tTh) * i / 600;
       const axial = s.r0 * (zN(s.tTh) - zN(t));
       const x = s.r0 * xN(t);
       trakPts.push([toX(x), toY(axial), toX(-x), toY(axial)]);
@@ -915,6 +943,31 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
   const tRx = toX(s.xTrans), tRy = toY(s.zTrans);
   const tLx = toX(-s.xTrans), tLy = toY(s.zTrans);
 
+  // Abstand der Seitenwand-Bemaßung: Maßlinien liegen außerhalb der Zeichnung
+  // (Raumecke, Treiber, Traktrix), 1. Lage 18px, 2. Lage +22px.
+  // Gemessen senkrecht zur Wand, nach außen;
+  // berücksichtigt wird nur, was in Wandrichtung neben der Bemaßung liegt.
+  const wallDimOff = (() => {
+    const len = Math.hypot(fx - mLx, fy - mLy);
+    const ux = (fx - mLx) / len, uy = (fy - mLy) / len;
+    const nx = uy, ny = -ux;                     // wie in DimAligned: links von Mund → Fokus
+    const obst = [];
+    const seg = (x1, y1, x2, y2, n = 40) => {
+      for (let i = 0; i <= n; i++) obst.push([x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n]);
+    };
+    if (showRaumecke) seg(hatX, hatY, reLx, reY);
+    seg(toX(-dw / 2), toY(-dh), toX(dw / 2), toY(-dh));
+    seg(toX(-dw / 2), toY(-dh), toX(-dw / 2), toY(0));
+    trakPts.forEach(p => obst.push([p[2], p[3]]));
+    let need = 0;
+    for (const [qx, qy] of obst) {
+      const t = (qx - mLx) * ux + (qy - mLy) * uy;
+      if (t < 0 || t > len) continue;
+      need = Math.max(need, (qx - mLx) * nx + (qy - mLy) * ny);
+    }
+    return Math.max(18, need + 18);              // 1. Lage: 18px außerhalb der Geometrie
+  })();
+
   return (
     <div ref={containerRef} {...zoom.handlers}
       style={{ position: "relative", width: "100%", height: "100%", cursor: "grab", touchAction: "none", userSelect: "none" }}>
@@ -930,8 +983,8 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
         <text x={cx0} y={14} textAnchor="middle" fontSize="9" fill="#5a5a5a" fontFamily="'DM Mono', monospace" letterSpacing="0.12em">DRAUFSICHT · HORIZONTALER SCHNITT</text>
 
         {showRaumecke && <>
-          <line x1={hatX} y1={hatY} x2={reRx} y2={reY} stroke={COLOR.raum} strokeWidth="1.8" strokeLinecap="butt" strokeDasharray={`${70*scale} ${9*scale} ${4*scale} ${9*scale}`} />
-          <line x1={hatX} y1={hatY} x2={reLx} y2={reY} stroke={COLOR.raum} strokeWidth="1.8" strokeLinecap="butt" strokeDasharray={`${70*scale} ${9*scale} ${4*scale} ${9*scale}`} />
+          <line x1={hatX} y1={hatY} x2={reRx} y2={reY} stroke={COLOR.raum} strokeWidth="1.2" strokeLinecap="butt" strokeDasharray={`${70*scale} ${9*scale} ${4*scale} ${9*scale}`} />
+          <line x1={hatX} y1={hatY} x2={reLx} y2={reY} stroke={COLOR.raum} strokeWidth="1.2" strokeLinecap="butt" strokeDasharray={`${70*scale} ${9*scale} ${4*scale} ${9*scale}`} />
           <circle cx={hatX} cy={hatY} r={DOT} fill={COLOR.raum} />
           <circle cx={toX(dw / 2)} cy={toY(-dh)} r={DOT} fill={COLOR.raum} />
           <circle cx={toX(-dw / 2)} cy={toY(-dh)} r={DOT} fill={COLOR.raum} />
@@ -950,11 +1003,11 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
         {hornPts.length > 1 && <path d={fillHorn} fill="rgba(134,239,172,0.08)" />}
 
         <path d={`M${fx},${fy} L${mRx},${mRy} A${rp},${rp} 0 0 1 ${mLx},${mLy} Z`} fill="rgba(147,197,253,0.06)" />
-        <path d={`M${mRx},${mRy} A${rp},${rp} 0 0 1 ${mLx},${mLy}`} fill="none" stroke={COLOR.arc} strokeWidth="2.2" />
+        <path d={`M${mRx},${mRy} A${rp},${rp} 0 0 1 ${mLx},${mLy}`} fill="none" stroke={COLOR.arc} strokeWidth="1.4" />
 
         {s.Lt > 0.5 && (
           <path d={`M${tRx},${tRy} A${irp},${irp} 0 0 1 ${tLx},${tLy}`}
-            fill="none" stroke={COLOR.trak} strokeWidth="1.4" strokeDasharray="6 3" />
+            fill="none" stroke={COLOR.trak} strokeWidth="0.9" strokeDasharray="6 3" />
         )}
 
         <line x1={fx} y1={fy} x2={mRx} y2={mRy} stroke={COLOR.arc} strokeWidth="0.7" strokeDasharray="4 3" />
@@ -986,8 +1039,8 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
           const nx = wdz / wlen, nz = -wdx / wlen;
           const wt = wandstaerke;
           return <>
-            <line x1={toX(s.xMouth)} y1={toY(s.zMouth)} x2={toX(s.xMouth + nx*wt)} y2={toY(s.zMouth + nz*wt)} stroke={COLOR.wand} strokeWidth="2.2" strokeLinecap="round" />
-            <line x1={toX(-s.xMouth)} y1={toY(s.zMouth)} x2={toX(-s.xMouth - nx*wt)} y2={toY(s.zMouth + nz*wt)} stroke={COLOR.wand} strokeWidth="2.2" strokeLinecap="round" />
+            <line x1={toX(s.xMouth)} y1={toY(s.zMouth)} x2={toX(s.xMouth + nx*wt)} y2={toY(s.zMouth + nz*wt)} stroke={COLOR.wand} strokeWidth="1.4" strokeLinecap="round" />
+            <line x1={toX(-s.xMouth)} y1={toY(s.zMouth)} x2={toX(-s.xMouth - nx*wt)} y2={toY(s.zMouth + nz*wt)} stroke={COLOR.wand} strokeWidth="1.4" strokeLinecap="round" />
             <circle cx={toX(s.xMouth + nx*wt)} cy={toY(s.zMouth + nz*wt)} r={DOT} fill={COLOR.wand} />
             <circle cx={toX(-s.xMouth - nx*wt)} cy={toY(s.zMouth + nz*wt)} r={DOT} fill={COLOR.wand} />
           </>;
@@ -1015,11 +1068,20 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
         <text x={bx+8} y={(toY(-dh)+toY(0))/2} textAnchor="middle" dominantBaseline="central"
           fontSize="9" fill="#5a5a78" fontFamily="'DM Mono', monospace"
           transform={`rotate(-90,${bx+8},${(toY(-dh)+toY(0))/2})`}>{dh} mm</text>
+        {/* Kette zur Treibertiefe: Hut-Spitze → Treiberrückseite */}
+        <Dim p1={[hatX, hatY]} p2={[toX(dw/2), toY(-dh)]} orient="v"
+          arrowPos={bx} color={COLOR.raum} marker="url(#arrH)" label={`${(dw/2).toFixed(0)} mm`} />
 
         <Dim p1={[toX(-dw/2), toY(-dh)]} p2={[toX(dw/2), toY(-dh)]}
           arrowPos={toY(hatTipZ) - 38} color={COLOR.dim}  marker="url(#arrH)" label={`${dw} mm`} />
         <Dim p1={[toX(-rt), toY(0)]}    p2={[toX(rt), toY(0)]}
           arrowPos={toY(hatTipZ) - 16}  color={COLOR.trak} marker="url(#arrH)" label={`Ø ${(rt*2).toFixed(1)} mm`} />
+
+        {/* Seitenwand (linke Hälfte, parallel zur Wand): linearer Bereich und Fokus → Mund */}
+        <DimAligned p1={[mLx, mLy]} p2={[tLx, tLy]} offset={wallDimOff}
+          color={COLOR.horn} marker="url(#arrH)" label={`${(s.arcR - s.rInner).toFixed(1)} mm`} />
+        <DimAligned p1={[mLx, mLy]} p2={[fx, fy]} offset={wallDimOff + 22}
+          color={COLOR.arc} marker="url(#arrH)" label={`${s.arcR.toFixed(1)} mm`} />
 
         <line x1={toX(-s.xMouth)} y1={toY(s.zMouth)+16} x2={toX(s.xMouth)} y2={toY(s.zMouth)+16} stroke="#5a5a78" strokeWidth="0.7" markerStart="url(#arrH)" markerEnd="url(#arrH)" />
         <text x={cx} y={toY(s.zMouth)+27} textAnchor="middle" fontSize="9" fill="#5a5a78" fontFamily="'DM Mono', monospace">{(2 * s.xMouth).toFixed(0)} mm</text>
@@ -1047,7 +1109,7 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
                   : item.fill
                   ? <div style={{ width: 12, height: 7, background: item.col, opacity: 0.5, borderRadius: 1, flexShrink: 0 }} />
                   : <svg width="12" height="6" style={{ flexShrink: 0 }}>
-                      <line x1="0" y1="3" x2="12" y2="3" stroke={item.col} strokeWidth="2" strokeDasharray={item.dash ? "4 2" : "none"} />
+                      <line x1="0" y1="3" x2="12" y2="3" stroke={item.col} strokeWidth="1.4" strokeDasharray={item.dash ? "4 2" : "none"} />
                     </svg>
                 }
                 <span style={{ fontSize: 8, color: "#5a5a78", fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" }}>{item.label}</span>
@@ -1077,13 +1139,15 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
   const zMax = s.zApex + 10;
 
   const portrait = VH > VW;
+  // Querformat: oben Platz für Titel + zwei Maßlagen, unten für eine
+  const mT = Math.min(72, VH * 0.3), mB = Math.min(40, VH * 0.15);
   const scale0 = portrait
     ? Math.min((VH - Math.min(80, VH*0.12) * 2) / (zMax - zMin), (VW - Math.min(68, VW*0.15) * 2) / (2 * halfMax))
-    : Math.min((VW - Math.min(80, VW*0.12) * 2) / (zMax - zMin), (VH - Math.min(68, VH*0.15) * 2) / (2 * halfMax));
+    : Math.min((VW - Math.min(80, VW*0.12) * 2) / (zMax - zMin), (VH - mT - mB) / (2 * halfMax));
 
   const contentW = (zMax - zMin) * scale0;
   const contentH = 2 * halfMax * scale0;
-  const cy = VH / 2;
+  const cy = mT + (VH - mT - mB) / 2;
 
   // Basis-Abbildung (Standard-Zoom, zentriert), darauf die Zoom/Pan-Transformation
   const toX0 = portrait ? y => VW / 2 + y * scale0 : z => (VW - contentW) / 2 + (z - zMin) * scale0;
@@ -1111,7 +1175,8 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
   const dimThroatAx = toX(s.hatTipZ) - 18;
   const dimDrivAx   = toX(s.hatTipZ) - 40;
   const dimLAy      = toY(-halfMax) + 16;
-  const dimTrakAy   = toY(halfMax) - 36;
+  const dimDrivTopAy = toY(halfMax) - 18;
+  const dimTrakAy   = toY(halfMax) - 40;
 
   return (
     <div ref={containerRef} {...zoom.handlers}
@@ -1134,16 +1199,19 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
         <line x1={toX(0)} y1={toY(dw/2)} x2={toX(-dh)} y2={toY(-dw/2)} stroke={COLOR.driv} strokeWidth="0.5" opacity="0.4" />
         <text x={toX(-dh/2)} y={toY(0)} {...S.label} textAnchor="middle" dominantBaseline="central" fill={COLOR.text}>Treiber</text>
 
-        <line x1={toX(s.hatTipZ)} y1={toY(-halfMax)} x2={toX(s.hatTipZ)} y2={toY(halfMax)}
-          stroke={COLOR.raum} strokeWidth="1.8" strokeLinecap="butt"
-          strokeDasharray={`${70*scale} ${9*scale} ${4*scale} ${9*scale}`} />
+        {/* Raumecke: von der Achse aus nach oben und unten, Strichmuster symmetrisch zur Achse */}
+        {[halfMax, -halfMax].map(yEnd =>
+          <line key={yEnd} x1={toX(s.hatTipZ)} y1={toY(0)} x2={toX(s.hatTipZ)} y2={toY(yEnd)}
+            stroke={COLOR.raum} strokeWidth="1.2" strokeLinecap="butt"
+            strokeDasharray={`${70*scale} ${9*scale} ${4*scale} ${9*scale}`} strokeDashoffset={35*scale} />
+        )}
 
         <circle cx={toX(0)} cy={toY(throatH/2)} r={DOT} fill={COLOR.trak} />
         <circle cx={toX(0)} cy={toY(-throatH/2)} r={DOT} fill={COLOR.trak} />
 
         {s.Lt > 0.5 && <>
-          <line x1={toX(0)} y1={toY(throatH/2)} x2={toX(s.zInnerApex)} y2={toY(throatH/2)} stroke={COLOR.trak} strokeWidth="1.8" strokeLinecap="round" />
-          <line x1={toX(0)} y1={toY(-throatH/2)} x2={toX(s.zInnerApex)} y2={toY(-throatH/2)} stroke={COLOR.trak} strokeWidth="1.8" strokeLinecap="round" />
+          <line x1={toX(0)} y1={toY(throatH/2)} x2={toX(s.zInnerApex)} y2={toY(throatH/2)} stroke={COLOR.trak} strokeWidth="1.2" strokeLinecap="round" />
+          <line x1={toX(0)} y1={toY(-throatH/2)} x2={toX(s.zInnerApex)} y2={toY(-throatH/2)} stroke={COLOR.trak} strokeWidth="1.2" strokeLinecap="round" />
           <circle cx={toX(s.zInnerApex)} cy={toY(throatH/2)} r={DOT} fill={COLOR.trans} />
           <circle cx={toX(s.zInnerApex)} cy={toY(-throatH/2)} r={DOT} fill={COLOR.trans} />
         </>}
@@ -1162,10 +1230,19 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
           arrowPos={dimDrivAx}   color={COLOR.dim}  marker="url(#arrV)" label={`${dw} mm`} />
         <Dim p1={[toX(s.hatTipZ), toY(0)]}       p2={[toX(s.zApex), toY(0)]}
           arrowPos={dimLAy}      color={COLOR.dim}  marker="url(#arrV)" label={`L=${L} mm`} sw="0.8" />
+        {/* Oben 1. Lage: Kette Hut-Spitze → Treiberrückseite → Treiberfront */}
+        <Dim p1={[toX(s.hatTipZ), toY(dw/2)]}    p2={[toX(-dh), toY(dw/2)]} orient={portrait ? "v" : "h"}
+          arrowPos={dimDrivTopAy} color={COLOR.raum} marker="url(#arrV)" label={`${(dw/2).toFixed(0)} mm`} />
+        <Dim p1={[toX(-dh), toY(dw/2)]}          p2={[toX(0), toY(dw/2)]}
+          arrowPos={dimDrivTopAy} color={COLOR.driv} marker="url(#arrV)" label={`${dh} mm`} />
+        {/* Oben 2. Lage: Kette Traktrix → Mund (axiale Längen) */}
         {s.Lt > 0.5 &&
-          <Dim p1={[toX(0), toY(throatH/2)]}     p2={[toX(s.zInnerApex), toY(0)]}
+          <Dim p1={[toX(0), toY(throatH/2)]}     p2={[toX(s.zInnerApex), toY(throatH/2)]}
             arrowPos={dimTrakAy} color={COLOR.trak} marker="url(#arrV)" label={`${s.zInnerApex.toFixed(0)} mm`} />
         }
+        <Dim p1={[toX(zProfileStart), toY(verticalHalfHeight(zProfileStart, s, rt, hMouth, curve, hypexT))]}
+          p2={[toX(s.zApex), toY(hMouth/2)]}
+          arrowPos={dimTrakAy} color={COLOR.horn} marker="url(#arrV)" label={`${(s.zApex - zProfileStart).toFixed(0)} mm`} />
       </svg>
     </div>
   );
@@ -1180,12 +1257,14 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
 //   |dy| >= |dx|  →  senkrechte Ausdehnung → vertikale Maßlinie (links/rechts)
 //   |dx| >  |dy|  →  waagerechte Ausdehnung → horizontale Maßlinie (oben/unten)
 // arrowPos: absolute Koordinate der Maßlinie (x für vertikal, y für horizontal)
+// orient:   optional "v"/"h" erzwingt die Orientierung (z.B. bei 45°-Strecken)
 // Hilfslinien: 2px vom Geometriepunkt, 2px über die Maßlinie hinaus.
 // Text:        8px (Seite) bzw. 11px (unten) / 8px (oben) von der Maßlinie.
-function Dim({ p1, p2, arrowPos, color, marker, label, sw = "0.7" }) {
+function Dim({ p1, p2, arrowPos, color, marker, label, sw = "0.7", orient }) {
   const [x1, y1] = p1, [x2, y2] = p2;
+  const vertical = orient ? orient === "v" : Math.abs(y2 - y1) >= Math.abs(x2 - x1);
 
-  if (Math.abs(y2 - y1) >= Math.abs(x2 - x1)) {
+  if (vertical) {
     // Senkrechte Ausdehnung → vertikale Maßlinie
     const ax = arrowPos;
     const d  = ax < (x1 + x2) / 2 ? -1 : 1;
@@ -1209,6 +1288,33 @@ function Dim({ p1, p2, arrowPos, color, marker, label, sw = "0.7" }) {
       <text x={mx} y={ty} {...S.label} textAnchor="middle" fill={color}>{label}</text>
     </>;
   }
+}
+
+// Schräge Bemaßung parallel zur Strecke p1→p2.
+// offset: Abstand der Maßlinie in px, positiv = links der Richtung p1→p2 (Bildschirm).
+// Text liegt parallel zur Maßlinie auf der Außenseite und steht nie auf dem Kopf.
+function DimAligned({ p1, p2, offset, color, marker, label, sw = "0.7" }) {
+  const [x1, y1] = p1, [x2, y2] = p2;
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  if (len < 1) return null;
+  const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+  const nx = uy, ny = -ux;                       // links der Richtung (SVG: y nach unten)
+  const d = Math.sign(offset) || 1;
+  // Hilfslinien: 2px vom Geometriepunkt, 2px über die Maßlinie hinaus
+  const [e0x, e0y] = [nx * d * 2, ny * d * 2];
+  const [e1x, e1y] = [nx * (offset + d * 2), ny * (offset + d * 2)];
+  const a1 = [x1 + nx * offset, y1 + ny * offset], a2 = [x2 + nx * offset, y2 + ny * offset];
+  const tOff = offset + d * 8;
+  const tx = (x1 + x2) / 2 + nx * tOff, ty = (y1 + y2) / 2 + ny * tOff;
+  let ang = Math.atan2(uy, ux) * 180 / Math.PI;
+  if (ang > 90) ang -= 180; else if (ang < -90) ang += 180;
+  return <>
+    <line x1={x1 + e0x} y1={y1 + e0y} x2={x1 + e1x} y2={y1 + e1y} {...S.dimRef} stroke={color} />
+    <line x1={x2 + e0x} y1={y2 + e0y} x2={x2 + e1x} y2={y2 + e1y} {...S.dimRef} stroke={color} />
+    <line x1={a1[0]} y1={a1[1]} x2={a2[0]} y2={a2[1]} strokeWidth={sw} stroke={color} markerStart={marker} markerEnd={marker} />
+    <text x={tx} y={ty} {...S.label} textAnchor="middle" dominantBaseline="central" fill={color}
+      transform={`rotate(${ang},${tx},${ty})`}>{label}</text>
+  </>;
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -1285,7 +1391,7 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
         <line x1={ml} y1={mt} x2={ml} y2={VH-mb} stroke={COLOR.axisH} strokeWidth="0.7"/>
         <line x1={ml} y1={VH-mb} x2={VW-mr} y2={VH-mb} stroke={COLOR.axisH} strokeWidth="0.7"/>
         {zAchseTrans !== null && <line x1={gx(zAchseTrans)} y1={mt} x2={gx(zAchseTrans)} y2={VH-mb} stroke={COLOR.trak} strokeWidth="0.6" strokeDasharray="3 2" opacity="0.4"/>}
-        {segs.map((seg, i) => <path key={i} d={mkPath(seg)} fill="none" stroke={seg[0].col} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round"/>)}
+        {segs.map((seg, i) => <path key={i} d={mkPath(seg)} fill="none" stroke={seg[0].col} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round"/>)}
         {[0, 0.5, 1].map(f => {
           const b = bMax / 1.08 * f, y = gy(b);
           return <g key={f}>
@@ -1359,6 +1465,7 @@ export default function App() {
   const [expFokus,        setExpFokus]        = useState(true);
   const [expSeitenprofil, setExpSeitenprofil] = useState(true);
   const [expUebergang,    setExpUebergang]    = useState(true);
+  const [expBemassung,    setExpBemassung]    = useState(true);
 
   const rt = throatDiam / 2;
 
@@ -1500,11 +1607,13 @@ export default function App() {
             <Toggle label="Fokuspunkt"         checked={expFokus}        onChange={setExpFokus} />
             <Toggle label="Seitenprofil"       checked={expSeitenprofil} onChange={setExpSeitenprofil} />
             <Toggle label="Übergangspunkt"     checked={expUebergang}    onChange={setExpUebergang} />
+            <div style={{ fontSize: 9, color: "#3a3a3a", margin: "8px 0 6px" }}>PDF — zusätzlich zu Kurven oben</div>
+            <Toggle label="Bemaßungen"         checked={expBemassung}    onChange={setExpBemassung} />
             <button onClick={() => exportDXF(s, rt, hMouth, curve, hypexT, { draufsicht: expDraufsicht, mundbogen: expMundbogen, fokus: expFokus, seitenprofil: expSeitenprofil, uebergang: expUebergang })}
               style={{ width: "100%", marginTop: 8, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #d6cbb8", background: "rgba(214,203,184,0.15)", color: "#d6cbb8", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
               ↓ DXF exportieren
             </button>
-            <button onClick={() => exportPDF(s, rt, dw, dh, LClamped, hMouth, curve, hypexT, openingAngle, showRaumecke, showWandstaerke, wandstaerke)}
+            <button onClick={() => exportPDF(s, rt, dw, dh, LClamped, hMouth, curve, hypexT, openingAngle, showRaumecke, showWandstaerke, wandstaerke, { draufsicht: expDraufsicht, mundbogen: expMundbogen, fokus: expFokus, seitenprofil: expSeitenprofil, bemassung: expBemassung })}
               style={{ width: "100%", marginTop: 6, padding: "7px 0", borderRadius: 5, cursor: "pointer", border: "1px solid #303030", background: "#1e1e1e", color: "#6e6e6e", fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.05em" }}>
               ↓ PDF (Zeichnungen)
             </button>
