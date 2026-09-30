@@ -21,7 +21,9 @@ function useSize(ref) {
 const ZOOM_MIN = 0.25, ZOOM_MAX = 20;
 const VIEW_RESET = { k: 1, tx: 0, ty: 0 };
 
-function useZoomPan(ref) {
+// Optionen: minZoom (Diagramme: nicht kleiner als 100 %), unitsPerPx (Umrechnung
+// Bildschirm-px → eigene Koordinaten, z.B. bei per viewBox skaliertem SVG).
+function useZoomPan(ref, { minZoom = ZOOM_MIN, unitsPerPx = () => 1 } = {}) {
   const [view, setView] = useState(VIEW_RESET);
   const drag = useRef(null);
 
@@ -33,10 +35,12 @@ function useZoomPan(ref) {
     const onWheel = e => {
       e.preventDefault();
       const r = el.getBoundingClientRect();
-      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const u = unitsPerPx();
+      const mx = (e.clientX - r.left) * u, my = (e.clientY - r.top) * u;
       const factor = Math.exp(-e.deltaY * 0.0015);
       setView(v => {
-        const k = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, v.k * factor));
+        const k = Math.min(ZOOM_MAX, Math.max(minZoom, v.k * factor));
+        if (minZoom >= 1 && k <= 1) return VIEW_RESET;   // Diagramm: bei 100 % wieder ganz sichtbar
         const f = k / v.k;
         return { k, tx: mx - (mx - v.tx) * f, ty: my - (my - v.ty) * f };
       });
@@ -52,7 +56,8 @@ function useZoomPan(ref) {
   };
   const onPointerMove = e => {
     if (!drag.current) return;
-    const dx = e.clientX - drag.current.x, dy = e.clientY - drag.current.y;
+    const u = unitsPerPx();
+    const dx = (e.clientX - drag.current.x) * u, dy = (e.clientY - drag.current.y) * u;
     drag.current = { x: e.clientX, y: e.clientY };
     setView(v => ({ ...v, tx: v.tx + dx, ty: v.ty + dy }));
   };
@@ -65,24 +70,26 @@ function useZoomPan(ref) {
   };
 }
 
-// Zoomstufe + Zurücksetzen, oben rechts links neben dem Vollbild-Button
-function ZoomControls({ k, onReset }) {
+// Zoomstufe + Zurücksetzen, oben rechts (Standard: links neben dem Vollbild-Button).
+// compact: kleinere Variante für den Querschnittsgraphen in der Seitenleiste.
+function ZoomControls({ k, onReset, top = 6, right = 36, compact = false }) {
   const stop = e => e.stopPropagation();
+  const h = compact ? 18 : 24, fs = compact ? 9 : 10;
   return (
     <div onPointerDown={stop} style={{
-      position: "absolute", top: 6, right: 36, zIndex: 10, display: "flex", gap: 4, alignItems: "center",
+      position: "absolute", top, right, zIndex: 10, display: "flex", gap: 4, alignItems: "center",
     }}>
       <span style={{
         background: "rgba(20,20,20,0.85)", border: "1px solid #303030", borderRadius: 4,
-        color: "#6e6e6e", fontSize: 10, fontFamily: "'DM Mono', monospace",
-        height: 24, boxSizing: "border-box", padding: "0 6px", display: "flex", alignItems: "center",
+        color: "#6e6e6e", fontSize: fs, fontFamily: "'DM Mono', monospace",
+        height: h, boxSizing: "border-box", padding: "0 6px", display: "flex", alignItems: "center",
       }}>
         {Math.round(k * 100)} %
       </span>
       <button onClick={onReset} title="Zoom zurücksetzen" style={{
         background: "rgba(20,20,20,0.85)", border: "1px solid #303030", borderRadius: 4,
-        color: "#6e6e6e", cursor: "pointer", height: 24, padding: "0 7px",
-        fontSize: 10, fontFamily: "'DM Mono', monospace",
+        color: "#6e6e6e", cursor: "pointer", height: h, padding: compact ? "0 5px" : "0 7px",
+        fontSize: fs, fontFamily: "'DM Mono', monospace",
       }}>
         ⟲ Reset
       </button>
@@ -1321,9 +1328,25 @@ function DimAligned({ p1, p2, offset, color, marker, label, sw = "0.7" }) {
 // QUERSCHNITT-GRAPH
 // ──────────────────────────────────────────────────────────────────
 
+// Ganzzahlige "runde" Tick-Werte (1/2/5 · 10^n) im Bereich [lo, hi]
+function niceTicks(lo, hi, count = 4) {
+  const span = hi - lo;
+  if (!(span > 0)) return [];
+  const raw = span / count, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map(f => f * mag).find(st => st >= raw);
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(v);
+  return out;
+}
+
 function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
   const VW = 310, VH = 200;
-  const ml = 38, mr = 8, mt = 16, mb = 20;
+  const ml = 38, mr = 8, mt = 26, mb = 20;
+  const svgRef = useRef(null);
+  const zoom = useZoomPan(svgRef, {
+    minZoom: 1,
+    unitsPerPx: () => VW / (svgRef.current?.clientWidth || VW),
+  });
 
   // B(z) (Horizontal-Breite) wird an der Wand-Kontakt-Position der Wellenfront berechnet,
   // aber der A(z)-Graph braucht die Achsen-Position dieser Wellenfront (wo H(z) über
@@ -1355,8 +1378,13 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
   const pts = [];
   const zAchseTrans = s.Lt > 0.5 ? s.zInnerApex : null;
 
-  for (let i = 0; i <= 100; i++) {
-    const zWall = s.zMouth * i / 100;
+  // Gleichmäßige Stützstellen plus exakt der Übergang Traktrix → linear, damit der
+  // Farbwechsel genau am Traktrix-Ende (zInnerApex) liegt und nicht einen Schritt davor
+  const zWalls = Array.from({ length: 101 }, (_, i) => s.zMouth * i / 100);
+  if (s.Lt > 0.5) zWalls.push(s.zTrans);
+  zWalls.sort((a, b) => a - b);
+
+  for (const zWall of zWalls) {
     const { B, zAxis } = calcBZAxis(zWall);
     const H = 2 * verticalHalfHeight(zAxis, s, rt, hMouth, curve, hypexT);
     const col = zWall <= s.zTrans ? COLOR.trak : COLOR.horn;
@@ -1372,8 +1400,37 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
   const zStart = pts[0].z;
   const zMouth = pts[pts.length - 1].z;
   const bMax   = pts.reduce((m, p) => p.B > m ? p.B : m, 0) * 1.08;
-  const gx     = z => ml + ((z - zStart) / (zMouth - zStart)) * (VW - ml - mr);
-  const gy     = b => mt + (1 - b / bMax) * (VH - mt - mb);
+  // Basis-Abbildung (Standard-Zoom), darauf Zoom/Pan; Achsen bleiben am Plotrahmen stehen
+  const { k, tx, ty } = zoom.view;
+  const pw = VW - ml - mr, ph = VH - mt - mb;
+  const gx     = z => tx + k * (ml + ((z - zStart) / (zMouth - zStart)) * pw);
+  const gy     = b => ty + k * (mt + (1 - b / bMax) * ph);
+  const zAt    = X => zStart + (((X - tx) / k) - ml) / pw * (zMouth - zStart);
+  const bAt    = Y => bMax * (1 - (((Y - ty) / k) - mt) / ph);
+  const inX    = x => x >= ml - 0.5 && x <= VW - mr + 0.5;
+  const inY    = y => y >= mt - 0.5 && y <= VH - mb + 0.5;
+  const zoomed = k !== 1 || tx !== 0 || ty !== 0;
+  // Achsen sitzen im Datenursprung (z = Start, A = 0) und wandern beim Verschieben mit;
+  // läuft der Ursprung aus dem Bild, bleiben sie am Plotrand sichtbar
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const axX = clamp(gx(zStart), ml, VW - mr);
+  const axY = clamp(gy(0), mt, VH - mb);
+
+  // Markante Werte (Start, Traktrix-Ende, Mund; 0 / ½ / max) immer; beim Zoomen
+  // zusätzlich runde Zwischenwerte für den sichtbaren Bereich
+  const xMarks = [
+    { z: zStart, label: zStart.toFixed(0), col: "#404040" },
+    ...(s.Lt > 0.5 && zAchseTrans !== null ? [{ z: zAchseTrans, label: zAchseTrans.toFixed(0), col: COLOR.trak }] : []),
+    { z: zMouth, label: zMouth.toFixed(0), col: COLOR.horn },
+  ];
+  const yMarks = [0, 0.5, 1].map(f => bMax / 1.08 * f);
+  const xTicks = [...xMarks, ...(zoomed
+    ? niceTicks(zAt(ml), zAt(VW - mr)).filter(z => xMarks.every(m => Math.abs(gx(m.z) - gx(z)) > 16))
+        .map(z => ({ z, label: z.toFixed(0), col: "#404040" }))
+    : [])].filter(t => inX(gx(t.z)));
+  const yTicks = [...yMarks, ...(zoomed
+    ? niceTicks(bAt(VH - mb), bAt(mt)).filter(b => yMarks.every(m => Math.abs(gy(m) - gy(b)) > 8))
+    : [])].filter(b => inY(gy(b)));
 
   const segs = [];
   let cur = [pts[0]];
@@ -1385,27 +1442,30 @@ function CrossSectionGraph({ s, rt, hMouth, curve, hypexT }) {
   const mkPath = ps => ps.map((p, i) => `${i===0?'M':'L'}${gx(p.z).toFixed(1)},${gy(p.B).toFixed(1)}`).join(' ');
 
   return (
-    <div style={{ background: "#1a1a1a", borderRadius: 8, border: "1px solid #292929", marginBottom: 8, padding: "4px 0 0 0" }}>
-      <svg viewBox={`0 0 ${VW} ${VH}`} style={{ width: "100%", display: "block" }}>
-        <text x={(ml+VW-mr)/2} y={10} {...S.label} textAnchor="middle" fontSize="8" fill={COLOR.text} letterSpacing="0.1em">QUERSCHNITT A(z) = B·H [mm²]</text>
-        <line x1={ml} y1={mt} x2={ml} y2={VH-mb} stroke={COLOR.axisH} strokeWidth="0.7"/>
-        <line x1={ml} y1={VH-mb} x2={VW-mr} y2={VH-mb} stroke={COLOR.axisH} strokeWidth="0.7"/>
-        {zAchseTrans !== null && <line x1={gx(zAchseTrans)} y1={mt} x2={gx(zAchseTrans)} y2={VH-mb} stroke={COLOR.trak} strokeWidth="0.6" strokeDasharray="3 2" opacity="0.4"/>}
-        {segs.map((seg, i) => <path key={i} d={mkPath(seg)} fill="none" stroke={seg[0].col} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round"/>)}
-        {[0, 0.5, 1].map(f => {
-          const b = bMax / 1.08 * f, y = gy(b);
-          return <g key={f}>
-            <line x1={ml-3} y1={y} x2={ml} y2={y} stroke={COLOR.axisH} strokeWidth="0.5"/>
-            <text x={ml-5} y={y} textAnchor="end" dominantBaseline="central" fontSize="7" fill="#404040" fontFamily="'DM Mono',monospace">{b.toFixed(0)}</text>
+    <div style={{ position: "relative", background: "#1a1a1a", borderRadius: 8, border: "1px solid #292929", marginBottom: 8, padding: "4px 0 0 0" }}>
+      <ZoomControls k={k} onReset={zoom.reset} top={4} right={6} compact />
+      <svg ref={svgRef} {...zoom.handlers} viewBox={`0 0 ${VW} ${VH}`}
+        style={{ width: "100%", display: "block", cursor: "grab", touchAction: "none", userSelect: "none" }}>
+        <defs>
+          <clipPath id="csPlot"><rect x={ml} y={mt} width={pw} height={ph} /></clipPath>
+        </defs>
+        <text x={ml} y={10} {...S.label} textAnchor="start" fontSize="8" fill={COLOR.text} letterSpacing="0.1em">QUERSCHNITT A(z) = B·H [mm²]</text>
+        <line x1={axX} y1={mt} x2={axX} y2={VH-mb} stroke={COLOR.axisH} strokeWidth="0.7"/>
+        <line x1={ml} y1={axY} x2={VW-mr} y2={axY} stroke={COLOR.axisH} strokeWidth="0.7"/>
+        <g clipPath="url(#csPlot)">
+          {zAchseTrans !== null && <line x1={gx(zAchseTrans)} y1={mt} x2={gx(zAchseTrans)} y2={VH-mb} stroke={COLOR.trak} strokeWidth="0.6" strokeDasharray="3 2" opacity="0.4"/>}
+          {segs.map((seg, i) => <path key={i} d={mkPath(seg)} fill="none" stroke={seg[0].col} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round"/>)}
+        </g>
+        {yTicks.map(b => {
+          const y = gy(b);
+          return <g key={b}>
+            <line x1={axX-3} y1={y} x2={axX} y2={y} stroke={COLOR.axisH} strokeWidth="0.5"/>
+            <text x={axX-5} y={y} textAnchor="end" dominantBaseline="central" fontSize="7" fill="#404040" fontFamily="'DM Mono',monospace">{b.toFixed(0)}</text>
           </g>;
         })}
-        {[
-          { z: zStart, label: zStart.toFixed(0),   col: "#404040"  },
-          ...(s.Lt > 0.5 && zAchseTrans !== null ? [{ z: zAchseTrans, label: zAchseTrans.toFixed(0), col: COLOR.trak }] : []),
-          { z: zMouth, label: zMouth.toFixed(0),   col: COLOR.horn },
-        ].map(t => <g key={t.z}>
-          <line x1={gx(t.z)} y1={VH-mb} x2={gx(t.z)} y2={VH-mb+3} stroke={COLOR.axisH} strokeWidth="0.5"/>
-          <text x={gx(t.z)} y={VH-mb+11} textAnchor="middle" fontSize="7" fill={t.col} fontFamily="'DM Mono',monospace">{t.label}</text>
+        {xTicks.map(t => <g key={t.z}>
+          <line x1={gx(t.z)} y1={axY} x2={gx(t.z)} y2={axY+3} stroke={COLOR.axisH} strokeWidth="0.5"/>
+          <text x={gx(t.z)} y={axY+11} textAnchor="middle" fontSize="7" fill={t.col} fontFamily="'DM Mono',monospace">{t.label}</text>
         </g>)}
       </svg>
     </div>
