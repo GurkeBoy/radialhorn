@@ -1,7 +1,27 @@
-# Tauri + React
+# Radialhorn-Konfigurator
 
-This template should help get you started developing with Tauri and React in Vite.
+Desktop-App zur Auslegung von Radialhörnern mit Traktrix-Eingang für den Lautsprecher-Eigenbau. Die Geometrie wird aus wenigen Parametern berechnet, als maßstäbliche Draufsicht und Seitenriss gezeichnet und als DXF (für CAD, z.B. Siemens NX) oder PDF-Datenblatt exportiert.
 
-## Recommended IDE Setup
+## Funktionen
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- **Horizontale Kontur:** Traktrix-Eingang → gerade Wand unter dem halben Öffnungswinkel → Mundbogen um den Fokuspunkt. Öffnungswinkel, Gesamtlänge, Traktrix-Länge, Throat und Treibermaße einstellbar.
+- **Raumecke:** Begrenzt die Hornbreite auf die 45°-Diagonale einer Raumecke, optional mit Wandstärke.
+- **Vertikales Profil:** Aufweitung linear, exponentiell oder Hypex; optionale Verrundung des Übergangs Throat → Aufweitung.
+- **Ansichten:** Draufsicht und Seitenriss mit Bemaßung, Zoom (Mausrad) und Verschieben (Ziehen), Vollbild; Querschnittsfläche A(z) als Diagramm.
+- **Kennwerte:** Mundfläche, vertikaler Öffnungswinkel, akustische Grenzfrequenzen (Näherung).
+- **Export:** DXF mit exakten Kurven (SPLINE/ARC/LINE statt Polylinien, damit CAD glatte Körper erzeugt) und PDF-Datenblatt mit maßstäblichen Zeichnungen.
+
+## Entwicklung
+
+Voraussetzungen: Node.js, Rust und die [Tauri-Voraussetzungen](https://tauri.app/start/prerequisites/).
+
+```bash
+npm install
+npm run tauri dev    # Desktop-App
+npm run dev          # nur Web-Oberfläche, http://localhost:1420
+npm test             # Tests (Vitest)
+npm run lint         # ESLint
+npm run tauri build  # Installer bauen
+```
+
+Aufbau, Konventionen und Bemaßungsregeln: siehe [CLAUDE.md](CLAUDE.md).
