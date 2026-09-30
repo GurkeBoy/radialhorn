@@ -15,6 +15,81 @@ function useSize(ref) {
   return size;
 }
 
+// Hook: Zoom (Mausrad, um den Cursor) und Verschieben (Klick+Drag) einer Ansicht.
+// Liefert eine Bildschirm-Transformation p' = t + k·p, die auf die
+// Basis-Abbildung (Standard-Zoom, zentriert) angewendet wird.
+const ZOOM_MIN = 0.25, ZOOM_MAX = 20;
+const VIEW_RESET = { k: 1, tx: 0, ty: 0 };
+
+function useZoomPan(ref) {
+  const [view, setView] = useState(VIEW_RESET);
+  const drag = useRef(null);
+
+  // Wheel-Listener nativ und nicht passiv, damit preventDefault das Scrollen verhindert.
+  // Ohne Dependency-Array: das Element hinter ref kann zwischen Renders wechseln.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = e => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      setView(v => {
+        const k = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, v.k * factor));
+        const f = k / v.k;
+        return { k, tx: mx - (mx - v.tx) * f, ty: my - (my - v.ty) * f };
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
+
+  const onPointerDown = e => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY };
+  };
+  const onPointerMove = e => {
+    if (!drag.current) return;
+    const dx = e.clientX - drag.current.x, dy = e.clientY - drag.current.y;
+    drag.current = { x: e.clientX, y: e.clientY };
+    setView(v => ({ ...v, tx: v.tx + dx, ty: v.ty + dy }));
+  };
+  const onPointerUp = () => { drag.current = null; };
+
+  return {
+    view,
+    reset: () => setView(VIEW_RESET),
+    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
+  };
+}
+
+// Zoomstufe + Zurücksetzen, oben rechts links neben dem Vollbild-Button
+function ZoomControls({ k, onReset }) {
+  const stop = e => e.stopPropagation();
+  return (
+    <div onPointerDown={stop} style={{
+      position: "absolute", top: 6, right: 36, zIndex: 10, display: "flex", gap: 4, alignItems: "center",
+    }}>
+      <span style={{
+        background: "rgba(20,20,20,0.85)", border: "1px solid #303030", borderRadius: 4,
+        color: "#6e6e6e", fontSize: 10, fontFamily: "'DM Mono', monospace",
+        height: 24, boxSizing: "border-box", padding: "0 6px", display: "flex", alignItems: "center",
+      }}>
+        {Math.round(k * 100)} %
+      </span>
+      <button onClick={onReset} title="Zoom zurücksetzen" style={{
+        background: "rgba(20,20,20,0.85)", border: "1px solid #303030", borderRadius: 4,
+        color: "#6e6e6e", cursor: "pointer", height: 24, padding: "0 7px",
+        fontSize: 10, fontFamily: "'DM Mono', monospace",
+      }}>
+        ⟲ Reset
+      </button>
+    </div>
+  );
+}
+
 // ── Geometrie-Konstanten (werden zur Laufzeit gesetzt) ─────────────────────
 let ALPHA2    = 70 * Math.PI / 180;
 let T_TRANS   = Math.asinh(1 / Math.tan(ALPHA2));
@@ -770,6 +845,7 @@ function Warn({ children }) {
 function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, openingAngle }) {
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
+  const zoom = useZoomPan(containerRef);
 
   if (!s || VW < 10 || VH < 10) return (
     <div ref={containerRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#fca5a5", fontSize: 12, fontFamily: "'DM Mono', monospace" }}>
@@ -789,9 +865,12 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
   const ml = 50, mr = 58, mt = 22, mb = 22;
   const drawW = VW - ml - mr;
   const drawH = VH - mt - mb;
-  const scale = Math.min(drawW / (2 * xMax), drawH / (zMax - zMin));
-  const cx = ml + drawW / 2;
-  const topOffset = mt + (drawH - (zMax - zMin) * scale) / 2;
+  const { k, tx, ty } = zoom.view;
+  const scale0 = Math.min(drawW / (2 * xMax), drawH / (zMax - zMin));
+  const cx0 = ml + drawW / 2;
+  const scale = scale0 * k;
+  const cx = tx + k * cx0;
+  const topOffset = ty + k * (mt + (drawH - (zMax - zMin) * scale0) / 2);
   const toX = x => cx + x * scale;
   const toY = z => topOffset + (z - zMin) * scale;
 
@@ -837,7 +916,9 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
   const tLx = toX(-s.xTrans), tLy = toY(s.zTrans);
 
   return (
-    <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div ref={containerRef} {...zoom.handlers}
+      style={{ position: "relative", width: "100%", height: "100%", cursor: "grab", touchAction: "none", userSelect: "none" }}>
+      <ZoomControls k={k} onReset={zoom.reset} />
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs>
           <marker id="arrH" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
@@ -846,7 +927,7 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
         </defs>
 
         <line x1={cx} y1={toY(hatTipZ - 6)} x2={cx} y2={toY(s.zApex) + 32} stroke="#3a3a3a" strokeWidth="0.6" strokeDasharray="5 4" />
-        <text x={cx} y={14} textAnchor="middle" fontSize="9" fill="#5a5a5a" fontFamily="'DM Mono', monospace" letterSpacing="0.12em">DRAUFSICHT · HORIZONTALER SCHNITT</text>
+        <text x={cx0} y={14} textAnchor="middle" fontSize="9" fill="#5a5a5a" fontFamily="'DM Mono', monospace" letterSpacing="0.12em">DRAUFSICHT · HORIZONTALER SCHNITT</text>
 
         {showRaumecke && <>
           <line x1={hatX} y1={hatY} x2={reRx} y2={reY} stroke={COLOR.raum} strokeWidth="1.8" strokeLinecap="butt" strokeDasharray={`${70*scale} ${9*scale} ${4*scale} ${9*scale}`} />
@@ -986,6 +1067,7 @@ function HornSVG({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke,
 function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
+  const zoom = useZoomPan(containerRef);
 
   if (!s || VW < 10 || VH < 10) return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 
@@ -995,16 +1077,21 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
   const zMax = s.zApex + 10;
 
   const portrait = VH > VW;
-  const scale = portrait
+  const scale0 = portrait
     ? Math.min((VH - Math.min(80, VH*0.12) * 2) / (zMax - zMin), (VW - Math.min(68, VW*0.15) * 2) / (2 * halfMax))
     : Math.min((VW - Math.min(80, VW*0.12) * 2) / (zMax - zMin), (VH - Math.min(68, VH*0.15) * 2) / (2 * halfMax));
 
-  const contentW = (zMax - zMin) * scale;
-  const contentH = 2 * halfMax * scale;
+  const contentW = (zMax - zMin) * scale0;
+  const contentH = 2 * halfMax * scale0;
   const cy = VH / 2;
 
-  const toX = portrait ? y => VW / 2 + y * scale : z => (VW - contentW) / 2 + (z - zMin) * scale;
-  const toY = portrait ? z => VH - (VH - contentW) / 2 - (z - zMin) * scale : y => cy - y * scale;
+  // Basis-Abbildung (Standard-Zoom, zentriert), darauf die Zoom/Pan-Transformation
+  const toX0 = portrait ? y => VW / 2 + y * scale0 : z => (VW - contentW) / 2 + (z - zMin) * scale0;
+  const toY0 = portrait ? z => VH - (VH - contentW) / 2 - (z - zMin) * scale0 : y => cy - y * scale0;
+  const { k, tx, ty } = zoom.view;
+  const scale = scale0 * k;
+  const toX = u => tx + k * toX0(u);
+  const toY = u => ty + k * toY0(u);
 
   const ml = portrait ? (VW - contentH) / 2 : (VW - contentW) / 2;
 
@@ -1027,7 +1114,9 @@ function SeitenrissSVG({ s, rt, dw, dh, L, hMouth, curve, hypexT }) {
   const dimTrakAy   = toY(halfMax) - 36;
 
   return (
-    <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
+    <div ref={containerRef} {...zoom.handlers}
+      style={{ position: "relative", width: "100%", height: "100%", cursor: "grab", touchAction: "none", userSelect: "none" }}>
+      <ZoomControls k={k} onReset={zoom.reset} />
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs>
           <marker id="arrV" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
