@@ -116,4 +116,94 @@ function minLtForRaumecke(L, rt, dw, dh) {
   return hi;
 }
 
-export { ALPHA2, T_TRANS, zN, xN, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke };
+// ──────────────────────────────────────────────────────────────────
+// VERTIKALES PROFIL (Seitenriss) – von App.jsx importiert
+// ──────────────────────────────────────────────────────────────────
+
+// fillet (optional, aus computeFillet): Verrundung des Übergangs Throat → Aufweitung.
+// Zwischen den Tangentenpunkten zT1..zT2 liegt die Wand auf dem Verrundungsbogen.
+function verticalHalfHeight(z, s, rt, hMouth, curve, hypexT, fillet = null) {
+  if (fillet && z > fillet.zT1 && z < fillet.zT2) {
+    return fillet.hc - Math.sqrt(Math.max(0, fillet.R ** 2 - (z - fillet.zc) ** 2));
+  }
+  const h0 = rt;
+  const h1 = hMouth / 2;
+  const z0 = s.zInnerApex;
+  const z1 = s.zApex;
+
+  if (z <= z0) return h0;
+  if (z >= z1) return h1;
+
+  const u = (z - z0) / (z1 - z0);
+
+  if (curve === "linear") {
+    return h0 + (h1 - h0) * u;
+  }
+  if (curve === "exponential") {
+    if (h0 <= 0) return h1;
+    return h0 * Math.exp(Math.log(h1 / h0) * u);
+  }
+  if (curve === "hypex") {
+    const T = hypexT;
+    const ratio = h1 / h0;
+    if (ratio <= 0) return h0;
+    let m;
+    const fVal = mv => Math.cosh(mv) + T * Math.sinh(mv);
+    if (Math.abs(ratio - 1) < 1e-9) {
+      m = 0;
+    } else if (ratio > 1) {
+      let lo = 0, hi = Math.log(ratio * 2 + 2) + 1;
+      for (let i = 0; i < 80; i++) {
+        const mid = (lo + hi) / 2;
+        fVal(mid) < ratio ? (lo = mid) : (hi = mid);
+      }
+      m = (lo + hi) / 2;
+    } else {
+      return h0 + (h1 - h0) * u;
+    }
+    if (m < 1e-10) return h0 + (h1 - h0) * u;
+    return h0 * fVal(m * u);
+  }
+  return h0 + (h1 - h0) * u;
+}
+
+// Verrundung des Knicks zwischen waagerechtem Throat (h = rt) und Aufweitungskurve f(z)
+// im Seitenriss: Kreis mit Radius R, tangential an beide. Mittelpunkt (zc, rt + R) liegt
+// außerhalb der Wand; Tangentenpunkt T2 auf f ist die Stelle, an der der Mittelpunkt
+// genau R entlang der Normalen liegt: f(z2) + R/√(1+f'²) = rt + R  (Bisektion).
+// Ist R zu groß (T1 vor dem Throat oder T2 hinter dem Mund), wird der größte machbare
+// Radius genommen und limited = true gesetzt.
+function computeFillet(s, rt, hMouth, curve, hypexT, R) {
+  if (!s || !(s.Lt > 0.5) || !(R > 0)) return null;
+  const z0 = s.zInnerApex, z1 = s.zApex, h0 = rt;
+  const f  = z => verticalHalfHeight(z, s, rt, hMouth, curve, hypexT);
+  const d  = Math.max(1e-4, (z1 - z0) * 1e-5);
+  const df = z => {
+    const a = Math.max(z0, z - d), b = Math.min(z1, z + d);
+    return (f(b) - f(a)) / (b - a);
+  };
+  const solve = r => {
+    const g = z => f(z) + r / Math.hypot(1, df(z)) - h0 - r;
+    if (g(z1) < 0) return null;
+    let lo = z0, hi = z1;
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      g(mid) < 0 ? (lo = mid) : (hi = mid);
+    }
+    const z2 = (lo + hi) / 2, m = df(z2);
+    const zc = z2 - r * m / Math.hypot(1, m);
+    if (zc < 0) return null;
+    return { R: r, zc, hc: h0 + r, zT1: zc, zT2: z2, hT2: f(z2) };
+  };
+  const full = solve(R);
+  if (full) return { ...full, limited: false };
+  let lo = 0, hi = R;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    solve(mid) ? (lo = mid) : (hi = mid);
+  }
+  return lo > 0.1 ? { ...solve(lo), limited: true } : null;
+}
+
+export { ALPHA2, T_TRANS, zN, xN, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke,
+         verticalHalfHeight, computeFillet };
