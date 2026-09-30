@@ -114,7 +114,7 @@ Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint
 
 ## Raumecke
 
-Strichpunktlinie `raumDash(scale)`: 70 / 9 / 4 / 9 mm, ein Zyklus ≈ 92 mm – gibt beim Ablesen ein Maßgefühl.
+Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 mm = **100 mm pro Zyklus** (1 Strich + Punkt = 10 cm) – gibt beim Ablesen ein Maßgefühl. Im Seitenriss liegt per `raumDashCenter` die Strichmitte auf der Achse.
 
 ## Export
 
