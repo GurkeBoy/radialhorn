@@ -22,7 +22,8 @@ src/
   horn-mesh.js             — 3D-Körper (Luftvolumen und Schale) als strukturierte Flächengitter
   theme.js                 — Farben (UI, COLOR), Schrift, SVG-Stile, Raumecken-Strichmuster
   utils.js                 — linspace, clamp, svgPath, niceTicks
-  hooks.js                 — useSize, useZoomPan
+  hooks.js                 — useSize, useZoomPan, usePersistentState
+  settings.js              — gespeicherte Einstellungen (localStorage, je Wert geprüft gegen den Standard)
   components/
     ui.jsx                 — Card, Slider, Toggle, SegmentedButtons, Stat, Warn, ZoomControls, FullscreenPanel, ArrowMarker
     Dim.jsx                — Bemaßungen Dim (waagerecht/senkrecht) und DimAligned (schräg)
@@ -76,7 +77,7 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 - **Flansch am Throat** (eigener Schalter, nur mit Wandstärke): runde Platte auf der Hornseite, z ∈ [0, Dicke], Öffnung = Throat-Querschnitt (Quadrat 2·rt). Der Außenkörper beginnt dann erst bei z = Dicke (`zStart` in `body`/`contourRight`); statt des Throat-Rings: Rückseite (Kreis − Luftkanal − Bohrungen), Vorderseite (Kreis − Außenkörper − Bohrungen), Zylindermantel, Bohrungswände. Die ebenen Flächen trianguliert earcut (`ShapeUtils.triangulateShape`); earcut lässt kollineare Randpunkte weg – `planarFace` setzt sie wieder in die Kanten ein, sonst gäbe es T-Stöße zur Schale. `flangeLayout` löst die Vorgaben auf: Ø mindestens der Umkreis des Außenkörpers bei z = Dicke (kleinerer Ø wird angehoben, `limited`); ohne Ø-Vorgabe dw, mindestens Minimum + 4·Bohrungs-Ø + 4 mm; ohne Lochkreis mittig zwischen Minimum und Rand; Bohrungen, die nicht ganz im Ring liegen, entfallen (`invalidHoles`, Warnung). Standard (Bohrbild BMS 4591): 10 mm, 4 × Ø 6,6 mm (M6 durch) auf Lochkreis 101,6 mm, 12, 3, 6, 9 Uhr (Winkellage 0°, gemessen von der Breitenachse). Durchgangsbohrungen, die in der Schale landen (`conflicts`), werden nicht gebohrt (Körper und STL bleiben dicht), aber angezeigt: in 3D rot markiert (Scheibe auf der Rückseite, Ringe an Rück- und Vorderseite), im DXF auf Layer `Flansch_Konflikt`. Konflikt-Lösung offen.
 - Die Wellenfront-Betrachtung für den Querschnitt im Traktrix-Bereich ist noch offen.
 
-**Kennwerte:** `mouthArea`, `verticalMouthAngle`, `frequencyEstimates` (Näherungen nach Olson/Beranek).
+**Kennwerte:** `mouthArea`, `verticalMouthAngle`, `frequencyEstimates` (Näherungen nach Olson/Beranek, aus der Mundfläche = Bogenlänge × Mundhöhe: fc_low über den flächengleichen Kreismund, fc_cut über m = ln(A_Mund / (2·rt)²) / L).
 
 **Invarianten nie brechen:** `solveR0`, `solveHorn`, `zN`, `xN` – die Tests prüfen sie gegen unabhängige Referenzen (analytisch, numerische Integration, Skalierung).
 
@@ -153,4 +154,5 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `horn-mesh.flange.test.js` – Flansch: wasserdicht (mit/ohne Bohrungen, Klothoide, ohne Traktrix), Volumenzuwachs = Vorderseite × Dicke, Bohrbild, Mindest-Ø, Automatik-Ø und Lochkreis, ungültige Bohrungen
 - `horn-mesh.test.js` – 3D-Körper: wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format
 - `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung, Flansch), PDF (Kennwerte, Maßstab, Layer)
+- `settings.test.js` – Einstellungen: Rundlauf, Typprüfung (falscher Typ, kaputtes JSON, NaN → Standard), null = automatisch, Layer-Auswahl zusammengeführt, Zurücksetzen
 - `utils.test.js`

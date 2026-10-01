@@ -1,5 +1,5 @@
 // Radialhorn-Konfigurator: Parameter in der Seitenleiste, Draufsicht und Seitenriss rechts.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createHornMath, hasTraktrix, CURVES, computeFillet, makeProfile,
   mouthArea, verticalMouthAngle, frequencyEstimates,
@@ -12,6 +12,8 @@ import { Draufsicht } from "./components/Draufsicht.jsx";
 import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
 import { Ansicht3D } from "./components/Ansicht3D.jsx";
+import { usePersistentState } from "./hooks.js";
+import { clearSettings } from "./settings.js";
 import { exportDXF } from "./export/dxf.js";
 import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
@@ -29,31 +31,31 @@ const L_MAX = 1200;   // Obergrenze des L-Reglers ohne Raumecke [mm]
 const formatHz = f => f >= 1000 ? (f / 1000).toFixed(2) + " k" : f.toFixed(0);
 
 export default function App() {
-  const [throatDiam,      setThroatDiam]      = useState(50.8);
-  const [openingAngle,    setOpeningAngle]    = useState(140);
-  const [L,               setL]               = useState(500);
-  const [Lt,              setLt]              = useState(60);
-  const [dw,              setDw]              = useState(182);   // BMS 4591: Ø 182 mm
-  const [dh,              setDh]              = useState(90);    // BMS 4591: Tiefe 90 mm
-  const [hMouth,          setHMouth]          = useState(200);
-  const [curve,           setCurve]           = useState("exponential");
-  const [hypexT,          setHypexT]          = useState(0.5);
-  const [showRaumecke,    setShowRaumecke]    = useState(true);
-  const [showWandstaerke, setShowWandstaerke] = useState(false);
-  const [wandstaerke,     setWandstaerke]     = useState(20);
-  const [filletOn,        setFilletOn]        = useState(false);
-  const [filletR,         setFilletR]         = useState(100);
-  const [clothoidOn,      setClothoidOn]      = useState(false);
-  const [clothoidLength,  setClothoidLength]  = useState(30);
-  const [flangeOn,        setFlangeOn]        = useState(false);
-  const [flangeD,         setFlangeD]         = useState(null);   // null: Treiberbreite dw, mind. Schale + Bohrungen
-  const [flangeT,         setFlangeT]         = useState(10);
-  const [holeCount,       setHoleCount]       = useState(4);
+  const [throatDiam,      setThroatDiam]      = usePersistentState("throatDiam", 50.8);
+  const [openingAngle,    setOpeningAngle]    = usePersistentState("openingAngle", 140);
+  const [L,               setL]               = usePersistentState("L", 500);
+  const [Lt,              setLt]              = usePersistentState("Lt", 60);
+  const [dw,              setDw]              = usePersistentState("dw", 182);   // BMS 4591: Ø 182 mm
+  const [dh,              setDh]              = usePersistentState("dh", 90);    // BMS 4591: Tiefe 90 mm
+  const [hMouth,          setHMouth]          = usePersistentState("hMouth", 200);
+  const [curve,           setCurve]           = usePersistentState("curve", "exponential");
+  const [hypexT,          setHypexT]          = usePersistentState("hypexT", 0.5);
+  const [showRaumecke,    setShowRaumecke]    = usePersistentState("showRaumecke", true);
+  const [showWandstaerke, setShowWandstaerke] = usePersistentState("showWandstaerke", false);
+  const [wandstaerke,     setWandstaerke]     = usePersistentState("wandstaerke", 20);
+  const [filletOn,        setFilletOn]        = usePersistentState("filletOn", false);
+  const [filletR,         setFilletR]         = usePersistentState("filletR", 100);
+  const [clothoidOn,      setClothoidOn]      = usePersistentState("clothoidOn", false);
+  const [clothoidLength,  setClothoidLength]  = usePersistentState("clothoidLength", 30);
+  const [flangeOn,        setFlangeOn]        = usePersistentState("flangeOn", false);
+  const [flangeD,         setFlangeD]         = usePersistentState("flangeD", null);   // null: Treiberbreite dw, mind. Schale + Bohrungen
+  const [flangeT,         setFlangeT]         = usePersistentState("flangeT", 10);
+  const [holeCount,       setHoleCount]       = usePersistentState("holeCount", 4);
   // Bohrbild BMS 4591: 4 × M6 im 90°-Raster auf Ø 101,6 mm (4"), Durchgangsbohrung M6 mittel 6,6 mm
-  const [holeCircle,      setHoleCircle]      = useState(101.6);   // null: mittig im Flanschring
-  const [holeD,           setHoleD]           = useState(6.6);
-  const [holeAngle,       setHoleAngle]       = useState(0);    // 0°: Bohrungen auf 3, 12, 9, 6 Uhr
-  const [exportLayers,    setExportLayers]    = useState({
+  const [holeCircle,      setHoleCircle]      = usePersistentState("holeCircle", 101.6);   // null: mittig im Flanschring
+  const [holeD,           setHoleD]           = usePersistentState("holeD", 6.6);
+  const [holeAngle,       setHoleAngle]       = usePersistentState("holeAngle", 0);    // 0°: Bohrungen auf 3, 12, 9, 6 Uhr
+  const [exportLayers,    setExportLayers]    = usePersistentState("exportLayers", {
     draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, uebergang: true, flansch: true, bemassung: true,
   });
   const setLayer = key => on => setExportLayers(layers => ({ ...layers, [key]: on }));
@@ -190,7 +192,7 @@ export default function App() {
 
         {s && <>
           <KeyFigures s={s} hMouth={hMouth} profile={profile} />
-          <Frequencies s={s} rt={rt} />
+          <Frequencies s={s} rt={rt} hMouth={hMouth} />
           <Querschnitt s={s} profile={profile} />
           <Card title="EXPORT">
             <Note style={{ marginBottom: 6 }}>DXF — Kurven (mm)</Note>
@@ -207,6 +209,7 @@ export default function App() {
             <ExportButton onClick={() => exportSTL(design)}>↓ STL (3D, {wall > 0 ? `Schale ${wall} mm${flange ? " + Flansch" : ""}` : "Luftvolumen"})</ExportButton>
           </Card>
         </>}
+        <ResetSettingsButton />
       </div>
 
       {/* Ansichten: oben Draufsicht und 3D, unten Seitenriss über die volle Breite */}
@@ -249,11 +252,11 @@ function KeyFigures({ s, hMouth, profile }) {
   );
 }
 
-function Frequencies({ s, rt }) {
-  const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt);
+function Frequencies({ s, rt, hMouth }) {
+  const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt, hMouth);
   return (
     <Card title="FREQUENZEN (NÄHERUNG)">
-      <FrequencyRow label="fc_low  — Mund (λ=2πR)"   value={fcLow} />
+      <FrequencyRow label="fc_low  — Mund (Umfang=λ)"   value={fcLow} />
       <FrequencyRow label="fc_cut  — Horn-Cutoff"     value={fcCut} />
       <FrequencyRow label="fc_high — Throat (λ=2r)"   value={fcHigh} />
       <Note style={{ fontSize: 8, marginTop: 6, lineHeight: 1.4 }}>
@@ -270,6 +273,22 @@ function FrequencyRow({ label, value }) {
       <span style={{ fontSize: 13, fontWeight: 700, color: UI.value, fontFamily: FONT }}>{formatHz(value)} Hz</span>
     </div>
   );
+}
+
+/** Gespeicherte Einstellungen löschen und mit den Standardwerten neu starten (zweiter Klick bestätigt). */
+function ResetSettingsButton() {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [armed]);
+  const reset = () => {
+    if (!armed) { setArmed(true); return; }
+    clearSettings();
+    window.location.reload();
+  };
+  return <ExportButton onClick={reset}>{armed ? "Wirklich zurücksetzen? Nochmal klicken" : "⟲ Alle Einstellungen zurücksetzen"}</ExportButton>;
 }
 
 function ExportButton({ primary, onClick, children }) {

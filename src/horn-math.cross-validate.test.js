@@ -183,15 +183,24 @@ describe("Bogenlänge und Winkelbeziehungen", () => {
 describe("Akustische Plausibilitätschecks", () => {
   const LT = 60;
   const s  = solveHorn(500, LT, RT, DW, DH);
-  const f  = frequencyEstimates(s, RT);
+  const H  = 200;
+  const f  = frequencyEstimates(s, RT, H);
 
   it("frequencyEstimates entspricht den Näherungsformeln", () => {
-    // fc_low: Mundumfang = Wellenlänge; fc_high: Throat-Durchmesser = halbe Wellenlänge;
-    // fc_cut: Flare-Konstante m = ln(B_Mund / B_Throat) / L mit B = horizontale Breite
-    const m = Math.log(s.arcLen / (2 * RT)) / (s.zApex - s.hatTipZ);
-    expect(f.fcLow).toBeCloseTo(C / (2 * Math.PI * s.arcR), 9);
+    // fc_low: Umfang des flächengleichen Kreismunds = Wellenlänge; fc_high: Throat-Durchmesser
+    // = halbe Wellenlänge; fc_cut: Flare-Konstante m = ln(A_Mund / A_Throat) / L
+    const A = s.arcLen * H;
+    const m = Math.log(A / (2 * RT) ** 2) / (s.zApex - s.hatTipZ);
+    expect(f.fcLow).toBeCloseTo(C / (2 * Math.PI * Math.sqrt(A / Math.PI)), 9);
     expect(f.fcHigh).toBeCloseTo(C / (2 * RT), 9);
     expect(f.fcCut).toBeCloseTo(C * m / (4 * Math.PI), 9);
+  });
+
+  it("größere Mundhöhe: fc_low sinkt, fc_cut steigt; fc_high unverändert", () => {
+    const g = frequencyEstimates(s, RT, 2 * H);
+    expect(g.fcLow).toBeLessThan(f.fcLow);
+    expect(g.fcCut).toBeGreaterThan(f.fcCut);
+    expect(g.fcHigh).toBe(f.fcHigh);
   });
 
   it("Mundbreite >> Throat-Durchmesser (Horn öffnet sich deutlich)", () => {
