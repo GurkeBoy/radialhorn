@@ -63,7 +63,7 @@ Horizontale Kontur in drei Abschnitten:
 
 **Verrundung des Übergangs** (`computeFillet`): Kreis tangential an Throat und Aufweitung, Mittelpunkt (zc, rt + R) außerhalb der Wand, Tangentenpunkt T2 per Bisektion. Zu große Radien werden auf den größten machbaren begrenzt (`limited`). Wirkt auf Seitenriss, Querschnitt, PDF und DXF; Sektionsfarben und Maße bleiben an zInnerApex getrennt. Nur mit Traktrix-Eingang.
 
-**Querschnitt** (`crossSection`): A = B·H; B aus der Wellenfront (gerader Bereich: Kreisbogen um den Fokus; Traktrix: Tangentenfuß + r0), H aus dem Profil an derselben Achsenposition. Der Übergang Traktrix → gerade Wand ist eigener Stützpunkt.
+**Querschnitt** (`crossSection`): Wellenfront = Kreisbogen um den Schnittpunkt der Wandtangente mit der Achse (gerader Bereich: Fokus, wachsender Radius; Traktrix: mitwandernder Tangentenfuß, Radius r0 – Voigt). A = ∫ 2h ds über den Bogen mit der Höhe nach der 3D-Regel h = Profil(zFocus + Abstand zum Fokus); im geraden Bereich ist h auf dem Bogen konstant, auf der Traktrix wird im Verrundungsband numerisch integriert. Der Übergang Traktrix → gerade Wand ist eigener Stützpunkt. A ist dort stetig, hat aber einen Knick: die Wandkrümmung springt (Traktrix → Gerade), und die Wellenfrontbreite hängt vom Tangentenwinkel ab (Steigung von B: 2·sin α → 2·α). Glatt würde A nur mit einem krümmungsstetigen Übergang in der Draufsicht (z.B. Klothoide) – bisher nicht umgesetzt.
 
 **3D-Körper** (`horn-mesh.js`, vereinbarte Konstruktion):
 - Traktrix-Sektion: senkrechte Wände entlang der Traktrix, Grundfläche wie in der Draufsicht bis zum inneren Teilkreis (Radius rInner um den Fokus).

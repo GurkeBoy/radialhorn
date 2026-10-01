@@ -329,11 +329,12 @@ export function computeFillet(s, rt, hMouth, curve, hypexT, R) {
 // ──────────────────────────────────────────────────────────────────
 
 /**
- * Horizontale Wellenfront-Breite B zu einem Wandpunkt bei zWall und die Achsenposition
- * dieser Wellenfront. Im geraden Bereich ist die Wellenfront ein Kreisbogen um den Fokus
- * (Achsenposition zFocus + Radius). Auf der Traktrix trifft die Tangente jedes Kurvenpunkts
- * die Achse in einem eigenen Fußpunkt, das Tangentensegment ist konstant r0 lang
- * (definierende Traktrix-Eigenschaft) – Achsenposition also Tangentenfuß + r0.
+ * Wellenfront (Draufsicht) zu einem Wandpunkt bei zWall: Kreisbogen um den Punkt, in dem die
+ * Wandtangente die Achse schneidet – nur so steht er senkrecht auf beiden Wänden. Im geraden
+ * Bereich ist das der Fokus (wachsender Radius, fester Halbwinkel α); auf der Traktrix ein
+ * mitwandernder Fußpunkt mit konstantem Radius r0 (definierende Traktrix-Eigenschaft) und
+ * wachsendem Halbwinkel. Die Achsenposition der Wellenfront ist Mittelpunkt + Radius.
+ * @returns {{ zCenter, radius, halfAngle, zAxis }}
  */
 function wavefrontAt(s, zWall) {
   if (hasTraktrix(s) && zWall <= s.zTrans) {
@@ -343,19 +344,28 @@ function wavefrontAt(s, zWall) {
       s.r0 * (zN(s.tTh) - zN(tm)) < zWall ? (lo = tm) : (hi = tm);
     }
     const t = (lo + hi) / 2;
-    return { B: 2 * s.r0 * Math.atan(1 / Math.sinh(t)), zAxis: s.r0 * (zN(s.tTh) - t + 1) };
+    const zAxis = s.r0 * (zN(s.tTh) - t + 1);
+    return { zCenter: zAxis - s.r0, radius: s.r0, halfAngle: Math.atan(1 / Math.sinh(t)), zAxis };
   }
   const frac  = (zWall - s.zTrans) / (s.Ls || 1);
   const xWall = s.xTrans + frac * s.Ls * Math.tan(s.alpha2);
   const R = Math.sqrt((zWall - s.zFocus) ** 2 + xWall ** 2);
-  return { B: R * 2 * s.alpha2, zAxis: s.zFocus + R };
+  return { zCenter: s.zFocus, radius: R, halfAngle: s.alpha2, zAxis: s.zFocus + R };
 }
 
+const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
+
 /**
- * Querschnittsfläche A = B·H entlang der Achse. B aus der Wellenfront (s.o.), H aus dem
- * Profil an derselben Achsenposition. Abgetastet an n+1 Wandpunkten plus exakt am
- * Übergang Traktrix → gerade Wand. Vor der ersten definierten Wellenfront (Treiberebene)
- * wird A bis z = 0 konstant gehalten.
+ * Querschnittsfläche der Wellenfront = ∫ 2·h ds über den Wellenfront-Bogen, mit der Höhe
+ * aus derselben Regel wie beim 3D-Körper: h = Profil(zFocus + Abstand zum Fokus). Im
+ * geraden Bereich liegt der Bogen um den Fokus, h ist darauf konstant (A = Bogenlänge · 2h).
+ * Auf der Traktrix liegt er um einen anderen Mittelpunkt; mit Verrundung ändert sich h dort
+ * entlang des Bogens und wird numerisch integriert (Simpson).
+ *
+ * Abgetastet an n+1 Wandpunkten plus exakt am Übergang Traktrix → gerade Wand. Vor der
+ * ersten definierten Wellenfront (Treiberebene) wird A bis z = 0 konstant gehalten.
+ * Am Übergang ist A stetig, hat aber einen Knick: die Wandkrümmung springt dort (Traktrix
+ * → Gerade), und die Wellenfrontbreite hängt vom Tangentenwinkel der Wand ab.
  *
  * @param profile  z ↦ halbe Höhe (makeProfile)
  * @returns {{z: number, A: number, traktrix: boolean}[]}  aufsteigend in z
@@ -365,9 +375,22 @@ export function crossSection(s, profile, n = 100) {
   if (hasTraktrix(s)) zWalls.push(s.zTrans);
   zWalls.sort((a, b) => a - b);
 
+  const areaOf = ({ zCenter, radius, halfAngle, zAxis }) => {
+    if (zCenter === s.zFocus) return 2 * halfAngle * radius * (2 * profile(zAxis));
+    // Punkt auf dem Bogen unter dem Winkel ψ zur Achse; Abstand zum Fokus bestimmt die Höhe
+    const height = psi => {
+      const x = radius * Math.sin(psi), z = zCenter + radius * Math.cos(psi);
+      return profile(s.zFocus + Math.hypot(x, z - s.zFocus));
+    };
+    const m = ARC_SAMPLES, step = halfAngle / m;
+    let sum = height(0) + height(halfAngle);
+    for (let k = 1; k < m; k++) sum += (k % 2 ? 4 : 2) * height(k * step);
+    return 2 * (2 * radius * step / 3 * sum);   // beide Bogenhälften, Höhe 2h
+  };
+
   const pts = zWalls.map(zWall => {
-    const { B, zAxis } = wavefrontAt(s, zWall);
-    return { z: zAxis, A: B * (2 * profile(zAxis)), traktrix: zWall <= s.zTrans };
+    const wf = wavefrontAt(s, zWall);
+    return { z: wf.zAxis, A: areaOf(wf), traktrix: zWall <= s.zTrans };
   });
   return [{ ...pts[0], z: 0 }, ...pts];
 }

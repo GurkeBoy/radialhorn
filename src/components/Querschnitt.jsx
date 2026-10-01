@@ -75,7 +75,13 @@ export function Querschnitt({ s, profile }) {
         <line x1={axX} y1={mt} x2={axX} y2={VH-mb} stroke={COLOR.axis} strokeWidth="0.7" />
         <line x1={ml} y1={axY} x2={VW-mr} y2={axY} stroke={COLOR.axis} strokeWidth="0.7" />
         <g clipPath="url(#csPlot)">
-          {zTrans !== null && <line x1={gx(zTrans)} y1={mt} x2={gx(zTrans)} y2={VH-mb} stroke={COLOR.trak} strokeWidth="0.6" strokeDasharray="3 2" opacity="0.4" />}
+          {zTrans !== null && <>
+            <line x1={gx(zTrans)} y1={mt} x2={gx(zTrans)} y2={VH-mb} stroke={COLOR.trak} strokeWidth="0.6" strokeDasharray="3 2" opacity="0.4" />
+            {/* unsichtbare, breitere Trefferfläche für den Hinweis */}
+            <line x1={gx(zTrans)} y1={mt} x2={gx(zTrans)} y2={VH-mb} stroke="transparent" strokeWidth="6" style={{ pointerEvents: "stroke" }}>
+              <title>{`Übergang Traktrix → gerade Wand (z = ${zTrans.toFixed(0)} mm). Der Knick in A(z) ist geometrisch bedingt: die Wandkrümmung in der Draufsicht springt hier, und die Wellenfrontbreite hängt vom Tangentenwinkel der Wand ab.`}</title>
+            </line>
+          </>}
           {segments.map((seg, i) => (
             <path key={i} d={svgPath(seg.pts.map(p => [gx(p.z), gy(p.A)]), 1)} fill="none"
               stroke={seg.traktrix ? COLOR.trak : COLOR.horn} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />

@@ -113,3 +113,65 @@ describe("Hypex-Cache", () => {
     }
   });
 });
+
+describe("crossSection – Höhe entlang der Wellenfront (wie der 3D-Körper)", () => {
+  const fillet = computeFillet(s, RT, H_MOUTH, "exponential", 0.5, 300);
+  const prof = makeProfile(s, RT, H_MOUTH, "exponential", 0.5, fillet);
+  const pts = crossSection(s, prof, 400);
+  const trak = pts.slice(1).filter(p => p.traktrix);
+
+  /** Unabhängige Referenz: Wellenfront zum Achspunkt z über die Traktrix-Eigenschaft rekonstruieren
+   *  (Mittelpunkt z − r0, Radius r0) und die Höhe über 20 000 Bogenpunkte aufsummieren. */
+  function referenceArea(z) {
+    const zc = z - s.r0;
+    // Halbwinkel: Bogen trifft die Traktrix-Wand – dort steht die Tangente senkrecht auf dem Radius
+    const wall = traktrixPoints(s, 20000);
+    let best = null;
+    for (const [x, zw] of wall) {
+      const d = Math.abs(Math.hypot(x, zw - zc) - s.r0);
+      if (!best || d < best.d) best = { d, psi: Math.atan2(x, zw - zc) };
+    }
+    const n = 20000, step = best.psi / n;
+    let sum = 0;
+    for (let k = 0; k < n; k++) {
+      const psi = (k + 0.5) * step;
+      const x = s.r0 * Math.sin(psi), zq = zc + s.r0 * Math.cos(psi);
+      sum += 2 * prof(s.zFocus + Math.hypot(x, zq - s.zFocus)) * s.r0 * step;
+    }
+    return 2 * sum;
+  }
+
+  it("ohne Verrundung: Traktrix-Fläche = Bogenlänge × 2·rt (eben)", () => {
+    const flatProfile = makeProfile(s, RT, H_MOUTH, "exponential", 0.5);
+    const flat = crossSection(s, flatProfile, 50).slice(1).filter(p => p.traktrix);
+    for (const p of flat) expect(p.A / (2 * RT) / (2 * s.r0)).toBeLessThanOrEqual(s.alpha2 + 1e-9);
+    expect(flat[flat.length - 1].A).toBeCloseTo(2 * s.alpha2 * s.r0 * 2 * RT, 6);   // am Übergang θ = α
+  });
+
+  it("mit Verrundung: stimmt mit unabhängiger Integration über die Bogenpunkte überein", () => {
+    for (const p of trak.filter((_, i) => i % 40 === 0).concat(trak[trak.length - 1])) {
+      expect(p.A / referenceArea(p.z)).toBeCloseTo(1, 4);
+    }
+  });
+
+  it("im Verrundungsband größer als die alte Näherung Breite × Höhe auf der Achse", () => {
+    // Bogenpunkte abseits der Achse liegen weiter vom Fokus entfernt → höher im ansteigenden Band
+    // ohne den Übergangspunkt selbst: dort liegt der Bogen um den Fokus, h ist konstant
+    const band = trak.filter(p => p.z > fillet.zT1 + 2 && p.z < s.zInnerApex - 0.5);
+    expect(band.length).toBeGreaterThan(0);
+    for (const p of band) {
+      const flatProfile = makeProfile(s, RT, H_MOUTH, "exponential", 0.5);
+      const width = crossSection(s, flatProfile, 400).find(q => q.z === p.z).A / (2 * RT);
+      expect(p.A).toBeGreaterThan(width * 2 * prof(p.z));
+    }
+  });
+
+  it("am Übergang stetig, mit dem erklärten Knick in der Steigung", () => {
+    const i = pts.findIndex(p => !p.traktrix);
+    const [a, b, c] = [pts[i - 2], pts[i - 1], pts[i + 1]];
+    expect(Math.abs(pts[i].A - b.A) / b.A).toBeLessThan(0.02);    // kein Sprung
+    const left = (b.A - a.A) / (b.z - a.z), right = (c.A - b.A) / (c.z - b.z);
+    // ohne Höhenänderung wäre das Verhältnis 2·sin α / 2·α; hier steigt h zusätzlich leicht
+    expect(right / left).toBeGreaterThan(1.1);
+  });
+});
