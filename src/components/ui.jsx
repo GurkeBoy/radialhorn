@@ -128,25 +128,29 @@ export function ZoomControls({ k, onReset, top = 6, right = 36, compact = false 
   );
 }
 
-/** Rahmen einer Ansicht mit Umschalter auf Vollbild. */
+/**
+ * Rahmen einer Ansicht mit Umschalter auf Vollbild. Der Inhalt bleibt dabei an derselben
+ * Stelle im Komponentenbaum – nur der Rahmen wechselt –, damit Zoom, Kamera und
+ * Darstellung der Ansicht erhalten bleiben.
+ */
 export function FullscreenPanel({ children }) {
   const [full, setFull] = useState(false);
-  const button = (
-    <button type="button" onClick={() => setFull(f => !f)} title={full ? "Vollbild beenden" : "Vollbild"} style={{
-      ...controlStyle, position: "absolute", top: 6, right: 6, zIndex: 10, cursor: "pointer",
-      width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: 12, lineHeight: 1,
-    }}>
-      {full ? "✕" : "⤢"}
-    </button>
-  );
-  return full
-    ? (
-      <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: UI.bg, display: "flex", flexDirection: "column" }}>
-        <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>{button}{children}</div>
+  return (
+    <div style={full
+      ? { position: "fixed", inset: 0, zIndex: 1000, background: UI.bg }
+      : { position: "relative", width: "100%", height: "100%" }}>
+      <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+        <button type="button" onClick={() => setFull(f => !f)} title={full ? "Vollbild beenden" : "Vollbild"} style={{
+          ...controlStyle, position: "absolute", top: 6, right: 6, zIndex: 10, cursor: "pointer",
+          width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 12, lineHeight: 1,
+        }}>
+          {full ? "✕" : "⤢"}
+        </button>
+        {children}
       </div>
-    )
-    : <div style={{ position: "relative", width: "100%", height: "100%" }}>{button}{children}</div>;
+    </div>
+  );
 }
 
 /** Pfeilspitze für Maßlinien (orient="auto-start-reverse": gleiche Form an beiden Enden). */
