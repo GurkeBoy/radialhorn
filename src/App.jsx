@@ -15,6 +15,7 @@ import { Ansicht3D } from "./components/Ansicht3D.jsx";
 import { exportDXF } from "./export/dxf.js";
 import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
+import { flangeLayout } from "./horn-mesh.js";
 
 const THROAT_SIZES = [
   { label: '1"',  diameter: 25.4 },
@@ -32,8 +33,8 @@ export default function App() {
   const [openingAngle,    setOpeningAngle]    = useState(140);
   const [L,               setL]               = useState(500);
   const [Lt,              setLt]              = useState(60);
-  const [dw,              setDw]              = useState(120);
-  const [dh,              setDh]              = useState(100);
+  const [dw,              setDw]              = useState(182);   // BMS 4591: Ø 182 mm
+  const [dh,              setDh]              = useState(90);    // BMS 4591: Tiefe 90 mm
   const [hMouth,          setHMouth]          = useState(200);
   const [curve,           setCurve]           = useState("exponential");
   const [hypexT,          setHypexT]          = useState(0.5);
@@ -44,8 +45,16 @@ export default function App() {
   const [filletR,         setFilletR]         = useState(100);
   const [clothoidOn,      setClothoidOn]      = useState(false);
   const [clothoidLength,  setClothoidLength]  = useState(30);
+  const [flangeOn,        setFlangeOn]        = useState(false);
+  const [flangeD,         setFlangeD]         = useState(null);   // null: Treiberbreite dw, mind. Schale + Bohrungen
+  const [flangeT,         setFlangeT]         = useState(10);
+  const [holeCount,       setHoleCount]       = useState(4);
+  // Bohrbild BMS 4591: 4 × M6 im 90°-Raster auf Ø 101,6 mm (4"), Durchgangsbohrung M6 mittel 6,6 mm
+  const [holeCircle,      setHoleCircle]      = useState(101.6);   // null: mittig im Flanschring
+  const [holeD,           setHoleD]           = useState(6.6);
+  const [holeAngle,       setHoleAngle]       = useState(0);    // 0°: Bohrungen auf 3, 12, 9, 6 Uhr
   const [exportLayers,    setExportLayers]    = useState({
-    draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, uebergang: true, bemassung: true,
+    draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, uebergang: true, flansch: true, bemassung: true,
   });
   const setLayer = key => on => setExportLayers(layers => ({ ...layers, [key]: on }));
 
@@ -96,8 +105,17 @@ export default function App() {
   );
 
   const wall = showWandstaerke ? wandstaerke : 0;
+  // Flansch nur an der Schale; Ø und Lochkreis werden gegen den Außenkörper aufgelöst
+  const flange = useMemo(
+    () => s && wall > 0 && flangeOn ? flangeLayout(s, rt, profile, fillet, wall, {
+      diameter: flangeD, fallback: dw, thickness: flangeT,
+      holes: { count: holeCount, circle: holeCircle, diameter: holeD, angle: holeAngle },
+    }) : null,
+    [s, rt, profile, fillet, wall, flangeOn, flangeD, dw, flangeT, holeCount, holeCircle, holeD, holeAngle],
+  );
+  const flangeOverRaumecke = flange && showRaumecke && flange.diameter / 2 > dw / 2 + dh;
   const design = {
-    s, rt, L: LClamped, hMouth, curve, hypexT, fillet, profile, wall,
+    s, rt, L: LClamped, hMouth, curve, hypexT, fillet, profile, wall, flange,
     showRaumecke, showWandstaerke, wandstaerke,
   };
 
@@ -117,7 +135,22 @@ export default function App() {
           {showRaumecke && <Note style={{ paddingLeft: 46, marginTop: -6, marginBottom: 4 }}>Hornbreite auf Raumecken-Diagonale begrenzt</Note>}
           <Toggle label="Wandstärke" checked={showWandstaerke} onChange={setShowWandstaerke} />
           {showWandstaerke && <Slider label="Wandstärke" value={wandstaerke} min={1} max={100} step={1} unit="mm" onChange={setWandstaerke} />}
+          {showWandstaerke && <Toggle label="Flansch am Throat" checked={flangeOn} onChange={setFlangeOn} />}
         </Card>
+
+        {flange && <Card title="FLANSCH">
+          <Slider label="Durchmesser" value={Math.round(flange.diameter)} min={Math.ceil(flange.minDiameter)} max={400} step={1} unit="mm" onChange={setFlangeD} />
+          {flange.limited && <Note style={{ marginTop: -4, marginBottom: 4 }}>mind. {Math.ceil(flange.minDiameter)} mm (umschließt die Schale)</Note>}
+          {flangeOverRaumecke && <Warn>⚠ Flansch ragt über die Raumecke</Warn>}
+          <Slider label="Dicke" value={flangeT} min={2} max={40} step={1} unit="mm" onChange={setFlangeT} />
+          <Slider label="Bohrungen" value={holeCount} min={0} max={12} step={1} unit="" onChange={setHoleCount} />
+          {holeCount > 0 && <>
+            <Slider label="Lochkreis-Ø" value={flange.holes.circle} min={Math.ceil(flange.minDiameter / 2)} max={Math.floor(flange.diameter)} step={0.1} unit="mm" onChange={setHoleCircle} />
+            <Slider label="Bohrungs-Ø" value={holeD} min={2} max={20} step={0.1} unit="mm" onChange={setHoleD} />
+            <Slider label="Winkellage" value={holeAngle} min={0} max={Math.round(360 / holeCount)} step={1} unit="°" onChange={setHoleAngle} />
+            {flange.invalidHoles > 0 && <Warn>⚠ {flange.invalidHoles} Bohrung{flange.invalidHoles > 1 ? "en" : ""} im Konflikt mit der Schale (rot markiert, nicht gebohrt)</Warn>}
+          </>}
+        </Card>}
 
         <Card title="THROAT">
           <SegmentedButtons
@@ -166,11 +199,12 @@ export default function App() {
             <Toggle label="Fokuspunkt"       checked={exportLayers.fokus}        onChange={setLayer("fokus")} />
             <Toggle label="Seitenprofil"     checked={exportLayers.seitenprofil} onChange={setLayer("seitenprofil")} />
             <Toggle label="Übergangspunkt"   checked={exportLayers.uebergang}    onChange={setLayer("uebergang")} />
+            {flange && <Toggle label="Flansch"  checked={exportLayers.flansch}      onChange={setLayer("flansch")} />}
             <Note style={{ margin: "8px 0 6px" }}>PDF — zusätzlich zu Kurven oben</Note>
             <Toggle label="Bemaßungen"       checked={exportLayers.bemassung}    onChange={setLayer("bemassung")} />
             <ExportButton primary onClick={() => exportDXF(design, exportLayers)}>↓ DXF exportieren</ExportButton>
             <ExportButton onClick={() => exportPDF(design, exportLayers)}>↓ PDF (Zeichnungen)</ExportButton>
-            <ExportButton onClick={() => exportSTL(design)}>↓ STL (3D, {wall > 0 ? `Schale ${wall} mm` : "Luftvolumen"})</ExportButton>
+            <ExportButton onClick={() => exportSTL(design)}>↓ STL (3D, {wall > 0 ? `Schale ${wall} mm${flange ? " + Flansch" : ""}` : "Luftvolumen"})</ExportButton>
           </Card>
         </>}
       </div>
@@ -180,14 +214,14 @@ export default function App() {
         <div style={{ flex: 6, display: "flex", gap: 8, minHeight: 0 }}>
           <ViewPanel flex={1}>
             <Draufsicht s={s} rt={rt} dw={dw} dh={dh} L={LClamped}
-              showRaumecke={showRaumecke} showWandstaerke={showWandstaerke} wandstaerke={wandstaerke} />
+              showRaumecke={showRaumecke} showWandstaerke={showWandstaerke} wandstaerke={wandstaerke} flange={flange} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={dw} dh={dh} hMouth={hMouth} profile={profile} fillet={fillet} wall={wall} showRaumecke={showRaumecke} />
+            <Ansicht3D s={s} rt={rt} dw={dw} dh={dh} hMouth={hMouth} profile={profile} fillet={fillet} wall={wall} flange={flange} showRaumecke={showRaumecke} />
           </ViewPanel>
         </div>
         <ViewPanel flex={5}>
-          <Seitenriss s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} profile={profile} fillet={fillet} />
+          <Seitenriss s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} profile={profile} fillet={fillet} flange={flange} />
         </ViewPanel>
       </div>
     </div>

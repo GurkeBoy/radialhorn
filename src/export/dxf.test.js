@@ -84,6 +84,23 @@ describe("buildDXF", () => {
     expect(count(e, "LINE", "Seitenprofil_Throat")).toBe(0);
   });
 
+  it("Flansch: Kreise in der Ebene quer zur Achse, quadratische Öffnung, Bohrungen", () => {
+    const flange = { diameter: 180, thickness: 10, holes: { count: 4, circle: 150, diameter: 6.5, angle: 45 },
+      centers: [[53, 53], [-53, 53], [-53, -53], [53, -53]], conflicts: [[0, 40]] };
+    const e = parse(buildDXF(design({ flange }), { flansch: true }));
+    const circles = e.filter(x => x.type === "CIRCLE" && layerOf(x) === "Flansch");
+    expect(circles).toHaveLength(2 + 4);
+    for (const c of circles) expect([get(c, "210")[0], get(c, "220")[0], get(c, "230")[0]]).toEqual([1, 0, 0]);
+    expect(circles.slice(0, 2).map(c => [get(c, "40")[0], get(c, "30")[0]])).toEqual([[90, 0], [90, 10]]);
+    expect(get(circles[2], "10")[0]).toBeCloseTo(53, 6);
+    expect(get(circles[2], "40")[0]).toBeCloseTo(3.25, 6);
+    const lines = e.filter(x => x.type === "LINE" && layerOf(x) === "Flansch");
+    expect(lines).toHaveLength(4);
+    expect(count(e, "CIRCLE", "Flansch_Konflikt")).toBe(1);
+    for (const l of lines) for (const v of [...get(l, "20"), ...get(l, "30")]) expect(Math.abs(v)).toBeCloseTo(RT, 6);
+    expect(count(parse(buildDXF(design(), { flansch: true })), "CIRCLE", "Flansch")).toBe(0);   // ohne Flansch
+  });
+
   it("ohne ausgewählte Layer nur der leere Rahmen", () => {
     expect(parse(buildDXF(design(), {})).map(e => e.type)).toEqual(["SECTION", "ENDSEC", "EOF"]);
   });

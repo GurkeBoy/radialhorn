@@ -28,11 +28,12 @@ src/
     Dim.jsx                — Bemaßungen Dim (waagerecht/senkrecht) und DimAligned (schräg)
     Draufsicht.jsx, Seitenriss.jsx, Querschnitt.jsx — 2D-Ansichten und Diagramm
     Ansicht3D.jsx          — 3D-Ansicht (three.js, OrbitControls, Zeichnen nur bei Bedarf)
+    FlanschSchnitt.jsx     — Schnittfläche des Throat-Flanschs (Draufsicht, Seitenriss)
   export/
     bspline.js             — kubische B-Spline-Interpolation für DXF-SPLINEs
     dxf.js                 — DXF-Writer (buildDXF) und Export
     pdf.js                 — PDF-Datenblatt (buildDatasheet) und Export
-    stl.js                 — STL-Export (binär) des Luftvolumens
+    stl.js                 — STL-Export (binär) von Luftvolumen bzw. Schale
     download.js            — Datei-Download
   *.test.js                — Vitest, neben dem getesteten Modul
 ```
@@ -72,6 +73,7 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 - Eine Höhenregel für den ganzen Körper: halbe Höhe = Profil(zFocus + Abstand zum Fokus). Im Prisma ergibt das rt; mit Verrundung steigt der Deckel im Ringband vor dem inneren Teilkreis an (Variante a – wie im Seitenriss).
 - Flächen als Gitter: Traktrix-Grundfläche als Coons-Fläche (Ränder Throat, Traktrix links/rechts, innerer Teilkreis), gerader Bereich als Polargitter; Nachbarflächen teilen die Randpunkte exakt → wasserdicht. Kappen an Throat und Mund schließen das Volumen (nur für die STL).
 - **Schale** (Wandstärke an): Dicke t senkrecht zur Fläche, scharfe Außenkanten, eine Stärke für alles. Throat: bündig in der Ebene z = 0. Mund: Deckel/Boden außen höchstens hMouth/2 + t (am Mund senkrecht nach oben/unten gemessen, waagerecht abgeschnitten), Stirnfläche bündig auf dem Mundbogen; Seitenwände laufen über die volle Höhe durch und enden senkrecht zur Wand durch die Mundkante (wie der Wandstärke-Strich in der Draufsicht und die Raumecken-Rechnung). Über den Seitenwänden hat der Außenkörper dafür je einen Eckstreifen (Coons-Fläche zwischen Wand, Außenkante, Naht und Endlinie). Außenkörper = derselbe Aufbau mit versetzter Kontur und eigener Höhe. Kontur: Einhüllende der Kreise mit Radius t um die Wandpunkte (`contourRight`) – schneidet die Schlaufe ab, die die einfache Parallelkurve der Traktrix bei t > Krümmungsradius bildet; die Naht zum Rotationsteil liegt dort, wo die Einhüllende in die Parallele der geraden Wand übergeht. Höhe (`outerHeightField`): über der Grundfläche die senkrechte Aufdickung des Deckels (eben rt + t, ansteigender Teil als Einhüllende, im Öffnungssektor radial über `offsetHeight`), außerhalb der Wert am nächsten Wandpunkt – der Deckel wird senkrecht zur Wand bis zur Außenkante verlängert (scharfe Kante). Die Traktrix-Sektion bleibt so auch bei großen Wandstärken außen eben. An konkaven Knicken treffen sich außen zwei Versatzflächen in einer Kante – die Wand ist dort minimal dicker als t, nie dünner. Verrundungen mit R < t werden außen zur Kante. Schale = Außenkörper + Luftvolumen mit umgedrehten Flächen + Ringflächen an Throat und Mund.
+- **Flansch am Throat** (eigener Schalter, nur mit Wandstärke): runde Platte auf der Hornseite, z ∈ [0, Dicke], Öffnung = Throat-Querschnitt (Quadrat 2·rt). Der Außenkörper beginnt dann erst bei z = Dicke (`zStart` in `body`/`contourRight`); statt des Throat-Rings: Rückseite (Kreis − Luftkanal − Bohrungen), Vorderseite (Kreis − Außenkörper − Bohrungen), Zylindermantel, Bohrungswände. Die ebenen Flächen trianguliert earcut (`ShapeUtils.triangulateShape`); earcut lässt kollineare Randpunkte weg – `planarFace` setzt sie wieder in die Kanten ein, sonst gäbe es T-Stöße zur Schale. `flangeLayout` löst die Vorgaben auf: Ø mindestens der Umkreis des Außenkörpers bei z = Dicke (kleinerer Ø wird angehoben, `limited`); ohne Ø-Vorgabe dw, mindestens Minimum + 4·Bohrungs-Ø + 4 mm; ohne Lochkreis mittig zwischen Minimum und Rand; Bohrungen, die nicht ganz im Ring liegen, entfallen (`invalidHoles`, Warnung). Standard (Bohrbild BMS 4591): 10 mm, 4 × Ø 6,6 mm (M6 durch) auf Lochkreis 101,6 mm, 12, 3, 6, 9 Uhr (Winkellage 0°, gemessen von der Breitenachse). Durchgangsbohrungen, die in der Schale landen (`conflicts`), werden nicht gebohrt (Körper und STL bleiben dicht), aber angezeigt: in 3D rot markiert (Scheibe auf der Rückseite, Ringe an Rück- und Vorderseite), im DXF auf Layer `Flansch_Konflikt`. Konflikt-Lösung offen.
 - Die Wellenfront-Betrachtung für den Querschnitt im Traktrix-Bereich ist noch offen.
 
 **Kennwerte:** `mouthArea`, `verticalMouthAngle`, `frequencyEstimates` (Näherungen nach Olson/Beranek).
@@ -88,7 +90,7 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 
 ## Farbschema
 
-Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint, Akzent Sandbeige `#d6cbb8`) und `COLOR` (Zeichnungen: Traktrix Rosa, gerade Wand Mint, Mundbogen Sandbeige, Raumecke Orange, Übergänge Koralle, Wandstärke Gelb, Bemaßung Grau-Violett). Das PDF hat ein eigenes helles Schema in `export/pdf.js`.
+Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint, Akzent Sandbeige `#d6cbb8`) und `COLOR` (Zeichnungen: Traktrix Rosa, gerade Wand Mint, Mundbogen Sandbeige, Raumecke Orange, Übergänge Koralle, Wandstärke Gelb, Flansch Violett, Bemaßung Grau-Violett). Das PDF hat ein eigenes helles Schema in `export/pdf.js`.
 
 ## Bemaßungsregeln
 
@@ -112,7 +114,7 @@ Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint
 
 **Lagen-Belegung**
 - Draufsicht links: L. Rechts, 1. Lage: Kette Hut-Spitze → Treiberrückseite (dw/2, Raumecke-Farbe) → Treiberfront (dh), mit Klothoide weiter → Traktrix-Ende → Beginn der Geraden (axial an der Wand, Summe = Lt); 2. Lage: Eingang auf der Achse (0 → zInnerApex). Oben: Throat (1.), Treiberbreite (2.). Schräg links: gerader Bereich (1.), Fokus → Mund (2.). Unten: Mundbreite, Radius.
-- Seitenriss links: Throat (1.), Treiberbreite (2.). Rechts: Mundhöhe. Unten: L. Oben, 1. Lage: Kette dw/2 → dh; 2. Lage: Kette Traktrix → Mund (axial). Der obere Rand `mT` reserviert Platz für Titel + zwei Lagen.
+- Seitenriss links: Throat (1.), Treiberbreite (2.), Flansch-Ø (3.). Rechts: Mundhöhe. Unten: L, Flanschdicke (2.). Oben, 1. Lage: Kette dw/2 → dh; 2. Lage: Kette Traktrix → Mund (axial). Der obere Rand `mT` reserviert Platz für Titel + zwei Lagen.
 
 **Endpunkte von Linien:** gefüllter Kreis `r = DOT`, Farbe der zugehörigen Linie.
 
@@ -132,11 +134,11 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 
 ## Export
 
-**DXF** (`export/dxf.js`): Traktrix und gekrümmte Aufweitung als SPLINE (kubische Interpolation, `export/bspline.js`), Mundbogen und Verrundung als ARC, Geraden als LINE, Konstruktionspunkte als POINT – nie POLYLINE, sonst macht NX facettierte Körper. Layer `Draufsicht_Wand`, `Mundbogen`, `Fokus`, `Seitenprofil_Throat`, `Seitenprofil_Flare`, `Seitenprofil_Verrundung`, `Uebergang`. Bögen im Seitenprofil (Ebene y = 0) mit Extrusion (0, −1, 0): OCS-x = Welt-X, OCS-y = Welt-Z. Mit Verrundung endet die Throat-LINE an T1, der Flare-SPLINE beginnt an T2.
+**DXF** (`export/dxf.js`): Traktrix und gekrümmte Aufweitung als SPLINE (kubische Interpolation, `export/bspline.js`), Mundbogen und Verrundung als ARC, Geraden als LINE, Konstruktionspunkte als POINT – nie POLYLINE, sonst macht NX facettierte Körper. Layer `Draufsicht_Wand`, `Mundbogen`, `Fokus`, `Seitenprofil_Throat`, `Seitenprofil_Flare`, `Seitenprofil_Verrundung`, `Uebergang`. Bögen im Seitenprofil (Ebene y = 0) mit Extrusion (0, −1, 0): OCS-x = Welt-X, OCS-y = Welt-Z. Mit Verrundung endet die Throat-LINE an T1, der Flare-SPLINE beginnt an T2. Layer `Flansch`: Außenkreis an Rück- und Vorderseite, Bohrungen (Konflikt-Bohrungen auf `Flansch_Konflikt`) (CIRCLE mit Extrusion (1, 0, 0): OCS-x = Welt-Y, OCS-y = Welt-Z, Elevation = Welt-X) und die quadratische Öffnung (LINE) in der Ebene X = 0.
 
 **PDF** (`export/pdf.js`): HTML mit zwei maßstäblichen Zeichnungen (1:1, 1:2, 1:5, …) und Kennwerten in neuem Fenster → Druckdialog → Als PDF speichern. Die Hut-Spitze wird nicht gezeichnet; Längenmaße zeigen die gezeichnete Strecke, L steht in den Kennwerten. Die Kurven-Toggles steuern auch das PDF, zusätzlich „Bemaßungen“.
 
-**STL** (`export/stl.js`): bei eingeschalteter Wandstärke die Schale, sonst das Luftvolumen (Innenform) – jeweils geschlossen, binär, mm. Achsen X = Breite, Y = Hornachse, Z = Höhe; der Achsentausch ist eine Spiegelung, deshalb wird dabei die Umlaufrichtung getauscht (Normalen nach außen).
+**STL** (`export/stl.js`): bei eingeschalteter Wandstärke die Schale (ggf. mit Flansch), sonst das Luftvolumen (Innenform) – jeweils geschlossen, binär, mm. Achsen X = Breite, Y = Hornachse, Z = Höhe; der Achsentausch ist eine Spiegelung, deshalb wird dabei die Umlaufrichtung getauscht (Normalen nach außen).
 
 **Kurvenauflösung:** Bildschirm/PDF fein (Traktrix 600 bzw. 500 Punkte, Aufweitung 500). Der DXF-Spline-Fit bekommt bewusst weniger Stützpunkte (Traktrix 80, Aufweitung 100) – der Fit ist O(n³), die Splines bleiben schlank.
 
@@ -148,6 +150,7 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `horn-math.clothoid.test.js` – Klothoide: Anschlüsse (Lage, Winkel, Krümmung), Bogenlänge, Lt, Fokus, Grenzen (Mindest-Lt, keine Scheinlösungen, maxLt), A(z) glatt, 3D wasserdicht, DXF
 - `horn-math.sampling.test.js` – Abtastung, Querschnitt, Kennwerte, Hypex-Cache
 - `horn-mesh.shell.test.js` – Schale: wasserdicht (auch ohne Traktrix, mit Verrundung R < t, bei extremer Wandstärke), Wandstärke t im Profilschnitt und in der Draufsicht, Kante am Knick, Verrundung außen R − t, Enden an Throat und Mund (Deckelhöhe, Stirnflächen)
+- `horn-mesh.flange.test.js` – Flansch: wasserdicht (mit/ohne Bohrungen, Klothoide, ohne Traktrix), Volumenzuwachs = Vorderseite × Dicke, Bohrbild, Mindest-Ø, Automatik-Ø und Lochkreis, ungültige Bohrungen
 - `horn-mesh.test.js` – 3D-Körper: wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format
-- `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung), PDF (Kennwerte, Maßstab, Layer)
+- `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung, Flansch), PDF (Kennwerte, Maßstab, Layer)
 - `utils.test.js`

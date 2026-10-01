@@ -6,12 +6,14 @@ import { linspace } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker } from "./ui.jsx";
 import { Dim } from "./Dim.jsx";
+import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
 
 /**
  * @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile)
  * @param fillet   Verrundung (computeFillet) oder null – nur für Markierungen
+ * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null
  */
-export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet }) {
+export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange }) {
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
@@ -19,9 +21,9 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet }) {
   if (!s || VW < 10 || VH < 10) return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 
   // ── Abbildung Geometrie (z, h) → Bildschirm ───────────────────────
-  const halfMax = Math.max(dw / 2, hMouth / 2) * 1.05;
+  const halfMax = Math.max(dw / 2, hMouth / 2, flange ? flange.diameter / 2 : 0) * 1.05;
   const zMin = s.hatTipZ - 10, zMax = s.zApex + 10;
-  const mT = Math.min(72, VH * 0.3), mB = Math.min(40, VH * 0.15);   // oben: Titel + zwei Maßlagen
+  const mT = Math.min(72, VH * 0.3), mB = Math.min(flange ? 62 : 40, VH * 0.15);   // oben: Titel + zwei Maßlagen
   const scale0 = Math.min((VW - Math.min(80, VW * 0.12) * 2) / (zMax - zMin), (VH - mT - mB) / (2 * halfMax));
   const contentW = (zMax - zMin) * scale0;
   const cy = mT + (VH - mT - mB) / 2;
@@ -45,6 +47,7 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet }) {
   const dimMouthX  = toX(s.zApex) + 18;
   const dimThroatX = toX(s.hatTipZ) - 18;
   const dimDrivX   = toX(s.hatTipZ) - 40;
+  const dimFlangeX = toX(s.hatTipZ) - 62;
   const dimLY      = toY(-halfMax) + 16;
   const dimTop1Y   = toY(halfMax) - 18;
   const dimTop2Y   = toY(halfMax) - 40;
@@ -84,6 +87,9 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet }) {
           {fillet && <FilletMarks fillet={fillet} rt={rt} zTrans={s.zInnerApex} hTrans={hTrans} toX={toX} toY={toY} />}
         </>}
 
+        {flange && <FlanschSchnitt flange={flange} map={(h, z) => [toX(z), toY(h)]}
+          inner={linspace(0, flange.thickness, 30).map(z => [profile(z), z])} />}
+
         <path d={wallPath(zFlare, 1)} {...S.hornWall} />
         <path d={wallPath(zFlare, -1)} {...S.hornWall} />
         <circle cx={toX(s.zApex)} cy={toY(hMouth/2)} r={DOT} fill={COLOR.arc} />
@@ -97,6 +103,13 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet }) {
           arrowPos={dimThroatX} color={COLOR.trak} marker="url(#arrV)" label={`Ø ${(rt*2).toFixed(1)} mm`} />
         <Dim p1={[toX(-dh), toY(dw/2)]} p2={[toX(-dh), toY(-dw/2)]}
           arrowPos={dimDrivX} color={COLOR.dim} marker="url(#arrV)" label={`${dw} mm`} />
+        {/* Links, 3. Lage / unten, 2. Lage: Flansch-Ø und -Dicke */}
+        {flange && <>
+          <Dim p1={[toX(0), toY(flange.diameter / 2)]} p2={[toX(0), toY(-flange.diameter / 2)]}
+            arrowPos={dimFlangeX} color={COLOR.flansch} marker="url(#arrV)" label={`Ø ${flange.diameter.toFixed(0)} mm`} />
+          <Dim p1={[toX(0), toY(-flange.diameter / 2)]} p2={[toX(flange.thickness), toY(-flange.diameter / 2)]} orient="h"
+            arrowPos={dimLY + 22} color={COLOR.flansch} marker="url(#arrV)" label={`${flange.thickness} mm`} />
+        </>}
         {/* Unten: Gesamtlänge */}
         <Dim p1={[toX(s.hatTipZ), toY(0)]} p2={[toX(s.zApex), toY(0)]}
           arrowPos={dimLY} color={COLOR.dim} marker="url(#arrV)" label={`L=${L} mm`} sw="0.8" />

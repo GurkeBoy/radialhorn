@@ -18,7 +18,7 @@ export const UI = {
   value:         "#9a9a9a",
   muted:         "#6e6e6e",
   subtle:        "#404040",
-  faint:         "#3a3a3a",
+  faint:         "#5e5e5e",
   accent:        "#d6cbb8",
   accentSoft:    "rgba(214,203,184,0.15)",
   overlay:       "rgba(20,20,20,0.85)",
@@ -34,6 +34,8 @@ export const COLOR = {
   raum:         "#fdba74",               // Raumecke
   trans:        "#fca5a5",               // Übergangspunkte, Verrundung
   wand:         "#fcd34d",               // Wandstärke
+  flansch:      "#c4b5fd",               // Throat-Flansch
+  konflikt:     "#ef4444",               // Flanschbohrung im Konflikt mit der Schale
   dim:          "#5a5a78",               // allgemeine Bemaßung
   dimL:         "#6868a0",               // Gesamtlänge L
   text:         "#5a5a5a",               // Beschriftungen, Titel
@@ -47,6 +49,7 @@ export const COLOR = {
   fillTrak:     "rgba(249,168,212,0.09)",
   fillHorn:     "rgba(134,239,172,0.08)",
   fillArc:      "rgba(147,197,253,0.06)",
+  fillFlansch:  "rgba(196,181,253,0.14)",
 };
 
 /** Radius der Punkt-Markierungen [px]. */
