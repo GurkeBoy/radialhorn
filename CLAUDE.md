@@ -49,11 +49,12 @@ src/
 
 ## Mathematik
 
-Horizontale Kontur in drei Abschnitten:
+Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 
-1. **Traktrix-Eingang** (0 → zTrans): parametrisch über `t` von `tTh` bis `T_TRANS`, `zN(t) = t − tanh(t)`, `xN(t) = 1/cosh(t)`
-2. **Gerade Wand** (zTrans → zMouth): unter ALPHA2, radial zum Fokuspunkt
-3. **Mundbogen**: Kreisbogen mit Radius arcR um den Fokus zFocus
+1. **Traktrix-Eingang**: parametrisch über `t` von `tTh` bis `tEnd`, `zN(t) = t − tanh(t)`, `xN(t) = 1/cosh(t)`; ohne Klothoide ist `tEnd = T_TRANS` (Tangente erreicht α)
+2. **Klothoide** (optional, `createHornMath(winkel, { clothoid: ℓ })`): krümmungsstetiger Übergang, Krümmung fällt linear von der Traktrix-Krümmung 1/(r0·sinh τ) auf 0. Beginnt bei τa mit ℓ = 2·(α − θ(τa)) / κ(τa), endet mit Winkel α. Lt = axiale Länge von Traktrix + Klothoide bis zum Beginn der Geraden; r0 wird dafür gelöst (eingegrenztes Illinois-Verfahren, Ergebnis wird nachgeprüft – an der Sprungstelle „Klothoide passt gerade nicht“ gibt es keine Lösung). Mindest-Lt: `minLtForClothoid`. `transition` wird je Instanz zwischengespeichert (Grenzsuchen rufen es tausendfach).
+3. **Gerade Wand** (zTrans → zMouth): unter ALPHA2, radial zum Fokuspunkt (mit Klothoide liegt der Fokus etwas anders)
+4. **Mundbogen**: Kreisbogen mit Radius arcR um den Fokus zFocus
 
 **Treiber:** Zylinder mit Durchmesser dw und Länge dh, Achse = Hornachse z, Front bei z = 0 (in beiden Schnitten ein Rechteck dw × dh).
 
@@ -63,7 +64,7 @@ Horizontale Kontur in drei Abschnitten:
 
 **Verrundung des Übergangs** (`computeFillet`): Kreis tangential an Throat und Aufweitung, Mittelpunkt (zc, rt + R) außerhalb der Wand, Tangentenpunkt T2 per Bisektion. Zu große Radien werden auf den größten machbaren begrenzt (`limited`). Wirkt auf Seitenriss, Querschnitt, PDF und DXF; Sektionsfarben und Maße bleiben an zInnerApex getrennt. Nur mit Traktrix-Eingang.
 
-**Querschnitt** (`crossSection`): Wellenfront = Kreisbogen um den Schnittpunkt der Wandtangente mit der Achse (gerader Bereich: Fokus, wachsender Radius; Traktrix: mitwandernder Tangentenfuß, Radius r0 – Voigt). A = ∫ 2h ds über den Bogen mit der Höhe nach der 3D-Regel h = Profil(zFocus + Abstand zum Fokus); im geraden Bereich ist h auf dem Bogen konstant, auf der Traktrix wird im Verrundungsband numerisch integriert. Der Übergang Traktrix → gerade Wand ist eigener Stützpunkt. A ist dort stetig, hat aber einen Knick: die Wandkrümmung springt (Traktrix → Gerade), und die Wellenfrontbreite hängt vom Tangentenwinkel ab (Steigung von B: 2·sin α → 2·α). Glatt würde A nur mit einem krümmungsstetigen Übergang in der Draufsicht (z.B. Klothoide) – bisher nicht umgesetzt.
+**Querschnitt** (`crossSection`): Wellenfront = Kreisbogen um den Schnittpunkt der Wandtangente mit der Achse (gerader Bereich: Fokus, wachsender Radius; Traktrix: mitwandernder Tangentenfuß, Radius r0 – Voigt; Klothoide: allgemeine Regel). Sektionen `part`: traktrix / klothoide / linear. A = ∫ 2h ds über den Bogen mit der Höhe nach der 3D-Regel h = Profil(zFocus + Abstand zum Fokus); im geraden Bereich ist h auf dem Bogen konstant, auf der Traktrix wird im Verrundungsband numerisch integriert. Der Übergang Traktrix → gerade Wand ist eigener Stützpunkt. A ist dort stetig, hat aber einen Knick: die Wandkrümmung springt (Traktrix → Gerade), und die Wellenfrontbreite hängt vom Tangentenwinkel ab (Steigung von B: 2·sin α → 2·α). Mit Klothoide ist die Krümmung stetig und A glatt (Tests prüfen beide Fälle).
 
 **3D-Körper** (`horn-mesh.js`, vereinbarte Konstruktion):
 - Traktrix-Sektion: senkrechte Wände entlang der Traktrix, Grundfläche wie in der Draufsicht bis zum inneren Teilkreis (Radius rInner um den Fokus).
@@ -110,7 +111,7 @@ Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint
 **Bemaßungswerte: axiale Projektion vs. physische Länge.** Eine parallel zur Wand platzierte Bemaßung zeigt die physische Wandlänge, nicht die axiale Projektion. Beide Ansichten zeigen für dasselbe physische Element denselben Wert. Bei Widersprüchen zwischen Nutzerbeschreibung und Geometrie aktiv nachfragen: „Meinst du die axiale Projektion oder die physische Länge?" – niemals stillschweigend eine korrekte Implementierung auf Zuruf ändern. Maßbeschriftungen zeigen immer die tatsächlich überspannte Strecke.
 
 **Lagen-Belegung**
-- Draufsicht links: L. Rechts, 1. Lage: Kette Hut-Spitze → Treiberrückseite (dw/2, Raumecke-Farbe) → Treiberfront (dh); 2. Lage: Traktrix axial. Oben: Throat (1.), Treiberbreite (2.). Schräg links: gerader Bereich (1.), Fokus → Mund (2.). Unten: Mundbreite, Radius.
+- Draufsicht links: L. Rechts, 1. Lage: Kette Hut-Spitze → Treiberrückseite (dw/2, Raumecke-Farbe) → Treiberfront (dh), mit Klothoide weiter → Traktrix-Ende → Beginn der Geraden (axial an der Wand, Summe = Lt); 2. Lage: Eingang auf der Achse (0 → zInnerApex). Oben: Throat (1.), Treiberbreite (2.). Schräg links: gerader Bereich (1.), Fokus → Mund (2.). Unten: Mundbreite, Radius.
 - Seitenriss links: Throat (1.), Treiberbreite (2.). Rechts: Mundhöhe. Unten: L. Oben, 1. Lage: Kette dw/2 → dh; 2. Lage: Kette Traktrix → Mund (axial). Der obere Rand `mT` reserviert Platz für Titel + zwei Lagen.
 
 **Endpunkte von Linien:** gefüllter Kreis `r = DOT`, Farbe der zugehörigen Linie.
@@ -144,6 +145,7 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `horn-math.test.js`, `horn-math.cross-validate.test.js` – Draufsicht-Geometrie bei 140°, Querverifikation gegen analytische Formeln und numerische Integration
 - `horn-math.angles.test.js` – Geometrie bei 90°/120°/160°, Unabhängigkeit der Winkel-Instanzen
 - `horn-math.profile.test.js` – Seitenriss-Profil, Verrundung (Tangentialität, C¹-Stetigkeit, Radiusbegrenzung)
+- `horn-math.clothoid.test.js` – Klothoide: Anschlüsse (Lage, Winkel, Krümmung), Bogenlänge, Lt, Fokus, Grenzen (Mindest-Lt, keine Scheinlösungen, maxLt), A(z) glatt, 3D wasserdicht, DXF
 - `horn-math.sampling.test.js` – Abtastung, Querschnitt, Kennwerte, Hypex-Cache
 - `horn-mesh.shell.test.js` – Schale: wasserdicht (auch ohne Traktrix, mit Verrundung R < t, bei extremer Wandstärke), Wandstärke t im Profilschnitt und in der Draufsicht, Kante am Knick, Verrundung außen R − t, Enden an Throat und Mund (Deckelhöhe, Stirnflächen)
 - `horn-mesh.test.js` – 3D-Körper: wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format

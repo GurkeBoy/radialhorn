@@ -1,6 +1,6 @@
 // Draufsicht (horizontaler Schnitt): Traktrix, gerade Wand, Mundbogen, Raumecke, Treiber.
 import { useRef } from "react";
-import { hasTraktrix, traktrixPoints, linearWallPoints } from "../horn-math.js";
+import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
 import { svgPath } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
@@ -8,6 +8,7 @@ import { ZoomControls, ArrowMarker } from "./ui.jsx";
 import { Dim, DimAligned } from "./Dim.jsx";
 
 const TRAKTRIX_SAMPLES = 600;
+const CLOTHOID_SAMPLES = 120;
 const WALL_SAMPLES = 80;
 const DIM_LAYER = 18, DIM_LAYER_STEP = 22;   // Bemaßungslagen [px], siehe CLAUDE.md
 
@@ -45,7 +46,9 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
     left:  pts.map(([x, z]) => [toX(-x), toY(z)]),
   });
   const trak = screen(traktrixPoints(s, TRAKTRIX_SAMPLES));
+  const klo  = screen(clothoidPoints(s, CLOTHOID_SAMPLES));
   const wall = screen(linearWallPoints(s, WALL_SAMPLES));
+  const entrance = { left: [...trak.left, ...klo.left.slice(1)], right: [...trak.right, ...klo.right.slice(1)] };
   // Fläche zwischen linker und rechter Wand
   const areaPath = ({ left, right }) => svgPath([...left, ...[...right].reverse()]) + " Z";
 
@@ -66,7 +69,7 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
     const len = Math.hypot(cx - mLx, fy - mY);
     const ux = (cx - mLx) / len, uy = (fy - mY) / len;
     const nx = uy, ny = -ux;                     // wie in DimAligned: links von Mund → Fokus
-    const obstacles = [...trak.left];
+    const obstacles = [...entrance.left];
     const seg = (x1, y1, x2, y2, n = 40) => {
       for (let i = 0; i <= n; i++) obstacles.push([x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n]);
     };
@@ -106,7 +109,7 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
 
         <Treiber toX={toX} toY={toY} dw={dw} dh={dh} scale={scale} cx={cx} />
 
-        {trak.left.length > 1 && <path d={areaPath(trak)} fill={COLOR.fillTrak} />}
+        {trak.left.length > 1 && <path d={areaPath(entrance)} fill={COLOR.fillTrak} />}
         <path d={areaPath(wall)} fill={COLOR.fillHorn} />
 
         <path d={`M${cx},${fy} L${mRx},${mY} A${rp},${rp} 0 0 1 ${mLx},${mY} Z`} fill={COLOR.fillArc} />
@@ -136,14 +139,19 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
           <path d={svgPath(trak.left)} {...S.trakWall} />
           <path d={svgPath(trak.right)} {...S.trakWall} />
         </>}
+        {klo.left.length > 1 && <>
+          <path d={svgPath(klo.left)} {...S.kloWall} />
+          <path d={svgPath(klo.right)} {...S.kloWall} />
+        </>}
         <path d={svgPath(wall.left)} {...S.hornWall} />
         <path d={svgPath(wall.right)} {...S.hornWall} />
 
         {showWandstaerke && wandstaerke > 0 && <Wandstaerke s={s} toX={toX} toY={toY} t={wandstaerke} />}
 
-        {trak.left.length > 1 && [trak.right, trak.left].map(side => {
+        {/* Übergangspunkte: Traktrix → (Klothoide →) gerade Wand */}
+        {[trak.right, trak.left, klo.right, klo.left].filter(side => side.length > 1).map(side => {
           const [x, y] = side[side.length - 1];
-          return <circle key={x} cx={x} cy={y} r={DOT} fill={COLOR.trans} />;
+          return <circle key={`${x},${y}`} cx={x} cy={y} r={DOT} fill={COLOR.trans} />;
         })}
 
         <path d={`M${cx+angleR*sinA},${fy+angleR*cosA} A${angleR},${angleR} 0 0 1 ${cx-angleR*sinA},${fy+angleR*cosA}`}
@@ -159,6 +167,16 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
           arrowPos={bx} color={COLOR.dim} marker="url(#arrH)" label={`${dh} mm`} />
         <Dim p1={[hatX, hatY]} p2={[toX(dw/2), toY(-dh)]} orient="v"
           arrowPos={bx} color={COLOR.raum} marker="url(#arrH)" label={`${(dw/2).toFixed(0)} mm`} />
+        {/* mit Klothoide: Kette weiter über Traktrix und Klothoide bis zum Beginn der Geraden (axial, an der Wand) */}
+        {hasClothoid(s) && (() => {
+          const [xa, za] = s.clothoid.start;
+          return <>
+            <Dim p1={[toX(rt), toY(0)]} p2={[toX(xa), toY(za)]} orient="v"
+              arrowPos={bx} color={COLOR.trak} marker="url(#arrH)" label={`${za.toFixed(0)} mm`} />
+            <Dim p1={[toX(xa), toY(za)]} p2={[toX(s.xTrans), toY(s.zTrans)]} orient="v"
+              arrowPos={bx} color={COLOR.klo} marker="url(#arrH)" label={`${(s.zTrans - za).toFixed(0)} mm`} />
+          </>;
+        })()}
         {hasTraktrix(s) &&
           <Dim p1={[toX(rt), toY(0)]} p2={[cx, toY(s.zInnerApex)]}
             arrowPos={bx + DIM_LAYER_STEP} color={COLOR.trak} marker="url(#arrH)" label={`${s.zInnerApex.toFixed(0)} mm`} />
@@ -182,7 +200,7 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
         <text x={cx} y={toY(s.zApex)+28} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>R={s.arcR.toFixed(0)} mm</text>
       </svg>
 
-      <Legend showWandstaerke={showWandstaerke} />
+      <Legend showWandstaerke={showWandstaerke} showClothoid={hasClothoid(s)} />
     </div>
   );
 }
@@ -216,9 +234,10 @@ function Wandstaerke({ s, toX, toY, t }) {
   });
 }
 
-function Legend({ showWandstaerke }) {
+function Legend({ showWandstaerke, showClothoid }) {
   const items = [
     { col: COLOR.trak,     label: "Traktrix" },
+    ...(showClothoid ? [{ col: COLOR.klo, label: "Klothoide" }] : []),
     { col: COLOR.horn,     label: "Lin. Bereich" },
     { col: COLOR.arc,      label: "Teilkreis" },
     { col: COLOR.trans,    label: "Übergang",   kind: "dot" },

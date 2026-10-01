@@ -10,6 +10,7 @@ const VW = 310, VH = 200;                        // viewBox; das SVG skaliert au
 const ml = 38, mr = 8, mt = 26, mb = 20;         // Plotrand
 const pw = VW - ml - mr, ph = VH - mt - mb;
 const HEADROOM = 1.08;                           // Luft über dem Maximum
+const PART_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn };
 
 /** @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile) */
 export function Querschnitt({ s, profile }) {
@@ -57,8 +58,8 @@ export function Querschnitt({ s, profile }) {
   // Kurve in Sektionen (Traktrix / gerade Wand) mit gemeinsamem Übergangspunkt
   const segments = [];
   for (let i = 0; i < pts.length; i++) {
-    if (i === 0 || pts[i].traktrix !== pts[i - 1].traktrix) {
-      segments.push({ traktrix: pts[i].traktrix, pts: i === 0 ? [] : [pts[i - 1]] });
+    if (i === 0 || pts[i].part !== pts[i - 1].part) {
+      segments.push({ part: pts[i].part, pts: i === 0 ? [] : [pts[i - 1]] });
     }
     segments[segments.length - 1].pts.push(pts[i]);
   }
@@ -84,7 +85,7 @@ export function Querschnitt({ s, profile }) {
           </>}
           {segments.map((seg, i) => (
             <path key={i} d={svgPath(seg.pts.map(p => [gx(p.z), gy(p.A)]), 1)} fill="none"
-              stroke={seg.traktrix ? COLOR.trak : COLOR.horn} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
+              stroke={PART_COLOR[seg.part]} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
           ))}
         </g>
         {yTicks.map(a => <g key={a}>

@@ -28,6 +28,7 @@ export const UI = {
 /** Zeichnungen: jede Geometrie hat ihre Farbe, Bemaßungen übernehmen sie. */
 export const COLOR = {
   trak:         "#f9a8d4",               // Traktrix
+  klo:          "#93c5fd",               // Klothoide (krümmungsstetiger Übergang)
   horn:         "#86efac",               // gerade Wand / Aufweitung
   arc:          "#d6cbb8",               // Mundbogen, Fokus
   raum:         "#fdba74",               // Raumecke
@@ -54,6 +55,7 @@ export const DOT = 2.5;
 /** Wiederkehrende SVG-Attribute. */
 export const S = {
   trakWall: { fill: "none", stroke: COLOR.trak, strokeWidth: "1.4", strokeLinejoin: "round" },
+  kloWall:  { fill: "none", stroke: COLOR.klo,  strokeWidth: "1.4", strokeLinejoin: "round" },
   hornWall: { fill: "none", stroke: COLOR.horn, strokeWidth: "1.4", strokeLinejoin: "round" },
   dimRef:   { strokeWidth: "0.35", strokeDasharray: "3 3" },
   label:    { fontSize: "9", fontFamily: FONT },

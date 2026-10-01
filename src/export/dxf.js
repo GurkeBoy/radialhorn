@@ -4,12 +4,13 @@
 // der XZ-Ebene (X = Achse z, Z = Höhe h). Kurven werden als exakte Entities geschrieben –
 // Traktrix und gekrümmte Aufweitung als SPLINE, Geraden als LINE, Kreisbögen als ARC –,
 // damit CAD-Systeme glatte Körper daraus erzeugen.
-import { hasTraktrix, traktrixPoints, makeProfile } from "../horn-math.js";
+import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, makeProfile } from "../horn-math.js";
 import { linspace } from "../utils.js";
 import { fitBSpline } from "./bspline.js";
 import { downloadFile } from "./download.js";
 
 const TRAKTRIX_FIT_POINTS = 80;    // Stützpunkte für den Spline-Fit (Fit ist O(n³))
+const CLOTHOID_FIT_POINTS = 40;
 const FLARE_FIT_POINTS    = 100;
 
 const num = v => v.toFixed(4);
@@ -58,8 +59,10 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet }, opts) {
 
   if (opts.draufsicht) {
     const trak = traktrixPoints(s, TRAKTRIX_FIT_POINTS);
+    const klo = clothoidPoints(s, CLOTHOID_FIT_POINTS);
     mirrored(sign => {
       if (trak.length > 1) out.push(dxfSpline(trak.map(([x, z]) => [z, sign * x]), "Draufsicht_Wand"));
+      if (klo.length > 1) out.push(dxfSpline(klo.map(([x, z]) => [z, sign * x]), "Draufsicht_Wand"));
       out.push(dxfLine([s.zTrans, sign * s.xTrans], [s.zMouth, sign * s.xMouth], "Draufsicht_Wand"));
     });
   }
@@ -93,7 +96,8 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet }, opts) {
 
   if (opts.uebergang && hasTraktrix(s)) {
     const points = [
-      [0, rt, 0], [s.zTrans, s.xTrans, 0],                 // Draufsicht: Throat, Traktrix → gerade Wand
+      [0, rt, 0], [s.zTrans, s.xTrans, 0],                 // Draufsicht: Throat, Eingang → gerade Wand
+      ...(hasClothoid(s) ? [[s.clothoid.start[1], s.clothoid.start[0], 0]] : []),   // Traktrix → Klothoide
       [0, 0, rt], [s.zInnerApex, 0, rt],                   // Seitenprofil: Throat, Throat → Aufweitung
       ...(fillet ? [[fillet.zT1, 0, rt], [fillet.zT2, 0, fillet.hT2]] : []),   // Tangentenpunkte der Verrundung
       [s.zMouth, s.xMouth, 0], [s.zApex, 0, hMouth / 2],   // Mund

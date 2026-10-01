@@ -3,7 +3,7 @@
 // wird. Die Hut-Spitze der Raumecke wird nicht gezeichnet; Längenmaße zeigen deshalb die
 // gezeichnete Strecke, L steht in den Kennwerten.
 import {
-  hasTraktrix, traktrixPoints, linearWallPoints, mouthArea, verticalMouthAngle,
+  hasTraktrix, entrancePoints, linearWallPoints, mouthArea, verticalMouthAngle,
 } from "../horn-math.js";
 import { linspace, svgPath } from "../utils.js";
 import { downloadFile } from "./download.js";
@@ -13,9 +13,9 @@ const SHEET_MM = 170;             // verfügbare Zeichnungsbreite auf A4
 const C = { dim: "#7c5cff", dimText: "#5a4bbf", line: "#1a1a24", axis: "#c8c8d0", arc: "#7c5cff" };
 const CURVE_LABELS = { linear: "Linear", exponential: "Exponential", hypex: "Hypex" };
 
-/** Kontur der Draufsicht (rechte Hälfte) als Punkte [x, z]. */
+/** Kontur der Draufsicht (rechte Hälfte) als Punkte [x, z]: Eingang (Traktrix, Klothoide), gerade Wand. */
 function planOutline(s) {
-  const trak = traktrixPoints(s, 500);
+  const trak = entrancePoints(s, 500, 100);
   const wall = linearWallPoints(s, 50);
   return trak.length ? [...trak, ...wall.slice(1)] : wall;
 }

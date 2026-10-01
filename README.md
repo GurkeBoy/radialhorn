@@ -4,7 +4,7 @@ Desktop-App zur Auslegung von Radialhörnern mit Traktrix-Eingang für den Lauts
 
 ## Funktionen
 
-- **Horizontale Kontur:** Traktrix-Eingang → gerade Wand unter dem halben Öffnungswinkel → Mundbogen um den Fokuspunkt. Öffnungswinkel, Gesamtlänge, Traktrix-Länge, Throat und Treibermaße einstellbar.
+- **Horizontale Kontur:** Traktrix-Eingang → gerade Wand unter dem halben Öffnungswinkel → Mundbogen um den Fokuspunkt; optional krümmungsstetiger Übergang (Klothoide) zwischen Traktrix und Wand. Öffnungswinkel, Gesamtlänge, Traktrix-Länge, Throat und Treibermaße einstellbar.
 - **Raumecke:** Begrenzt die Hornbreite auf die 45°-Diagonale einer Raumecke, optional mit Wandstärke.
 - **Vertikales Profil:** Aufweitung linear, exponentiell oder Hypex; optionale Verrundung des Übergangs Throat → Aufweitung.
 - **Ansichten:** Draufsicht und Seitenriss mit Bemaßung, Zoom (Mausrad) und Verschieben (Ziehen), Vollbild; Querschnittsfläche A(z) als Diagramm.
