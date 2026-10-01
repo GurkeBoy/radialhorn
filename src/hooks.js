@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { readSetting, writeSetting } from "./settings.js";
 
 /** Größe eines DOM-Elements, laufend per ResizeObserver gemessen. */
 export function useSize(ref) {
@@ -73,4 +74,11 @@ export function useZoomPan(ref, { minZoom = ZOOM_MIN, unitsPerPx = () => 1 } = {
     reset: () => setView(VIEW_RESET),
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
   };
+}
+
+/** useState, dessen Wert gespeichert wird und beim nächsten Start wieder da ist (settings.js). */
+export function usePersistentState(key, initial) {
+  const [value, setValue] = useState(() => readSetting(key, initial));
+  useEffect(() => writeSetting(key, value), [key, value]);
+  return [value, setValue];
 }

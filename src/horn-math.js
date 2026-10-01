@@ -556,15 +556,17 @@ export function verticalMouthAngle(s, profile) {
 
 /**
  * Grobe akustische Grenzfrequenzen [Hz] (Näherungen nach Olson/Beranek):
- *   fcLow  – Mundumfang ≈ Wellenlänge (λ = 2π·arcR)
- *   fcCut  – Horn-Cutoff aus der mittleren Flare-Konstante m = ln(B_Mund / B_Throat) / L
+ *   fcLow  – Umfang des flächengleichen Kreismunds ≈ Wellenlänge (λ = 2π·√(A_Mund/π))
+ *   fcCut  – Horn-Cutoff aus der mittleren Flare-Konstante m = ln(A_Mund / A_Throat) / L,
+ *            A_Throat = (2·rt)² (quadratischer Throat), A_Mund = Bogenlänge × Mundhöhe
  *   fcHigh – Throat-Durchmesser ≈ halbe Wellenlänge (λ = 2·rt)
  */
-export function frequencyEstimates(s, rt) {
+export function frequencyEstimates(s, rt, hMouth) {
   const c = SPEED_OF_SOUND;
-  const m = Math.log(s.arcR * 2 * s.alpha2 / (2 * rt)) / (s.zApex - s.hatTipZ);
+  const A = mouthArea(s, hMouth);
+  const m = Math.log(A / (2 * rt) ** 2) / (s.zApex - s.hatTipZ);
   return {
-    fcLow:  c / (2 * Math.PI * s.arcR),
+    fcLow:  c / (2 * Math.PI * Math.sqrt(A / Math.PI)),
     fcCut:  c * m / (4 * Math.PI),
     fcHigh: c / (2 * rt),
   };
