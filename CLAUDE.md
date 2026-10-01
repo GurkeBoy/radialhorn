@@ -19,7 +19,7 @@ Vor jedem Commit: `npm run lint` und `npm test` grün.
 src/
   main.jsx, App.jsx        — Einstieg; App: Zustand, abgeleitete Geometrie (useMemo), Layout
   horn-math.js             — gesamte Geometrie-Mathematik, rein funktional
-  horn-mesh.js             — 3D-Körper (Luftvolumen) als strukturierte Flächengitter
+  horn-mesh.js             — 3D-Körper (Luftvolumen und Schale) als strukturierte Flächengitter
   theme.js                 — Farben (UI, COLOR), Schrift, SVG-Stile, Raumecken-Strichmuster
   utils.js                 — linspace, clamp, svgPath, niceTicks
   hooks.js                 — useSize, useZoomPan
@@ -70,6 +70,7 @@ Horizontale Kontur in drei Abschnitten:
 - Gerader Bereich: senkrechte Wände im Öffnungswinkel; Deckel und Boden = Rotation des Seitenprofils um die senkrechte Achse durch den Fokus.
 - Eine Höhenregel für den ganzen Körper: halbe Höhe = Profil(zFocus + Abstand zum Fokus). Im Prisma ergibt das rt; mit Verrundung steigt der Deckel im Ringband vor dem inneren Teilkreis an (Variante a – wie im Seitenriss).
 - Flächen als Gitter: Traktrix-Grundfläche als Coons-Fläche (Ränder Throat, Traktrix links/rechts, innerer Teilkreis), gerader Bereich als Polargitter; Nachbarflächen teilen die Randpunkte exakt → wasserdicht. Kappen an Throat und Mund schließen das Volumen (nur für die STL).
+- **Schale** (Wandstärke an): Dicke t senkrecht zur Fläche, scharfe Außenkanten, eine Stärke für alles. Throat: bündig in der Ebene z = 0. Mund: Deckel/Boden außen höchstens hMouth/2 + t (am Mund senkrecht nach oben/unten gemessen, waagerecht abgeschnitten), Stirnfläche bündig auf dem Mundbogen; Seitenwände laufen über die volle Höhe durch und enden senkrecht zur Wand durch die Mundkante (wie der Wandstärke-Strich in der Draufsicht und die Raumecken-Rechnung). Über den Seitenwänden hat der Außenkörper dafür je einen Eckstreifen (Coons-Fläche zwischen Wand, Außenkante, Naht und Endlinie). Außenkörper = derselbe Aufbau mit versetzter Kontur und eigener Höhe. Kontur: Einhüllende der Kreise mit Radius t um die Wandpunkte (`contourRight`) – schneidet die Schlaufe ab, die die einfache Parallelkurve der Traktrix bei t > Krümmungsradius bildet; die Naht zum Rotationsteil liegt dort, wo die Einhüllende in die Parallele der geraden Wand übergeht. Höhe (`outerHeightField`): über der Grundfläche die senkrechte Aufdickung des Deckels (eben rt + t, ansteigender Teil als Einhüllende, im Öffnungssektor radial über `offsetHeight`), außerhalb der Wert am nächsten Wandpunkt – der Deckel wird senkrecht zur Wand bis zur Außenkante verlängert (scharfe Kante). Die Traktrix-Sektion bleibt so auch bei großen Wandstärken außen eben. An konkaven Knicken treffen sich außen zwei Versatzflächen in einer Kante – die Wand ist dort minimal dicker als t, nie dünner. Verrundungen mit R < t werden außen zur Kante. Schale = Außenkörper + Luftvolumen mit umgedrehten Flächen + Ringflächen an Throat und Mund.
 - Die Wellenfront-Betrachtung für den Querschnitt im Traktrix-Bereich ist noch offen.
 
 **Kennwerte:** `mouthArea`, `verticalMouthAngle`, `frequencyEstimates` (Näherungen nach Olson/Beranek).
@@ -134,7 +135,7 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 
 **PDF** (`export/pdf.js`): HTML mit zwei maßstäblichen Zeichnungen (1:1, 1:2, 1:5, …) und Kennwerten in neuem Fenster → Druckdialog → Als PDF speichern. Die Hut-Spitze wird nicht gezeichnet; Längenmaße zeigen die gezeichnete Strecke, L steht in den Kennwerten. Die Kurven-Toggles steuern auch das PDF, zusätzlich „Bemaßungen“.
 
-**STL** (`export/stl.js`): Luftvolumen als geschlossener Körper (Innenform, ohne Wandstärke), binär, mm. Achsen X = Breite, Y = Hornachse, Z = Höhe; der Achsentausch ist eine Spiegelung, deshalb wird dabei die Umlaufrichtung getauscht (Normalen nach außen).
+**STL** (`export/stl.js`): bei eingeschalteter Wandstärke die Schale, sonst das Luftvolumen (Innenform) – jeweils geschlossen, binär, mm. Achsen X = Breite, Y = Hornachse, Z = Höhe; der Achsentausch ist eine Spiegelung, deshalb wird dabei die Umlaufrichtung getauscht (Normalen nach außen).
 
 **Kurvenauflösung:** Bildschirm/PDF fein (Traktrix 600 bzw. 500 Punkte, Aufweitung 500). Der DXF-Spline-Fit bekommt bewusst weniger Stützpunkte (Traktrix 80, Aufweitung 100) – der Fit ist O(n³), die Splines bleiben schlank.
 
@@ -144,6 +145,7 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `horn-math.angles.test.js` – Geometrie bei 90°/120°/160°, Unabhängigkeit der Winkel-Instanzen
 - `horn-math.profile.test.js` – Seitenriss-Profil, Verrundung (Tangentialität, C¹-Stetigkeit, Radiusbegrenzung)
 - `horn-math.sampling.test.js` – Abtastung, Querschnitt, Kennwerte, Hypex-Cache
+- `horn-mesh.shell.test.js` – Schale: wasserdicht (auch ohne Traktrix, mit Verrundung R < t, bei extremer Wandstärke), Wandstärke t im Profilschnitt und in der Draufsicht, Kante am Knick, Verrundung außen R − t, Enden an Throat und Mund (Deckelhöhe, Stirnflächen)
 - `horn-mesh.test.js` – 3D-Körper: wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format
 - `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung), PDF (Kennwerte, Maßstab, Layer)
 - `utils.test.js`

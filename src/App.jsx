@@ -90,8 +90,9 @@ export default function App() {
     [s, rt, hMouth, curve, hypexT, fillet],
   );
 
+  const wall = showWandstaerke ? wandstaerke : 0;
   const design = {
-    s, rt, L: LClamped, hMouth, curve, hypexT, fillet, profile,
+    s, rt, L: LClamped, hMouth, curve, hypexT, fillet, profile, wall,
     showRaumecke, showWandstaerke, wandstaerke,
   };
 
@@ -160,7 +161,7 @@ export default function App() {
             <Toggle label="Bemaßungen"       checked={exportLayers.bemassung}    onChange={setLayer("bemassung")} />
             <ExportButton primary onClick={() => exportDXF(design, exportLayers)}>↓ DXF exportieren</ExportButton>
             <ExportButton onClick={() => exportPDF(design, exportLayers)}>↓ PDF (Zeichnungen)</ExportButton>
-            <ExportButton onClick={() => exportSTL(design)}>↓ STL (3D, Luftvolumen)</ExportButton>
+            <ExportButton onClick={() => exportSTL(design)}>↓ STL (3D, {wall > 0 ? `Schale ${wall} mm` : "Luftvolumen"})</ExportButton>
           </Card>
         </>}
       </div>
@@ -173,7 +174,7 @@ export default function App() {
               showRaumecke={showRaumecke} showWandstaerke={showWandstaerke} wandstaerke={wandstaerke} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={dw} dh={dh} hMouth={hMouth} profile={profile} fillet={fillet} showRaumecke={showRaumecke} />
+            <Ansicht3D s={s} rt={rt} dw={dw} dh={dh} hMouth={hMouth} profile={profile} fillet={fillet} wall={wall} showRaumecke={showRaumecke} />
           </ViewPanel>
         </div>
         <ViewPanel flex={5}>

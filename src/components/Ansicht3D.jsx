@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { buildHornGeometry, triangulate, gridLines } from "../horn-mesh.js";
+import { buildHornGeometry, buildShellGeometry, triangulate, gridLines } from "../horn-mesh.js";
 import { COLOR, FONT, UI } from "../theme.js";
 import { useSize } from "../hooks.js";
 
-const SECTION_COLOR = { traktrix: COLOR.trak, linear: COLOR.horn };
+const SECTION_COLOR = { traktrix: COLOR.trak, linear: COLOR.horn, rim: COLOR.wand };
 
 /** Dreiecke bzw. Strecken [p, …] als BufferGeometry (Punkte [x, h, z]). */
 function bufferGeometry(items) {
@@ -16,11 +16,12 @@ function bufferGeometry(items) {
   return g;
 }
 
-/** Horn als Gruppe: je Sektion Flächen und Gitterlinien (Kappen werden nicht gezeigt). */
+/** Horn als Gruppe: je Sektion Flächen und Gitterlinien (Kappen des Luftvolumens werden nicht gezeigt). */
 function hornGroup(geometry) {
   const group = new THREE.Group();
-  for (const section of ["traktrix", "linear"]) {
+  for (const section of Object.keys(SECTION_COLOR)) {
     const surfaces = geometry.surfaces.filter(f => f.section === section);
+    if (!surfaces.length) continue;
     const faces = bufferGeometry(surfaces.flatMap(triangulate));
     faces.computeVertexNormals();
     const mesh = new THREE.Mesh(faces, new THREE.MeshStandardMaterial({
@@ -82,15 +83,18 @@ function frame(camera, controls, object) {
 
 /**
  * @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile)
+ * @param wall     Wandstärke [mm]; 0 zeigt das Luftvolumen, > 0 die Schale
  */
-export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, showRaumecke }) {
+export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, showRaumecke }) {
   const containerRef = useRef(null);
   const { w, h } = useSize(containerRef);
   const three = useRef(null);
   const [wireframe, setWireframe] = useState(false);
   const [showReference, setShowReference] = useState(true);
 
-  const geometry = useMemo(() => s && buildHornGeometry(s, rt, profile, fillet), [s, rt, profile, fillet]);
+  const geometry = useMemo(() => s && (wall > 0
+    ? buildShellGeometry(s, rt, profile, fillet, wall)
+    : buildHornGeometry(s, rt, profile, fillet)), [s, rt, profile, fillet, wall]);
 
   // Szene, Kamera, Renderer und Steuerung einmalig anlegen
   useEffect(() => {
@@ -164,7 +168,7 @@ export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, showRaumecke
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: 10, left: 0, right: 0, textAlign: "center", fontSize: 9, color: COLOR.text, fontFamily: FONT, letterSpacing: "0.12em", pointerEvents: "none" }}>
-        3D · LUFTVOLUMEN
+        {wall > 0 ? `3D · SCHALE · WANDSTÄRKE ${wall} MM` : "3D · LUFTVOLUMEN"}
       </div>
       <div style={{ position: "absolute", top: 6, right: 36, zIndex: 10, display: "flex", gap: 4 }}>
         <ViewButton active={wireframe} onClick={() => setWireframe(v => !v)} title="Flächen / Gitter">▦ Gitter</ViewButton>

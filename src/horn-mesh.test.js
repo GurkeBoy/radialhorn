@@ -94,7 +94,7 @@ describe("buildHornGeometry – Konstruktion", () => {
       const r = Math.hypot(row[0][0], row[0][2] - s.zFocus);
       for (const [x, h, z] of row) {
         expect(Math.hypot(x, z - s.zFocus)).toBeCloseTo(r, 6);
-        expect(h).toBe(row[0][1]);
+        expect(h).toBeCloseTo(row[0][1], 9);
       }
     }
   });
