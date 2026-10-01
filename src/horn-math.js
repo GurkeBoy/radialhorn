@@ -37,6 +37,49 @@ export const xN = t => 1 / Math.cosh(t);
 /** Hat die Lösung einen Traktrix-Eingang? */
 export const hasTraktrix = s => s.Lt > LT_MIN;
 
+/** Hat die Lösung einen Klothoiden-Übergang zwischen Traktrix und gerader Wand? */
+export const hasClothoid = s => !!s.clothoid;
+
+/**
+ * Nullstelle von f in [lo, hi] mit f(lo) < 0 < f(hi) (Illinois-Verfahren: eingegrenzt wie
+ * die Bisektion, aber meist in wenigen Schritten). Sprünge in f sind zulässig.
+ */
+function solveBracketed(f, lo, hi, maxIter = 200) {
+  let flo = f(lo), fhi = f(hi), side = 0, x = lo;
+  for (let i = 0; i < maxIter; i++) {
+    x = (lo * fhi - hi * flo) / (fhi - flo);
+    if (!(x > lo && x < hi)) x = (lo + hi) / 2;
+    const fx = f(x);
+    if (fx === 0 || hi - lo <= 1e-13 * Math.max(1, Math.abs(x))) break;
+    if (fx > 0) { hi = x; fhi = fx; if (side === -1) flo /= 2; side = -1; }
+    else        { lo = x; flo = fx; if (side === 1) fhi /= 2; side = 1; }
+  }
+  return x;
+}
+
+const CLOTHOID_STEPS = 64;   // Simpson-Schritte für die Klothoiden-Integration
+
+/**
+ * Punkte einer Klothoide (Krümmung fällt linear von kappa0 auf 0 über die Länge):
+ * Tangentenwinkel zur Achse θ(s) = θ0 + κ0·(s − s²/2ℓ). n+1 Punkte {x, z, theta}.
+ * @param c  { start: [x, z], theta0, kappa0, length }
+ */
+export function clothoidTable(c, n = CLOTHOID_STEPS) {
+  const theta = u => c.theta0 + c.kappa0 * (u - u * u / (2 * c.length));
+  const ds = c.length / n;
+  const out = [{ x: c.start[0], z: c.start[1], theta: c.theta0 }];
+  for (let k = 0; k < n; k++) {
+    const a = theta(k * ds), m = theta((k + 0.5) * ds), b = theta((k + 1) * ds);
+    const prev = out[k];
+    out.push({
+      x: prev.x + ds / 6 * (Math.sin(a) + 4 * Math.sin(m) + Math.sin(b)),
+      z: prev.z + ds / 6 * (Math.cos(a) + 4 * Math.cos(m) + Math.cos(b)),
+      theta: b,
+    });
+  }
+  return out;
+}
+
 // ──────────────────────────────────────────────────────────────────
 // WINKELABHÄNGIGE GEOMETRIE (Draufsicht)
 // ──────────────────────────────────────────────────────────────────
@@ -44,8 +87,10 @@ export const hasTraktrix = s => s.Lt > LT_MIN;
 /**
  * Erzeugt die an einen Öffnungswinkel gebundenen Geometrie-Funktionen.
  * @param {number} openingAngle  horizontaler Öffnungswinkel [°]
+ * @param {number} clothoid      Länge [mm] eines krümmungsstetigen Übergangs (Klothoide)
+ *                               zwischen Traktrix und gerader Wand; 0 = ohne
  */
-export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE) {
+export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid = 0 } = {}) {
   const ALPHA2    = (openingAngle / 2) * Math.PI / 180;   // halber Öffnungswinkel
   const T_TRANS   = Math.asinh(1 / Math.tan(ALPHA2));    // Traktrix-Parameter, bei dem die Tangente ALPHA2 erreicht
   const PHI_TOTAL = openingAngle * Math.PI / 180;
@@ -70,12 +115,63 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE) {
     return (lo + hi) / 2;
   }
 
-  /** Übergang Traktrix → gerade Wand; ohne Traktrix beginnt die Wand direkt am Throat. null = unlösbar. */
+  /**
+   * Eingang mit Klothoide für einen Traktrix-Radius r0: Die Traktrix läuft bis zum Parameter
+   * τa, an dem eine Klothoide der vorgegebenen Länge ℓ mit linear auf 0 fallender Krümmung
+   * genau den Winkel α erreicht: ℓ = 2·(α − θ(τa)) / κ(τa) mit θ = atan(1/sinh τ),
+   * κ = 1/(r0·sinh τ). Lage, Richtung und Krümmung sind an beiden Enden stetig.
+   * null, wenn die Traktrix dafür nicht lang genug ist.
+   */
+  function clothoidEntrance(r0, rt, length) {
+    if (r0 <= rt) return null;
+    const tTh = Math.acosh(r0 / rt);
+    if (tTh <= T_TRANS) return null;
+    const g = tau => 2 * r0 * Math.sinh(tau) * (ALPHA2 - Math.atan(1 / Math.sinh(tau))) - length;
+    if (g(tTh) < 0) return null;
+    const tauA = solveBracketed(g, T_TRANS, tTh);
+    const c = {
+      start: [r0 * xN(tauA), r0 * (zN(tTh) - zN(tauA))],
+      theta0: Math.atan(1 / Math.sinh(tauA)),
+      kappa0: 1 / (r0 * Math.sinh(tauA)),
+      length,
+    };
+    const end = clothoidTable(c).at(-1);
+    return { r0, tTh, tEnd: tauA, clothoid: c, xTrans: end.x, zTrans: end.z };
+  }
+
+  /**
+   * Übergang Eingang → gerade Wand; ohne Traktrix beginnt die Wand direkt am Throat.
+   * Mit Klothoide wird r0 so bestimmt, dass Traktrix + Klothoide axial genau Lt lang sind.
+   * null = unlösbar.
+   */
   function transition(Lt, rt) {
-    if (!(Lt > LT_MIN)) return { r0: null, tTh: null, xTrans: rt, zTrans: 0 };
-    const r0 = solveR0(Lt, rt);
-    if (!r0) return null;
-    return { r0, tTh: Math.acosh(r0 / rt), xTrans: r0 * xN(T_TRANS), zTrans: Lt };
+    if (!(clothoid > 0)) return transitionUncached(Lt, rt);
+    // mit Klothoide teuer und von den Grenzsuchen tausendfach mit gleichen Werten gerufen
+    const key = Lt + "|" + rt;
+    if (!transitionCache.has(key)) {
+      if (transitionCache.size > 2000) transitionCache.clear();
+      transitionCache.set(key, transitionUncached(Lt, rt));
+    }
+    return transitionCache.get(key);
+  }
+  const transitionCache = new Map();
+
+  function transitionUncached(Lt, rt) {
+    if (!(Lt > LT_MIN)) return { r0: null, tTh: null, tEnd: null, clothoid: null, xTrans: rt, zTrans: 0 };
+    if (!(clothoid > 0)) {
+      const r0 = solveR0(Lt, rt);
+      if (!r0) return null;
+      return { r0, tTh: Math.acosh(r0 / rt), tEnd: T_TRANS, clothoid: null, xTrans: r0 * xN(T_TRANS), zTrans: Lt };
+    }
+    const f = r0 => { const e = clothoidEntrance(r0, rt, clothoid); return e ? e.zTrans - Lt : -Lt; };
+    let hi = rt * 2;
+    for (let i = 0; i < 80 && f(hi) < 0; i++) hi *= 2;
+    if (f(hi) < 0) return null;
+    const r0 = solveBracketed(f, rt * (1 + 1e-9), hi);
+    // Die Suche endet auch an einer Sprungstelle (Klothoide passt gerade so, beginnt am Throat,
+    // ist aber schon länger als Lt) – dann gibt es keine Lösung.
+    const e = clothoidEntrance(r0, rt, clothoid);
+    return e && Math.abs(e.zTrans - Lt) < 1e-6 ? e : null;
   }
 
   /** Fokuspunkt (Schnitt der verlängerten Wand mit der Achse) und Abstand Übergang–Fokus. */
@@ -91,7 +187,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE) {
   function solveHorn(L, Lt, rt, dw, dh) {
     const tr = transition(Lt, rt);
     if (!tr) return null;
-    const { r0, tTh, xTrans, zTrans } = tr;
+    const { r0, tTh, tEnd, xTrans, zTrans } = tr;
 
     const { zFocus, rInner } = focusOf(tr);
     const hatTipZ = -dh - dw / 2;
@@ -112,7 +208,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE) {
 
     return {
       openingAngle, alpha2: ALPHA2, tTrans: T_TRANS,
-      r0, tTh, Lt, Ls,
+      r0, tTh, tEnd, clothoid: tr.clothoid, Lt, Ls,
       xTrans, zTrans,
       xMouth, zMouth,
       zFocus, arcR, zApex: zFocus + arcR,
@@ -129,15 +225,31 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE) {
     return Math.ceil(dh + dw / 2 + zFocus + rInner) + 10;
   }
 
-  /** Größte Traktrix-Länge, für die solveHorn bei Gesamtlänge L noch lösbar ist. */
+  /**
+   * Größte Traktrix-Länge, für die solveHorn bei Gesamtlänge L noch lösbar ist.
+   * Ist der Eingang zu kurz für die Klothoide, zählt das als „zu kurz“ (untere Seite).
+   */
   function maxLt(L, rt, dw, dh) {
     if (!solveHorn(L, 0, rt, dw, dh)) return 0;
+    const ok = lt => transition(lt, rt) === null ? clothoid > 0 : !!solveHorn(L, lt, rt, dw, dh);
     let lo = 0, hi = L;
     for (let i = 0; i < 60; i++) {
       const mid = (lo + hi) / 2;
-      solveHorn(L, mid, rt, dw, dh) ? (lo = mid) : (hi = mid);
+      ok(mid) ? (lo = mid) : (hi = mid);
     }
     return lo;
+  }
+
+  /** Kleinste Traktrix-Länge, in die die Klothoide passt (0 ohne Klothoide). */
+  function minLtForClothoid(rt) {
+    if (!(clothoid > 0)) return 0;
+    let lo = LT_MIN, hi = clothoid;
+    while (transition(hi, rt) === null && hi < 1e5) hi *= 2;
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      transition(mid, rt) ? (hi = mid) : (lo = mid);
+    }
+    return hi;
   }
 
   /**
@@ -184,7 +296,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE) {
 
   return {
     openingAngle, ALPHA2, T_TRANS, PHI_TOTAL,
-    solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke,
+    solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke, minLtForClothoid,
   };
 }
 
@@ -198,14 +310,28 @@ export const {
 // ABTASTUNG DER DRAUFSICHT
 // ──────────────────────────────────────────────────────────────────
 
-/** n+1 Punkte [x, z] der Traktrix vom Throat bis zum Übergang; leer ohne Traktrix. */
+/** n+1 Punkte [x, z] der Traktrix vom Throat bis zu ihrem Ende (Klothoide bzw. gerade Wand); leer ohne Traktrix. */
 export function traktrixPoints(s, n) {
   if (!hasTraktrix(s)) return [];
   const z0 = zN(s.tTh);
   return Array.from({ length: n + 1 }, (_, i) => {
-    const t = s.tTh + (s.tTrans - s.tTh) * i / n;
+    const t = s.tTh + (s.tEnd - s.tTh) * i / n;
     return [s.r0 * xN(t), s.r0 * (z0 - zN(t))];
   });
+}
+
+/** n+1 Punkte [x, z] der Klothoide vom Ende der Traktrix bis zum Beginn der geraden Wand; leer ohne Klothoide. */
+export function clothoidPoints(s, n) {
+  if (!hasClothoid(s)) return [];
+  const pts = clothoidTable(s.clothoid, n).map(p => [p.x, p.z]);
+  pts[n] = [s.xTrans, s.zTrans];   // Ende exakt auf dem Beginn der Geraden
+  return pts;
+}
+
+/** Eingang (Traktrix + Klothoide) als Polygonzug [x, z] vom Throat bis zum Beginn der geraden Wand. */
+export function entrancePoints(s, nTrak, nClothoid = nTrak) {
+  const trak = traktrixPoints(s, nTrak);
+  return hasClothoid(s) ? [...trak, ...clothoidPoints(s, nClothoid).slice(1)] : trak;
 }
 
 /** n+1 Punkte [x, z] der geraden Wand vom Übergang bis zum Mund. */
@@ -328,29 +454,45 @@ export function computeFillet(s, rt, hMouth, curve, hypexT, R) {
 // QUERSCHNITT A(z)
 // ──────────────────────────────────────────────────────────────────
 
+/** Wellenfront durch einen Wandpunkt (x, z) mit Tangentenwinkel θ zur Achse: Kreisbogen um den
+ *  Schnittpunkt der Tangente mit der Achse, Halbwinkel θ. */
+const wavefrontThrough = (x, z, theta) => {
+  const radius = x / Math.sin(theta), zCenter = z - x / Math.tan(theta);
+  return { zCenter, radius, halfAngle: theta, zAxis: zCenter + radius };
+};
+
 /**
  * Wellenfront (Draufsicht) zu einem Wandpunkt bei zWall: Kreisbogen um den Punkt, in dem die
  * Wandtangente die Achse schneidet – nur so steht er senkrecht auf beiden Wänden. Im geraden
  * Bereich ist das der Fokus (wachsender Radius, fester Halbwinkel α); auf der Traktrix ein
  * mitwandernder Fußpunkt mit konstantem Radius r0 (definierende Traktrix-Eigenschaft) und
- * wachsendem Halbwinkel. Die Achsenposition der Wellenfront ist Mittelpunkt + Radius.
- * @returns {{ zCenter, radius, halfAngle, zAxis }}
+ * wachsendem Halbwinkel; auf der Klothoide wandern Mittelpunkt und Radius.
+ * @param clothoid  dichte Tabelle der Klothoide (clothoidTable) oder null
+ * @returns {{ zCenter, radius, halfAngle, zAxis, part }}
  */
-function wavefrontAt(s, zWall) {
-  if (hasTraktrix(s) && zWall <= s.zTrans) {
-    let lo = s.tTh, hi = s.tTrans;
+function wavefrontAt(s, zWall, clothoid) {
+  const zTrakEnd = clothoid ? clothoid[0].z : s.zTrans;
+  if (hasTraktrix(s) && zWall <= zTrakEnd) {
+    let lo = s.tTh, hi = s.tEnd;
     for (let i = 0; i < 60; i++) {
       const tm = (lo + hi) / 2;
       s.r0 * (zN(s.tTh) - zN(tm)) < zWall ? (lo = tm) : (hi = tm);
     }
     const t = (lo + hi) / 2;
     const zAxis = s.r0 * (zN(s.tTh) - t + 1);
-    return { zCenter: zAxis - s.r0, radius: s.r0, halfAngle: Math.atan(1 / Math.sinh(t)), zAxis };
+    return { zCenter: zAxis - s.r0, radius: s.r0, halfAngle: Math.atan(1 / Math.sinh(t)), zAxis, part: "traktrix" };
+  }
+  if (clothoid && zWall <= s.zTrans) {
+    let k = 1;
+    while (k < clothoid.length - 1 && clothoid[k].z < zWall) k++;
+    const p = clothoid[k - 1], q = clothoid[k], f = (zWall - p.z) / (q.z - p.z);
+    const lerp = key => p[key] + f * (q[key] - p[key]);
+    return { ...wavefrontThrough(lerp("x"), zWall, lerp("theta")), part: "klothoide" };
   }
   const frac  = (zWall - s.zTrans) / (s.Ls || 1);
   const xWall = s.xTrans + frac * s.Ls * Math.tan(s.alpha2);
   const R = Math.sqrt((zWall - s.zFocus) ** 2 + xWall ** 2);
-  return { zCenter: s.zFocus, radius: R, halfAngle: s.alpha2, zAxis: s.zFocus + R };
+  return { zCenter: s.zFocus, radius: R, halfAngle: s.alpha2, zAxis: s.zFocus + R, part: "linear" };
 }
 
 const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
@@ -362,17 +504,20 @@ const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
  * Auf der Traktrix liegt er um einen anderen Mittelpunkt; mit Verrundung ändert sich h dort
  * entlang des Bogens und wird numerisch integriert (Simpson).
  *
- * Abgetastet an n+1 Wandpunkten plus exakt am Übergang Traktrix → gerade Wand. Vor der
- * ersten definierten Wellenfront (Treiberebene) wird A bis z = 0 konstant gehalten.
- * Am Übergang ist A stetig, hat aber einen Knick: die Wandkrümmung springt dort (Traktrix
- * → Gerade), und die Wellenfrontbreite hängt vom Tangentenwinkel der Wand ab.
+ * Abgetastet an n+1 Wandpunkten plus exakt an den Sektionsgrenzen. Vor der ersten
+ * definierten Wellenfront (Treiberebene) wird A bis z = 0 konstant gehalten.
+ * Ohne Klothoide ist A am Übergang Traktrix → Gerade stetig, hat aber einen Knick: die
+ * Wandkrümmung springt dort, und die Wellenfrontbreite hängt vom Tangentenwinkel der Wand
+ * ab. Mit Klothoide ist die Krümmung stetig und A glatt.
  *
  * @param profile  z ↦ halbe Höhe (makeProfile)
- * @returns {{z: number, A: number, traktrix: boolean}[]}  aufsteigend in z
+ * @returns {{z: number, A: number, part: "traktrix" | "klothoide" | "linear"}[]}  aufsteigend in z
  */
 export function crossSection(s, profile, n = 100) {
+  const clothoid = hasClothoid(s) ? clothoidTable(s.clothoid, 400) : null;
   const zWalls = Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
   if (hasTraktrix(s)) zWalls.push(s.zTrans);
+  if (clothoid) zWalls.push(clothoid[0].z);
   zWalls.sort((a, b) => a - b);
 
   const areaOf = ({ zCenter, radius, halfAngle, zAxis }) => {
@@ -389,8 +534,8 @@ export function crossSection(s, profile, n = 100) {
   };
 
   const pts = zWalls.map(zWall => {
-    const wf = wavefrontAt(s, zWall);
-    return { z: wf.zAxis, A: areaOf(wf), traktrix: zWall <= s.zTrans };
+    const wf = wavefrontAt(s, zWall, clothoid);
+    return { z: wf.zAxis, A: areaOf(wf), part: wf.part };
   });
   return [{ ...pts[0], z: 0 }, ...pts];
 }

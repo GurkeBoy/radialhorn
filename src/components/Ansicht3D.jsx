@@ -7,7 +7,7 @@ import { buildHornGeometry, buildShellGeometry, triangulate, gridLines } from ".
 import { COLOR, FONT, UI } from "../theme.js";
 import { useSize } from "../hooks.js";
 
-const SECTION_COLOR = { traktrix: COLOR.trak, linear: COLOR.horn, rim: COLOR.wand };
+const SECTION_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn, rim: COLOR.wand };
 
 /** Dreiecke bzw. Strecken [p, …] als BufferGeometry (Punkte [x, h, z]). */
 function bufferGeometry(items) {

@@ -20,7 +20,7 @@
  * Koordinaten der Gitterpunkte: [X, Y, Z] = [x (Breite), h (Höhe), z (Achse)] in mm.
  * Nachbarflächen teilen sich an den Nähten exakt dieselben Randpunkte (wasserdicht).
  */
-import { hasTraktrix, zN, xN } from "./horn-math.js";
+import { hasTraktrix, hasClothoid, entrancePoints } from "./horn-math.js";
 import { linspace } from "./utils.js";
 
 const DEFAULT_RES = { angular: 60, radial: 80, axial: 40 };
@@ -55,13 +55,19 @@ export function offsetHeight(hAt, rMax, t) {
   };
 }
 
-/** Rechte Innenwand der Draufsicht [x, z] als dichter Polygonzug: Traktrix, dann gerade Wand bis zum Mund. */
+/**
+ * Rechte Innenwand der Draufsicht [x, z] als Polygonzug: Eingang (Traktrix, ggf. Klothoide),
+ * dann gerade Wand bis zum Mund. lineStart = Index des Beginns der Geraden, kloStart = Index
+ * des Beginns der Klothoide (oder null).
+ */
 function innerWall(s, rt, n = 400) {
-  const trak = hasTraktrix(s)
-    ? linspace(s.tTh, s.tTrans, n).map(tau => [s.r0 * xN(tau), s.r0 * (zN(s.tTh) - zN(tau))])
-    : [[rt, 0]];
-  trak[0] = [rt, 0];
-  return { points: [...trak, [s.xMouth, s.zMouth]], lineStart: trak.length - 1 };
+  const entrance = hasTraktrix(s) ? entrancePoints(s, n, Math.max(8, n >> 1)) : [[rt, 0]];
+  entrance[0] = [rt, 0];
+  return {
+    points: [...entrance, [s.xMouth, s.zMouth]],
+    lineStart: entrance.length - 1,
+    kloStart: hasClothoid(s) ? n : null,
+  };
 }
 
 /**
@@ -76,11 +82,17 @@ function innerWall(s, rt, n = 400) {
 function contourRight(s, rt, t, axial) {
   const wall = innerWall(s, rt, 2000).points;
   if (t === 0) {
-    return hasTraktrix(s) ? innerWall(s, rt, axial).points.slice(0, -1) : [[rt, 0]];
+    if (!hasTraktrix(s)) return { pts: [[rt, 0]], kloStart: null };
+    const w = innerWall(s, rt, axial);
+    return { pts: w.points.slice(0, -1), kloStart: w.kloStart };
   }
+  // Beginn der Klothoide auf der versetzten Kontur: Wandpunkt + t·Normale (cos θ, −sin θ)
+  const c = hasClothoid(s) ? s.clothoid : null;
+  const zKlo = c ? c.start[1] - t * Math.sin(c.theta0) : null;
+  const withKlo = pts => ({ pts, kloStart: zKlo === null || zKlo <= 0 ? null : Math.max(1, pts.findIndex(p => p[1] >= zKlo)) });
   // versetzter Übergangspunkt: Übergang + t·Normale der Wand (cos α, −sin α)
   const xs = s.xTrans + t * Math.cos(s.alpha2), zs = s.zTrans - t * Math.sin(s.alpha2);
-  if (!hasTraktrix(s) || zs <= 0) return [[xs - zs * Math.tan(s.alpha2), 0]];
+  if (!hasTraktrix(s) || zs <= 0) return { pts: [[xs - zs * Math.tan(s.alpha2), 0]], kloStart: null };
 
   // gerade Wand dicht abtasten, damit die Einhüllende dort exakt die Parallele ist
   const line = linspace(0, 1, 2000).map(f => [s.xTrans + f * (s.xMouth - s.xTrans), s.zTrans + f * (s.zMouth - s.zTrans)]);
@@ -102,7 +114,7 @@ function contourRight(s, rt, t, axial) {
   }
   const pts = linspace(0, zEnd, axial).map(z => [envelope(z), z]);
   pts[axial] = [L(zEnd), zEnd];
-  return pts;
+  return withKlo(pts);
 }
 
 /**
@@ -198,7 +210,7 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }) {
   const corner = t > 0 ? CORNER_COLUMNS : 0;
 
   // Naht zwischen Traktrix-Grundfläche und Rest: Kreis um den Fokus durch das Konturende
-  const contour = contourRight(s, rt, t, axial);
+  const { pts: contour, kloStart } = contourRight(s, rt, t, axial);
   const end = contour[contour.length - 1];
   const rSeam = t === 0 && hasTraktrix(s) ? s.rInner : Math.hypot(end[0], end[1] - s.zFocus);
   const phiSeam = s.alpha2 + Math.asin(Math.min(1, t / rSeam));
@@ -208,14 +220,18 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }) {
   const arc = arcPhis.map(phi => polar(rSeam, phi));
   const nCols = arc.length - 1;
 
-  // Traktrix-Grundfläche: Throat-Kante, Naht, linke/rechte Kontur
+  // Grundfläche des Eingangs: Throat-Kante, Naht, linke/rechte Kontur; mit Klothoide in
+  // zwei Flächen geteilt (gemeinsame Zeile am Beginn der Klothoide)
   const side = contour.length > 1 ? [...contour] : [contour[0], contour[0]];
   side[side.length - 1] = arc[nCols];
   if (!hasTraktrix(s)) side[0] = arc[nCols];
   const x0 = side[0][0];
   const throat = linspace(-x0, x0, nCols).map(x => [x, 0]);
-  const trakTop = lift(coons(throat, arc, side.map(([x, z]) => [-x, z]), side,
+  const entranceTop = lift(coons(throat, arc, side.map(([x, z]) => [-x, z]), side,
     linspace(0, 1, side.length - 1), linspace(0, 1, nCols)));
+  const split = kloStart !== null && kloStart > 0 && kloStart < entranceTop.length - 1;
+  const trakTop = split ? entranceTop.slice(0, kloStart + 1) : entranceTop;
+  const kloTop = split ? entranceTop.slice(kloStart) : null;
 
   // Öffnungssektor: Polargitter um den Fokus, im Verrundungsbereich verdichtet
   let radii = linspace(rSeam, s.arcR, radial);
@@ -249,16 +265,18 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }) {
   const column = (grid, j) => grid.map(row => row[j]);
   const last = grid => grid[grid.length - 1];
   const wall = (top, bottom) => top.map((p, k) => [bottom[k], p]);
-  const trakBottom = mirrorY(trakTop), linBottom = mirrorY(linTop);
+  const trakBottom = mirrorY(trakTop), linBottom = mirrorY(linTop), kloBottom = mirrorY(kloTop);
   const cornerBottomR = mirrorY(cornerTopR), cornerBottomL = mirrorY(cornerTopL);
   // Seitenwände des geraden Bereichs: innen auf dem Strahl φ = ±α, außen auf der Parallelen
   const [wallTopL, wallBotL, wallTopR, wallBotR] = corner
     ? [column(cornerTopL, corner), column(cornerBottomL, corner), column(cornerTopR, corner), column(cornerBottomR, corner)]
     : [column(linTop, 0), column(linBottom, 0), column(linTop, angular), column(linBottom, angular)];
   return {
-    trakTop, trakBottom, linTop, linBottom, cornerTopL, cornerTopR, cornerBottomL, cornerBottomR,
+    trakTop, trakBottom, kloTop, kloBottom, linTop, linBottom, cornerTopL, cornerTopR, cornerBottomL, cornerBottomR,
     trakWallL: wall(column(trakTop, 0), column(trakBottom, 0)),
     trakWallR: wall(column(trakTop, nCols), column(trakBottom, nCols)),
+    kloWallL: kloTop && wall(column(kloTop, 0), column(kloBottom, 0)),
+    kloWallR: kloTop && wall(column(kloTop, nCols), column(kloBottom, nCols)),
     linWallL: wall(wallTopL, wallBotL),
     linWallR: wall(wallTopR, wallBotR),
     capThroat: wall(trakTop[0], trakBottom[0]),
@@ -318,6 +336,14 @@ function surfacesOf(b, invert = false) {
     { name: "linWallL",   section: "linear",   grid: b.linWallL,   outward: o(sideways) },
     { name: "linWallR",   section: "linear",   grid: b.linWallR,   outward: o(sideways) },
   ];
+  if (b.kloTop) {
+    list.push(
+      { name: "kloTop",    section: "klothoide", grid: b.kloTop,    outward: o(up) },
+      { name: "kloBottom", section: "klothoide", grid: b.kloBottom, outward: o(down) },
+      { name: "kloWallL",  section: "klothoide", grid: b.kloWallL,  outward: o(sideways) },
+      { name: "kloWallR",  section: "klothoide", grid: b.kloWallR,  outward: o(sideways) },
+    );
+  }
   if (b.cornerTopR) {
     list.push(
       { name: "cornerTopL",    section: "linear", grid: b.cornerTopL,    outward: o(up) },
@@ -337,7 +363,7 @@ function surfacesOf(b, invert = false) {
  * @param fillet   Verrundung oder null – verdichtet das Gitter im Verrundungsbereich
  * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[] }}
  *   grid: Zeilen × Spalten von Punkten oder triangles: fertige Dreiecke;
- *   section: "traktrix" | "linear" | "cap"; outward: Punkt ↦ ungefähre Außenrichtung
+ *   section: "traktrix" | "klothoide" | "linear" | "cap"; outward: Punkt ↦ ungefähre Außenrichtung
  */
 export function buildHornGeometry(s, rt, profile, fillet = null, res = DEFAULT_RES) {
   const air = body(s, rt, 0, (x, z) => profile(s.zFocus + Math.hypot(x, z - s.zFocus)), fillet, res);
@@ -356,7 +382,7 @@ export function buildHornGeometry(s, rt, profile, fillet = null, res = DEFAULT_R
  * Deckel und Boden: außen höchstens hMouth/2 + t (am Mund senkrecht gemessen, waagerecht
  * abgeschnitten), Stirnfläche bündig auf dem Mundbogen. Seitenwände: über die volle Höhe,
  * Stirnfläche senkrecht zur Wand durch die Mundkante. Throat: bündig in der Ebene z = 0.
- * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[] }}  section: "traktrix" | "linear" | "rim"
+ * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[] }}  section: "traktrix" | "klothoide" | "linear" | "rim"
  */
 export function buildShellGeometry(s, rt, profile, fillet, t, res = DEFAULT_RES) {
   const hAt = r => profile(s.zFocus + r);

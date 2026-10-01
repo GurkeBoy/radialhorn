@@ -42,6 +42,8 @@ export default function App() {
   const [wandstaerke,     setWandstaerke]     = useState(20);
   const [filletOn,        setFilletOn]        = useState(false);
   const [filletR,         setFilletR]         = useState(100);
+  const [clothoidOn,      setClothoidOn]      = useState(false);
+  const [clothoidLength,  setClothoidLength]  = useState(30);
   const [exportLayers,    setExportLayers]    = useState({
     draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, uebergang: true, bemassung: true,
   });
@@ -52,7 +54,7 @@ export default function App() {
   // Grenzen und Lösung der Draufsicht. Die Grenzsuchen sind teuer (verschachtelte
   // Bisektionen) und hängen nur von diesen Parametern ab.
   const geometry = useMemo(() => {
-    const math = createHornMath(openingAngle);
+    const math = createHornMath(openingAngle, { clothoid: clothoidOn ? clothoidLength : 0 });
     // Wandstärke vergrößert die Außenkante senkrecht zur Wand; ihre Projektion auf die
     // 45°-Raumecke verkleinert den verfügbaren Platz
     const extraBreite = showRaumecke && showWandstaerke
@@ -61,7 +63,8 @@ export default function App() {
 
     const LtMax         = math.maxLt(L, rt, dw, dh);
     const LtMinRaumecke = showRaumecke ? math.minLtForRaumecke(L, rt, dw, dh, extraBreite) : null;
-    const LtMin         = LtMinRaumecke ?? 0;
+    const LtMinClothoid = math.minLtForClothoid(rt);
+    const LtMin         = Math.max(LtMinRaumecke ?? 0, LtMinClothoid);
     const LtClamped     = Math.min(Math.max(Lt, LtMin), LtMax);
     const LMaxRaumecke  = showRaumecke ? math.maxLforRaumecke(LtClamped, rt, dw, dh, extraBreite) : null;
     const LClamped      = LMaxRaumecke !== null && L > LMaxRaumecke ? LMaxRaumecke : L;
@@ -75,11 +78,13 @@ export default function App() {
         raumecke: showRaumecke && LMaxRaumecke !== null && L >= LMaxRaumecke - 1,
         ltMax:    Lt > LtMax,
         ltMin:    showRaumecke && LtMinRaumecke !== null && Lt <= LtMin + 0.5,
+        clothoid: LtMinClothoid > LtMax ? "zu lang" : Lt < LtMinClothoid ? "Lt" : null,
       },
+      LtMinClothoid,
     };
-  }, [openingAngle, L, Lt, rt, dw, dh, showRaumecke, showWandstaerke, wandstaerke]);
+  }, [openingAngle, L, Lt, rt, dw, dh, showRaumecke, showWandstaerke, wandstaerke, clothoidOn, clothoidLength]);
 
-  const { s, LtMin, LtMax, LtClamped, LClamped, LMaxRaumecke, Lmin, Lmax, warnings } = geometry;
+  const { s, LtMin, LtMax, LtClamped, LClamped, LMaxRaumecke, Lmin, Lmax, warnings, LtMinClothoid } = geometry;
 
   const fillet = useMemo(
     () => filletOn ? computeFillet(s, rt, hMouth, curve, hypexT, filletR) : null,
@@ -128,6 +133,10 @@ export default function App() {
           <Slider label="Traktrix-Länge Lₜ" value={LtClamped} min={LtMin} max={LtMax} step={1} unit="mm" onChange={setLt} />
           {warnings.ltMax && <Warn>⚠ Lₜ-Maximum erreicht ({LtMax.toFixed(0)} mm)</Warn>}
           {warnings.ltMin && <Warn>⚠ Lₜ-Minimum (Raumecke: {LtMin.toFixed(0)} mm)</Warn>}
+          <Toggle label="Krümmungsstetiger Übergang" checked={clothoidOn} onChange={setClothoidOn} />
+          {clothoidOn && <Slider label="Klothoide ℓ" value={clothoidLength} min={1} max={150} step={1} unit="mm" onChange={setClothoidLength} />}
+          {clothoidOn && warnings.clothoid === "Lt" && <Warn>⚠ Lₜ für diese Klothoide mind. {LtMinClothoid.toFixed(0)} mm</Warn>}
+          {clothoidOn && warnings.clothoid === "zu lang" && <Warn>⚠ Klothoide zu lang für diese Geometrie</Warn>}
         </Card>
 
         <Card title="TREIBER">

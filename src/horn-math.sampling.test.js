@@ -58,9 +58,9 @@ describe("crossSection", () => {
   });
 
   it("Sektionswechsel exakt am Traktrix-Ende (zInnerApex)", () => {
-    const lastTrak = pts.filter(p => p.traktrix).pop();
+    const lastTrak = pts.filter(p => p.part === "traktrix").pop();
     expect(lastTrak.z).toBeCloseTo(s.zInnerApex, 6);
-    expect(pts.findIndex(p => !p.traktrix)).toBe(pts.indexOf(lastTrak) + 1);
+    expect(pts.findIndex(p => p.part !== "traktrix")).toBe(pts.indexOf(lastTrak) + 1);
   });
 
   it("am Mund: A = Bogenlänge × Mundhöhe", () => {
@@ -70,7 +70,7 @@ describe("crossSection", () => {
   });
 
   it("Fläche ist positiv und wächst im geraden Bereich monoton", () => {
-    const linear = pts.filter(p => !p.traktrix);
+    const linear = pts.filter(p => p.part !== "traktrix");
     for (const p of pts) expect(p.A).toBeGreaterThan(0);
     for (let i = 1; i < linear.length; i++) expect(linear[i].A).toBeGreaterThan(linear[i - 1].A);
   });
@@ -118,7 +118,7 @@ describe("crossSection – Höhe entlang der Wellenfront (wie der 3D-Körper)", 
   const fillet = computeFillet(s, RT, H_MOUTH, "exponential", 0.5, 300);
   const prof = makeProfile(s, RT, H_MOUTH, "exponential", 0.5, fillet);
   const pts = crossSection(s, prof, 400);
-  const trak = pts.slice(1).filter(p => p.traktrix);
+  const trak = pts.slice(1).filter(p => p.part === "traktrix");
 
   /** Unabhängige Referenz: Wellenfront zum Achspunkt z über die Traktrix-Eigenschaft rekonstruieren
    *  (Mittelpunkt z − r0, Radius r0) und die Höhe über 20 000 Bogenpunkte aufsummieren. */
@@ -143,7 +143,7 @@ describe("crossSection – Höhe entlang der Wellenfront (wie der 3D-Körper)", 
 
   it("ohne Verrundung: Traktrix-Fläche = Bogenlänge × 2·rt (eben)", () => {
     const flatProfile = makeProfile(s, RT, H_MOUTH, "exponential", 0.5);
-    const flat = crossSection(s, flatProfile, 50).slice(1).filter(p => p.traktrix);
+    const flat = crossSection(s, flatProfile, 50).slice(1).filter(p => p.part === "traktrix");
     for (const p of flat) expect(p.A / (2 * RT) / (2 * s.r0)).toBeLessThanOrEqual(s.alpha2 + 1e-9);
     expect(flat[flat.length - 1].A).toBeCloseTo(2 * s.alpha2 * s.r0 * 2 * RT, 6);   // am Übergang θ = α
   });
@@ -167,7 +167,7 @@ describe("crossSection – Höhe entlang der Wellenfront (wie der 3D-Körper)", 
   });
 
   it("am Übergang stetig, mit dem erklärten Knick in der Steigung", () => {
-    const i = pts.findIndex(p => !p.traktrix);
+    const i = pts.findIndex(p => p.part !== "traktrix");
     const [a, b, c] = [pts[i - 2], pts[i - 1], pts[i + 1]];
     expect(Math.abs(pts[i].A - b.A) / b.A).toBeLessThan(0.02);    // kein Sprung
     const left = (b.A - a.A) / (b.z - a.z), right = (c.A - b.A) / (c.z - b.z);
