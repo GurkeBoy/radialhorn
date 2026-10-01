@@ -21,6 +21,7 @@
  * Nachbarflächen teilen sich an den Nähten exakt dieselben Randpunkte (wasserdicht).
  */
 import { hasTraktrix, hasClothoid, entrancePoints } from "./horn-math.js";
+import { ShapeUtils, Vector2 } from "three";
 import { linspace } from "./utils.js";
 
 const DEFAULT_RES = { angular: 60, radial: 80, axial: 40 };
@@ -76,10 +77,11 @@ function innerWall(s, rt, n = 400) {
  * Wandpunkte, X(z) = max x_i + √(t² − (z − z_i)²): an stark gekrümmten Stellen der Traktrix
  * (Krümmungsradius < t) schneidet sie die Schlaufe der einfachen Parallelkurve ab. Endet dort,
  * wo die Einhüllende in die Parallele der geraden Wand übergeht – normalerweise im versetzten
- * Übergangspunkt, bei sehr großen Wandstärken weiter vorn. Liegt dieser Punkt hinter z = 0,
- * besteht die Kontur nur aus dem Schnittpunkt der Parallelen mit z = 0.
+ * Übergangspunkt, bei sehr großen Wandstärken weiter vorn. Die Kontur beginnt in der Ebene
+ * z0 (0 oder Flanschdicke); liegt dieser Punkt davor, besteht sie nur aus dem Schnittpunkt
+ * der Parallelen mit z = z0.
  */
-function contourRight(s, rt, t, axial) {
+function contourRight(s, rt, t, axial, z0 = 0) {
   const wall = innerWall(s, rt, 2000).points;
   if (t === 0) {
     if (!hasTraktrix(s)) return { pts: [[rt, 0]], kloStart: null };
@@ -89,10 +91,10 @@ function contourRight(s, rt, t, axial) {
   // Beginn der Klothoide auf der versetzten Kontur: Wandpunkt + t·Normale (cos θ, −sin θ)
   const c = hasClothoid(s) ? s.clothoid : null;
   const zKlo = c ? c.start[1] - t * Math.sin(c.theta0) : null;
-  const withKlo = pts => ({ pts, kloStart: zKlo === null || zKlo <= 0 ? null : Math.max(1, pts.findIndex(p => p[1] >= zKlo)) });
+  const withKlo = pts => ({ pts, kloStart: zKlo === null || zKlo <= z0 ? null : Math.max(1, pts.findIndex(p => p[1] >= zKlo)) });
   // versetzter Übergangspunkt: Übergang + t·Normale der Wand (cos α, −sin α)
   const xs = s.xTrans + t * Math.cos(s.alpha2), zs = s.zTrans - t * Math.sin(s.alpha2);
-  if (!hasTraktrix(s) || zs <= 0) return { pts: [[xs - zs * Math.tan(s.alpha2), 0]], kloStart: null };
+  if (!hasTraktrix(s) || zs <= z0) return { pts: [[xs + (z0 - zs) * Math.tan(s.alpha2), z0]], kloStart: null };
 
   // gerade Wand dicht abtasten, damit die Einhüllende dort exakt die Parallele ist
   const line = linspace(0, 1, 2000).map(f => [s.xTrans + f * (s.xMouth - s.xTrans), s.zTrans + f * (s.zMouth - s.zTrans)]);
@@ -112,7 +114,8 @@ function contourRight(s, rt, t, axial) {
     for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; above(mid) ? (lo = mid) : (hi = mid); }
     zEnd = hi;
   }
-  const pts = linspace(0, zEnd, axial).map(z => [envelope(z), z]);
+  if (zEnd <= z0) return { pts: [[L(z0), z0]], kloStart: null };
+  const pts = linspace(z0, zEnd, axial).map(z => [envelope(z), z]);
   pts[axial] = [L(zEnd), zEnd];
   return withKlo(pts);
 }
@@ -204,13 +207,13 @@ function coons(B, T, L, R, us, vs) {
  * Eckstreifen über den Seitenwänden (zwischen Wand und Außenkante), der wie die Seitenwand
  * senkrecht zur Wand an der Mundkante endet.
  */
-function body(s, rt, t, height, fillet, { angular, radial, axial }) {
+function body(s, rt, t, height, fillet, { angular, radial, axial }, zStart = 0) {
   const polar = (r, phi) => [r * Math.sin(phi), s.zFocus + r * Math.cos(phi)];
   const lift = grid => grid.map(row => row.map(([x, z]) => [x, height(x, z), z]));
   const corner = t > 0 ? CORNER_COLUMNS : 0;
 
   // Naht zwischen Traktrix-Grundfläche und Rest: Kreis um den Fokus durch das Konturende
-  const { pts: contour, kloStart } = contourRight(s, rt, t, axial);
+  const { pts: contour, kloStart } = contourRight(s, rt, t, axial, zStart);
   const end = contour[contour.length - 1];
   const rSeam = t === 0 && hasTraktrix(s) ? s.rInner : Math.hypot(end[0], end[1] - s.zFocus);
   const phiSeam = s.alpha2 + Math.asin(Math.min(1, t / rSeam));
@@ -226,7 +229,7 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }) {
   side[side.length - 1] = arc[nCols];
   if (!hasTraktrix(s)) side[0] = arc[nCols];
   const x0 = side[0][0];
-  const throat = linspace(-x0, x0, nCols).map(x => [x, 0]);
+  const throat = linspace(-x0, x0, nCols).map(x => [x, zStart]);
   const entranceTop = lift(coons(throat, arc, side.map(([x, z]) => [-x, z]), side,
     linspace(0, 1, side.length - 1), linspace(0, 1, nCols)));
   const split = kloStart !== null && kloStart > 0 && kloStart < entranceTop.length - 1;
@@ -377,19 +380,160 @@ export function buildHornGeometry(s, rt, profile, fillet = null, res = DEFAULT_R
   };
 }
 
+const FLANGE_SEGMENTS = 96, HOLE_SEGMENTS = 24;
+
+/** Mittelpunkte der Flanschbohrungen [x, h]; erste Bohrung unter angle (Grad) gegen die Breitenachse. */
+export function boltHoleCenters({ count, circle, angle }) {
+  return Array.from({ length: count }, (_, i) => {
+    const a = (angle + 360 * i / count) * Math.PI / 180;
+    return [circle / 2 * Math.cos(a), circle / 2 * Math.sin(a)];
+  });
+}
+
+/** Kleinster Abstand eines Punkts zu einem geschlossenen Polygonzug und ob er innen liegt. */
+function polygonDistance([px, py], poly) {
+  let d = Infinity, inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, ay] = poly[j], [bx, by] = poly[i];
+    if ((ay > py) !== (by > py) && px < ax + (py - ay) * (bx - ax) / (by - ay)) inside = !inside;
+    const abx = bx - ax, aby = by - ay;
+    const f = Math.max(0, Math.min(1, ((px - ax) * abx + (py - ay) * aby) / (abx * abx + aby * aby || 1)));
+    d = Math.min(d, Math.hypot(px - ax - f * abx, py - ay - f * aby));
+  }
+  return { d, inside };
+}
+
+/**
+ * Löst die Flanschvorgaben gegen die Schale auf. Der Flansch muss den Außenkörper an seinem
+ * Beginn (z = Dicke) umschließen – ein kleinerer Ø wird auf dieses Minimum angehoben. Ohne
+ * Ø (diameter = null) gilt fallback (z.B. die Treiberbreite), mindestens aber das Minimum
+ * plus Platz für die Bohrungen bzw. der vorgegebene Lochkreis plus Rand. Ohne Lochkreis (circle = null) liegt er mittig zwischen
+ * Außenkörper und Flanschrand. Bohrungen, die nicht ganz im Flansch und außerhalb der
+ * Schale liegen, entfallen.
+ * @param flange  { diameter | null, fallback?, thickness, holes: { count, circle | null, diameter, angle } }
+ * @returns {{ diameter, thickness, holes, centers: [x, h][], conflicts: [x, h][], minDiameter, limited, invalidHoles }}
+ *   centers: gebohrte Löcher; conflicts: Bohrbild-Positionen, die nicht gebohrt werden können
+ *   (in der Schale oder über den Rand) – nur zur Anzeige
+ */
+export function flangeLayout(s, rt, profile, fillet, t, flange, res = DEFAULT_RES) {
+  const outer = outerBody(s, rt, profile, fillet, t, res, flange.thickness);
+  const loop = outer.throatLoop.slice(0, -1);
+  const minDiameter = 2 * Math.max(...loop.map(([x, h]) => Math.hypot(x, h)));
+  const holeRing = flange.holes.count > 0 ? 4 * flange.holes.diameter + 4 : 0;   // Bohrung + Stege
+  const holeFit = flange.holes.count > 0 && flange.holes.circle ? flange.holes.circle + 2 * flange.holes.diameter + 2 : 0;
+  const wanted = flange.diameter ?? Math.max(flange.fallback ?? 0, minDiameter + holeRing, holeFit);
+  const diameter = Math.max(wanted, minDiameter);
+  const holes = { ...flange.holes, circle: flange.holes.circle ?? (minDiameter + diameter) / 2 };
+  const r = diameter / 2, rh = holes.diameter / 2;
+  const all = holes.count > 0 ? boltHoleCenters(holes) : [];
+  const fits = c => {
+    if (Math.hypot(...c) + rh > r - 0.5) return false;
+    const { d, inside } = polygonDistance(c, loop);
+    return !inside && d > rh + 0.5;
+  };
+  const centers = all.filter(fits), conflicts = all.filter(c => !fits(c));
+  return {
+    diameter, thickness: flange.thickness, holes, centers, conflicts,
+    minDiameter, limited: wanted < minDiameter, invalidHoles: all.length - centers.length,
+  };
+}
+
+/** Außenkörper der Schale, optional ab der Ebene zStart (Flansch davor). */
+function outerBody(s, rt, profile, fillet, t, res, zStart = 0) {
+  const hAt = r => profile(s.zFocus + r);
+  const capHeight = hAt(s.arcR) + t;
+  const field = outerHeightField(s, rt, hAt, t);
+  return body(s, rt, t, (x, z) => Math.min(field(x, z), capHeight), fillet, res, zStart);
+}
+
+/** Ring aus n Punkten [x, h, z] um (cx, ch) in der Ebene z. */
+const ring = (cx, ch, radius, z, n) =>
+  Array.from({ length: n }, (_, k) => {
+    const a = 2 * Math.PI * k / n;
+    return [cx + radius * Math.cos(a), ch + radius * Math.sin(a), z];
+  });
+
+const area2 = ([a, b, c]) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+
+/**
+ * Ebene Fläche aus Außenrand und Löchern (Punkte [x, h, z] gleicher Ebene), trianguliert und
+ * so orientiert, dass die Normale in Richtung nz (±1) zeigt. earcut lässt kollineare
+ * Randpunkte aus; sie werden in die Dreieckskante zurückgesetzt, auf der sie liegen, damit
+ * die Fläche dicht an die angrenzenden Gitter anschließt (keine T-Stöße).
+ */
+function planarFace(contour, holes, nz) {
+  const v2 = pts => pts.map(([x, h]) => new Vector2(x, h));
+  const all = [contour, ...holes].flat();
+  const idx = ShapeUtils.triangulateShape(v2(contour), holes.map(v2));
+  let tris = idx.map(([a, b, c]) => [all[a], all[b], all[c]]);
+  if (tris.length && area2(tris[0]) * nz < 0) tris = tris.map(([a, b, c]) => [a, c, b]);
+
+  const used = new Set(idx.flat());
+  for (const p of all.filter((_, i) => !used.has(i))) {
+    for (let k = 0; k < tris.length; k++) {
+      const tri = tris[k];
+      const e = [0, 1, 2].find(j => onSegment(p, tri[j], tri[(j + 1) % 3]));
+      if (e === undefined) continue;
+      const [a, b, c] = [tri[e], tri[(e + 1) % 3], tri[(e + 2) % 3]];
+      tris.splice(k, 1, [a, p, c], [p, b, c]);
+      break;
+    }
+  }
+  return tris;
+}
+
+/** Liegt p (in x, h) im Inneren der Strecke a–b? */
+function onSegment(p, a, b) {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (Math.abs(area2([a, b, p])) > 1e-7 * len * len) return false;
+  const f = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / (len * len);
+  return f > 1e-9 && f < 1 - 1e-9;
+}
+
+/** Mantel zwischen zwei gleich langen, geschlossenen Ringen (ohne wiederholten Startpunkt). */
+const band = (a, b) => [[...a, a[0]], [...b, b[0]]];
+
+/**
+ * Flansch als Flächen: Rückseite (z = 0) mit Throat-Öffnung, Vorderseite (z = Dicke) um den
+ * Außenkörper der Schale, Zylindermantel und Bohrungswände.
+ * @param airLoop    Randzug des Luftvolumens am Throat (z = 0)
+ * @param outerLoop  Randzug des Außenkörpers bei z = Dicke
+ */
+function flangeSurfaces(flange, airLoop, outerLoop) {
+  const holes = flange.centers;
+  const r = flange.diameter / 2, rh = flange.holes.diameter / 2, d = flange.thickness;
+  const back = ring(0, 0, r, 0, FLANGE_SEGMENTS), front = ring(0, 0, r, d, FLANGE_SEGMENTS);
+  const holesBack = holes.map(([x, h]) => ring(x, h, rh, 0, HOLE_SEGMENTS));
+  const holesFront = holes.map(([x, h]) => ring(x, h, rh, d, HOLE_SEGMENTS));
+  const open = loop => loop.slice(0, -1);
+  return [
+    { name: "flangeBack",  section: "flansch", oriented: true, triangles: planarFace(back, [open(airLoop), ...holesBack], -1) },
+    { name: "flangeFront", section: "flansch", oriented: true, triangles: planarFace(front, [open(outerLoop), ...holesFront], 1) },
+    { name: "flangeRim",   section: "flansch", outward: ([x, h]) => [x, h, 0], grid: band(back, front) },
+    ...holes.map(([cx, ch], i) => ({
+      name: `flangeHole${i}`, section: "flansch", outward: ([x, h]) => [cx - x, ch - h, 0],
+      grid: band(holesBack[i], holesFront[i]),
+    })),
+  ];
+}
+
 /**
  * Schale mit Wandstärke t: Außenkörper, Innenseite (Luftvolumen, umgedreht) und Stirnflächen.
  * Deckel und Boden: außen höchstens hMouth/2 + t (am Mund senkrecht gemessen, waagerecht
  * abgeschnitten), Stirnfläche bündig auf dem Mundbogen. Seitenwände: über die volle Höhe,
- * Stirnfläche senkrecht zur Wand durch die Mundkante. Throat: bündig in der Ebene z = 0.
- * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[] }}  section: "traktrix" | "klothoide" | "linear" | "rim"
+ * Stirnfläche senkrecht zur Wand durch die Mundkante. Throat: bündig in der Ebene z = 0 oder
+ * – mit flange { diameter, thickness, holes: { count, circle, diameter, angle } } – runder
+ * Flansch von z = 0 bis zur Dicke; der Außenkörper beginnt dann erst dahinter. Ein bereits
+ * aufgelöster Flansch (flangeLayout) wird direkt verwendet.
+ * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[] }}  section: "traktrix" | "klothoide" | "linear" | "rim" | "flansch"
  */
-export function buildShellGeometry(s, rt, profile, fillet, t, res = DEFAULT_RES) {
+export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, res = DEFAULT_RES) {
   const hAt = r => profile(s.zFocus + r);
-  const capHeight = hAt(s.arcR) + t;
-  const field = outerHeightField(s, rt, hAt, t);
   const air = body(s, rt, 0, (x, z) => hAt(Math.hypot(x, z - s.zFocus)), fillet, res);
-  const outer = body(s, rt, t, (x, z) => Math.min(field(x, z), capHeight), fillet, res);
+  const outer = outerBody(s, rt, profile, fillet, t, res, flange ? flange.thickness : 0);
+  const throatEnd = flange
+    ? flangeSurfaces(flange.centers ? flange : flangeLayout(s, rt, profile, fillet, t, flange, res), air.throatLoop, outer.throatLoop)
+    : [{ name: "rimThroat", section: "rim", triangles: zipper(air.throatLoop, outer.throatLoop), outward: () => [0, 0, -1] }];
 
   const radialOut = ([x, , z]) => [x, 0, z - s.zFocus];
   const am = air.mouth, om = outer.mouth;
@@ -404,7 +548,7 @@ export function buildShellGeometry(s, rt, profile, fillet, t, res = DEFAULT_RES)
     surfaces: [
       ...surfacesOf(outer).map(f => ({ ...f, name: "outer." + f.name })),
       ...surfacesOf(air, true).map(f => ({ ...f, name: "inner." + f.name })),
-      { name: "rimThroat", section: "rim", triangles: zipper(air.throatLoop, outer.throatLoop), outward: () => [0, 0, -1] },
+      ...throatEnd,
       { name: "rimMouthTop",    section: "rim", grid: [am.top, om.top],       outward: radialOut },
       { name: "rimMouthBottom", section: "rim", grid: [am.bottom, om.bottom], outward: radialOut },
       { name: "rimEndR", section: "rim", outward: dir(1),
@@ -422,9 +566,11 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 /**
  * Dreiecke einer Gitterfläche, nach außen orientiert (Normale zeigt in outward-Richtung).
  * Entartete Dreiecke (z.B. an zusammenfallenden Randpunkten) werden ausgelassen.
+ * oriented: fertige, bereits orientierte Dreiecke – unverändert übernommen.
  * @returns {number[][][]}  Liste von Dreiecken [a, b, c]
  */
-export function triangulate({ grid, triangles, outward }) {
+export function triangulate({ grid, triangles, outward, oriented }) {
+  if (oriented) return triangles;
   const tris = [];
   const add = (a, b, c) => {
     const n = cross(sub(b, a), sub(c, a));

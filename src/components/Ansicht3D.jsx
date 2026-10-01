@@ -7,7 +7,7 @@ import { buildHornGeometry, buildShellGeometry, triangulate, gridLines } from ".
 import { COLOR, FONT, UI } from "../theme.js";
 import { useSize } from "../hooks.js";
 
-const SECTION_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn, rim: COLOR.wand };
+const SECTION_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn, rim: COLOR.wand, flansch: COLOR.flansch };
 
 /** Dreiecke bzw. Strecken [p, …] als BufferGeometry (Punkte [x, h, z]). */
 function bufferGeometry(items) {
@@ -63,6 +63,30 @@ function referenceGroup(s, dw, dh, hMouth, showRaumecke) {
   return group;
 }
 
+/**
+ * Bohrungen, die nicht gebohrt werden können (in der Schale): rote Scheibe mit Ring auf der
+ * Flanschrückseite und Ring an der Vorderseite, damit das Bohrbild trotzdem sichtbar ist.
+ */
+function conflictGroup(flange) {
+  const group = new THREE.Group();
+  if (!flange?.conflicts.length) return group;
+  const material = new THREE.MeshBasicMaterial({ color: COLOR.konflikt, side: THREE.DoubleSide });
+  const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR.konflikt });
+  const r = flange.holes.diameter / 2;
+  for (const [x, h] of flange.conflicts) {
+    const disk = new THREE.Mesh(new THREE.CircleGeometry(r, 32), material);
+    disk.position.set(x, h, -0.05);              // knapp vor der Rückseite (z = 0)
+    group.add(disk);
+    for (const z of [-0.1, flange.thickness]) {
+      const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(
+        Array.from({ length: 48 }, (_, k) => new THREE.Vector3(
+          x + r * 1.3 * Math.cos(2 * Math.PI * k / 48), h + r * 1.3 * Math.sin(2 * Math.PI * k / 48), z))), lineMaterial);
+      group.add(ring);
+    }
+  }
+  return group;
+}
+
 function disposeGroup(group) {
   group.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
 }
@@ -84,8 +108,9 @@ function frame(camera, controls, object) {
 /**
  * @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile)
  * @param wall     Wandstärke [mm]; 0 zeigt das Luftvolumen, > 0 die Schale
+ * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null, nur mit Schale
  */
-export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, showRaumecke }) {
+export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, flange, showRaumecke }) {
   const containerRef = useRef(null);
   const { w, h } = useSize(containerRef);
   const three = useRef(null);
@@ -93,8 +118,8 @@ export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, showRa
   const [showReference, setShowReference] = useState(true);
 
   const geometry = useMemo(() => s && (wall > 0
-    ? buildShellGeometry(s, rt, profile, fillet, wall)
-    : buildHornGeometry(s, rt, profile, fillet)), [s, rt, profile, fillet, wall]);
+    ? buildShellGeometry(s, rt, profile, fillet, wall, flange)
+    : buildHornGeometry(s, rt, profile, fillet)), [s, rt, profile, fillet, wall, flange]);
 
   // Szene, Kamera, Renderer und Steuerung einmalig anlegen
   useEffect(() => {
@@ -112,11 +137,11 @@ export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, showRa
     // Zeichnen nur bei Bedarf (Kamerabewegung, Geometrie, Größe, Darstellung) statt Dauerschleife
     const render = () => renderer.render(scene, camera);
     controls.addEventListener("change", render);
-    three.current = { renderer, scene, camera, controls, render, horn: null, reference: null, framed: false };
+    three.current = { renderer, scene, camera, controls, render, horn: null, reference: null, conflicts: null, framed: false };
     return () => {
       controls.removeEventListener("change", render);
       controls.dispose();
-      for (const g of [three.current.horn, three.current.reference]) if (g) disposeGroup(g);
+      for (const g of [three.current.horn, three.current.reference, three.current.conflicts]) if (g) disposeGroup(g);
       renderer.dispose();
       renderer.domElement.remove();
       three.current = null;
@@ -137,16 +162,17 @@ export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, showRa
   useEffect(() => {
     const t = three.current;
     if (!t) return;
-    for (const key of ["horn", "reference"]) {
+    for (const key of ["horn", "reference", "conflicts"]) {
       if (t[key]) { t.scene.remove(t[key]); disposeGroup(t[key]); t[key] = null; }
     }
     if (!geometry) return;
     t.horn = hornGroup(geometry);
     t.reference = referenceGroup(s, dw, dh, hMouth, showRaumecke);
-    t.scene.add(t.horn, t.reference);
+    t.conflicts = conflictGroup(wall > 0 ? flange : null);
+    t.scene.add(t.horn, t.reference, t.conflicts);
     if (!t.framed) { frame(t.camera, t.controls, t.horn); t.framed = true; }
     t.render();
-  }, [geometry, s, dw, dh, hMouth, showRaumecke]);
+  }, [geometry, s, dw, dh, hMouth, showRaumecke, wall, flange]);
 
   // Darstellung umschalten
   useEffect(() => {

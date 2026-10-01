@@ -15,7 +15,7 @@ export function Card({ title, children }) {
 }
 
 export function SectionTitle({ children }) {
-  return <div style={{ fontSize: 9, color: UI.faint, letterSpacing: "0.15em", marginBottom: 8 }}>{children}</div>;
+  return <div style={{ fontSize: 9, color: UI.muted, letterSpacing: "0.15em", marginBottom: 8 }}>{children}</div>;
 }
 
 /** Kleine Zwischenüberschrift bzw. Hinweiszeile innerhalb einer Karte. */

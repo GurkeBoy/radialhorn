@@ -1,18 +1,20 @@
 // Draufsicht (horizontaler Schnitt): Traktrix, gerade Wand, Mundbogen, Raumecke, Treiber.
 import { useRef } from "react";
-import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, linearWallPoints } from "../horn-math.js";
+import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
 import { svgPath } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker } from "./ui.jsx";
 import { Dim, DimAligned } from "./Dim.jsx";
+import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
 
 const TRAKTRIX_SAMPLES = 600;
 const CLOTHOID_SAMPLES = 120;
 const WALL_SAMPLES = 80;
 const DIM_LAYER = 18, DIM_LAYER_STEP = 22;   // Bemaßungslagen [px], siehe CLAUDE.md
 
-export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke }) {
+/** @param flange  aufgelöster Throat-Flansch (flangeLayout) oder null */
+export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange }) {
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
@@ -27,7 +29,7 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
   const raumeckeEndX = dw / 2 + (s.zApex - (-dh));
   const zMin = s.hatTipZ - 140;
   const zMax = s.zApex + Math.max(16, Math.ceil((s.zApex - zMin) * 30 / 432));
-  const xMax = Math.max(s.xMouth, dw / 2, showRaumecke ? raumeckeEndX + 4 : 0) + 20;
+  const xMax = Math.max(s.xMouth, dw / 2, flange ? flange.diameter / 2 : 0, showRaumecke ? raumeckeEndX + 4 : 0) + 20;
 
   const ml = 50, mr = 58, mt = 22, mb = 22;
   const drawW = VW - ml - mr, drawH = VH - mt - mb;
@@ -147,6 +149,8 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
         <path d={svgPath(wall.right)} {...S.hornWall} />
 
         {showWandstaerke && wandstaerke > 0 && <Wandstaerke s={s} toX={toX} toY={toY} t={wandstaerke} />}
+        {flange && <FlanschSchnitt flange={flange} map={(x, z) => [toX(x), toY(z)]}
+          inner={hasTraktrix(s) ? [...entrancePoints(s, 200, 60), ...linearWallPoints(s, 20).slice(1)] : linearWallPoints(s, 20)} />}
 
         {/* Übergangspunkte: Traktrix → (Klothoide →) gerade Wand */}
         {[trak.right, trak.left, klo.right, klo.left].filter(side => side.length > 1).map(side => {
@@ -200,7 +204,7 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
         <text x={cx} y={toY(s.zApex)+28} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>R={s.arcR.toFixed(0)} mm</text>
       </svg>
 
-      <Legend showWandstaerke={showWandstaerke} showClothoid={hasClothoid(s)} />
+      <Legend showWandstaerke={showWandstaerke} showClothoid={hasClothoid(s)} showFlange={!!flange} />
     </div>
   );
 }
@@ -234,7 +238,7 @@ function Wandstaerke({ s, toX, toY, t }) {
   });
 }
 
-function Legend({ showWandstaerke, showClothoid }) {
+function Legend({ showWandstaerke, showClothoid, showFlange }) {
   const items = [
     { col: COLOR.trak,     label: "Traktrix" },
     ...(showClothoid ? [{ col: COLOR.klo, label: "Klothoide" }] : []),
@@ -244,6 +248,7 @@ function Legend({ showWandstaerke, showClothoid }) {
     { col: COLOR.drivPlan, label: "Treiber",    kind: "fill" },
     { col: COLOR.raum,     label: "Raumecke",   dash: true },
     ...(showWandstaerke ? [{ col: COLOR.wand, label: "Wandstärke" }] : []),
+    ...(showFlange ? [{ col: COLOR.flansch, label: "Flansch", kind: "fill" }] : []),
     { col: COLOR.dim,      label: "Bemaßung" },
   ];
   return (

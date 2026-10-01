@@ -42,6 +42,35 @@ export function dxfArc(cx, cy, r, startDeg, endDeg, layer, normal = null) {
   return `0\nARC\n8\n${layer}\n100\nAcDbCircle\n10\n${num(cx)}\n20\n${num(cy)}\n30\n0\n40\n${num(r)}\n${ext}100\nAcDbArc\n50\n${num(startDeg)}\n51\n${num(endDeg)}\n`;
 }
 
+/**
+ * Kreis; normal wie bei dxfArc. Für die Flanschebene X = const wird (1,0,0) verwendet:
+ * dann ist OCS-x = Welt-Y (Breite), OCS-y = Welt-Z (Höhe) und elevation = Welt-X.
+ */
+export function dxfCircle(cx, cy, r, layer, normal = null, elevation = 0) {
+  const ext = normal ? `210
+${normal[0]}
+220
+${normal[1]}
+230
+${normal[2]}
+` : "";
+  return `0
+CIRCLE
+8
+${layer}
+100
+AcDbCircle
+10
+${num(cx)}
+20
+${num(cy)}
+30
+${num(elevation)}
+40
+${num(r)}
+${ext}`;
+}
+
 export function dxfPoint(x, y, z, layer) {
   return `0\nPOINT\n8\n${layer}\n10\n${num(x)}\n20\n${num(y)}\n30\n${num(z)}\n`;
 }
@@ -50,10 +79,10 @@ export const dxfDocument = entities => `0\nSECTION\n2\nENTITIES\n${entities.join
 
 /**
  * Erzeugt den DXF-Text.
- * @param design  { s, rt, hMouth, curve, hypexT, fillet }
- * @param opts    Layer-Auswahl { draufsicht, mundbogen, fokus, seitenprofil, uebergang }
+ * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange }
+ * @param opts    Layer-Auswahl { draufsicht, mundbogen, fokus, seitenprofil, uebergang, flansch }
  */
-export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet }, opts) {
+export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null }, opts) {
   const out = [];
   const mirrored = fn => [1, -1].forEach(fn);
 
@@ -104,6 +133,17 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet }, opts) {
     ];
     // jeweils beide Seiten: Draufsicht spiegelt y, Seitenprofil spiegelt z
     for (const [x, y, z] of points) mirrored(sign => out.push(dxfPoint(x, sign * y, sign * z, "Uebergang")));
+  }
+  // Flansch: Rückseite (X = 0) mit quadratischer Throat-Öffnung und Bohrungen, Vorderseite
+  // (X = Dicke) als Außenkreis – in der Ebene quer zur Achse (Y = Breite, Z = Höhe)
+  if (opts.flansch && flange) {
+    const X = [1, 0, 0], r = flange.diameter / 2;
+    out.push(dxfCircle(0, 0, r, "Flansch", X, 0), dxfCircle(0, 0, r, "Flansch", X, flange.thickness));
+    const sq = [[rt, rt], [-rt, rt], [-rt, -rt], [rt, -rt]];
+    sq.forEach(([y, z], i) => out.push(dxfLine([0, y, z], [0, ...sq[(i + 1) % 4]], "Flansch")));
+    for (const [y, z] of flange.centers) out.push(dxfCircle(y, z, flange.holes.diameter / 2, "Flansch", X, 0));
+    // Bohrungen im Konflikt mit der Schale: gleiches Bohrbild, eigener Layer
+    for (const [y, z] of flange.conflicts ?? []) out.push(dxfCircle(y, z, flange.holes.diameter / 2, "Flansch_Konflikt", X, 0));
   }
   return dxfDocument(out);
 }
