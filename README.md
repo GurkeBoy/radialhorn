@@ -8,9 +8,9 @@ Desktop-App zur Auslegung von Radialhörnern mit Traktrix-Eingang für den Lauts
 - **Raumecke:** Begrenzt die Hornbreite auf die 45°-Diagonale einer Raumecke, optional mit Wandstärke.
 - **Vertikales Profil:** Aufweitung linear, exponentiell oder Hypex; optionale Verrundung des Übergangs Throat → Aufweitung.
 - **Ansichten:** Draufsicht und Seitenriss mit Bemaßung, Zoom (Mausrad) und Verschieben (Ziehen), Vollbild; Querschnittsfläche A(z) als Diagramm.
-- **3D-Ansicht:** das Luftvolumen des Horns zum Drehen und Zoomen, als Fläche oder Gitter, mit Treiber und Raumecke als Bezug.
+- **3D-Ansicht:** das Luftvolumen oder – mit Wandstärke – die Schale des Horns zum Drehen und Zoomen, als Fläche oder Gitter, mit Treiber und Raumecke als Bezug.
 - **Kennwerte:** Mundfläche, vertikaler Öffnungswinkel, akustische Grenzfrequenzen (Näherung).
-- **Export:** DXF mit exakten Kurven (SPLINE/ARC/LINE statt Polylinien, damit CAD glatte Körper erzeugt), PDF-Datenblatt mit maßstäblichen Zeichnungen und STL des Luftvolumens (z.B. für ein 3D-gedrucktes Modell).
+- **Export:** DXF mit exakten Kurven (SPLINE/ARC/LINE statt Polylinien, damit CAD glatte Körper erzeugt), PDF-Datenblatt mit maßstäblichen Zeichnungen und STL der Schale bzw. des Luftvolumens (z.B. für den 3D-Druck).
 
 ## Entwicklung
 
