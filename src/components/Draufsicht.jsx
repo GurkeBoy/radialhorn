@@ -48,7 +48,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
   const xMax = Math.max(s.xMouth, dw / 2, flange ? flange.diameter / 2 : 0, shellOuter ? shellOuter[shellOuter.length - 1][0] : 0,
     showRaumecke ? raumeckeEndX + 4 : 0) + 20;
 
-  const ml = 50, mr = 58, mt = 22, mb = 22;
+  const ml = 50, mr = 58, mt = 22, mb = 40;   // unten: Mundbreite (1. Lage)
   const drawW = VW - ml - mr, drawH = VH - mt - mb;
   const { k, tx, ty } = zoom.view;
   const scale0 = Math.min(drawW / (2 * xMax), drawH / (zMax - zMin));
@@ -111,7 +111,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs><ArrowMarker id="arrH" /></defs>
 
-        <line x1={cx} y1={toY(s.hatTipZ - 6)} x2={cx} y2={toY(s.zApex) + 32} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
+        <line x1={cx} y1={toY(s.hatTipZ - 6)} x2={cx} y2={toY(s.zApex) + 6} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
         <text x={cx0} y={14} textAnchor="middle" fontSize="9" fill={COLOR.text} fontFamily={FONT} letterSpacing="0.12em">DRAUFSICHT · HORIZONTALER SCHNITT</text>
 
         {showRaumecke && <>
@@ -237,12 +237,12 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
         <DimAligned p1={[mLx, mY]} p2={[tLx, tLy]} offset={wallDimOff}
           color={COLOR.horn} marker="url(#arrH)" label={`${(s.arcR - s.rInner).toFixed(1)} mm`} />
         <DimAligned p1={[mLx, mY]} p2={[cx, fy]} offset={wallDimOff + DIM_LAYER_STEP}
-          color={COLOR.arc} marker="url(#arrH)" label={`${s.arcR.toFixed(1)} mm`} />
+          color={COLOR.arc} marker="url(#arrH)" label={`R ${s.arcR.toFixed(1)} mm`} />
 
-        {/* Unten: Mundbreite, Radius */}
-        <line x1={mLx} y1={mY+16} x2={mRx} y2={mY+16} stroke={COLOR.dim} strokeWidth="0.7" markerStart="url(#arrH)" markerEnd="url(#arrH)" />
-        <text x={cx} y={mY+27} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>{(2 * s.xMouth).toFixed(0)} mm</text>
-        <text x={cx} y={toY(s.zApex)+28} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>R={s.arcR.toFixed(0)} mm</text>
+        {/* Unten, außerhalb der Zeichnung: Mundbreite (1. Lage unter dem Mundscheitel); der Teilkreis-
+            Radius steht am schrägen Maß Fokus → Mund */}
+        <Dim p1={[mLx, mY]} p2={[mRx, mY]} orient="h"
+          arrowPos={toY(s.zApex) + DIM_LAYER} color={COLOR.dim} marker="url(#arrH)" label={`${(2 * s.xMouth).toFixed(0)} mm`} />
       </svg>
 
       <Legend showWandstaerke={showWandstaerke} showClothoid={hasClothoid(s)} showFlange={!!flange} />
