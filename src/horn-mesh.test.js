@@ -3,8 +3,8 @@
  * vereinbarten Konstruktion (Traktrix-Prisma + Rotationskörper um den Fokus).
  */
 import { describe, it, expect } from "vitest";
-import { solveHorn, makeProfile, computeFillet, traktrixPoints } from "./horn-math.js";
-import { buildHornGeometry, triangulate } from "./horn-mesh.js";
+import { solveHorn, makeProfile, computeFillet, traktrixPoints, createHornMath, focusRadius, crossSection } from "./horn-math.js";
+import { buildHornGeometry, buildShellGeometry, triangulate } from "./horn-mesh.js";
 import { stlBinary } from "./export/stl.js";
 
 const RT = 25.4, H_MOUTH = 200;
@@ -159,5 +159,50 @@ describe("stlBinary", () => {
     let zMax = -Infinity;
     for (let t = 0; t < tris.length; t++) for (let k = 0; k < 3; k++) zMax = Math.max(zMax, view.getFloat32(84 + 50 * t + 12 + 12 * k + 8, true));
     expect(zMax).toBeCloseTo(H_MOUTH / 2, 3);
+  });
+});
+
+describe("Fokus weit im Horn (lange Traktrix): Höhenregel hinter dem Fokus", () => {
+  // Fall aus der App: L 700, Lt 345, Hypex 0,7, Verrundung (begrenzt) – der Fokus liegt weiter
+  // vom Throat entfernt, als der innere Teilkreis reicht; der Abstand zum Fokus hob früher den
+  // Deckel am Throat bis in die Aufweitung
+  const sl = createHornMath(140).solveHorn(700, 345.3, RT, 182, 90);
+  const fl = computeFillet(sl, RT, 200, "hypex", 0.7, 631);
+  const pl = makeProfile(sl, RT, 200, "hypex", 0.7, fl);
+  const T = 10;
+  const shell = buildShellGeometry(sl, RT, pl, fl, T);
+  const grid = name => shell.surfaces.find(f => f.name === name).grid;
+
+  it("Voraussetzung: Fokus weiter hinten als der innere Teilkreis vorn", () => {
+    expect(sl.zFocus).toBeGreaterThan(sl.rInner);
+  });
+
+  it("focusRadius: auf der Achse z − zFocus, am Fokus stetig, nach vorn monoton", () => {
+    for (const z of [0, 100, sl.zFocus, 400, 600]) expect(focusRadius(sl, 0, z)).toBeCloseTo(z - sl.zFocus, 9);
+    for (const x of [0, 20, 60]) {
+      expect(focusRadius(sl, x, sl.zFocus - 1e-9)).toBeCloseTo(focusRadius(sl, x, sl.zFocus), 6);
+      let prev = -Infinity;
+      for (let z = 0; z <= 600; z += 5) { const r = focusRadius(sl, x, z); expect(r).toBeGreaterThanOrEqual(prev); prev = r; }
+    }
+  });
+
+  it("Mittelschnitt des Luftvolumens in der Traktrix = Seitenprofil", () => {
+    for (const row of grid("inner.trakTop")) {
+      const [x, h, z] = row[row.length >> 1];
+      expect(x).toBeCloseTo(0, 9);
+      expect(h).toBeCloseTo(pl(z), 9);
+    }
+  });
+
+  it("Deckel steigt nirgends zum Throat hin an: am Throat innen rt, außen rt + t", () => {
+    const inner = grid("inner.trakTop"), outer = grid("outer.trakTop");
+    for (const [, h] of inner[0]) expect(h).toBeCloseTo(RT, 9);
+    for (const [, h] of outer[0]) expect(h).toBeCloseTo(RT + T, 6);
+    for (let j = 0; j < inner[0].length; j++)
+      for (let i = 1; i < inner.length; i++) expect(inner[i][j][1]).toBeGreaterThanOrEqual(inner[i - 1][j][1] - 1e-9);
+  });
+
+  it("Querschnitt am Throat ≈ quadratischer Throat (2·rt)² (Wellenfront dort kaum gekrümmt)", () => {
+    expect(crossSection(sl, pl)[0].A / (2 * RT) ** 2).toBeCloseTo(1, 2);
   });
 });

@@ -30,6 +30,17 @@ export const DEFAULT_OPENING_ANGLE = 140;
 /** Schallgeschwindigkeit [mm/s]. */
 export const SPEED_OF_SOUND = 343000;
 
+/**
+ * Radius für die Höhenregel des 3D-Körpers, h(x, z) = Profil(zFocus + focusRadius(s, x, z)).
+ * Vor dem Fokus der Abstand zum Fokus (Rotation des Seitenprofils um die Achse durch den
+ * Fokus). Hinter dem Fokus (z < zFocus – bei langer Traktrix liegt der Fokus weit im Horn)
+ * (z − zFocus) + |x|: auf der Achse genau das Seitenprofil, am Fokus stetig, nach vorn
+ * monoton steigend. Der Abstand selbst wüchse dort nach hinten wieder an und höbe den Deckel
+ * am Throat bis in die Aufweitung.
+ */
+export const focusRadius = (s, x, z) =>
+  z >= s.zFocus ? Math.hypot(x, z - s.zFocus) : z - s.zFocus + Math.abs(x);
+
 /** Normierte Traktrix (r0 = 1), Parameter t: axiale Position und Radius. */
 export const zN = t => t - Math.tanh(t);
 export const xN = t => 1 / Math.cosh(t);
@@ -502,7 +513,7 @@ const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
 
 /**
  * Querschnittsfläche der Wellenfront = ∫ 2·h ds über den Wellenfront-Bogen, mit der Höhe
- * aus derselben Regel wie beim 3D-Körper: h = Profil(zFocus + Abstand zum Fokus). Im
+ * aus derselben Regel wie beim 3D-Körper: h = Profil(zFocus + focusRadius). Im
  * geraden Bereich liegt der Bogen um den Fokus, h ist darauf konstant (A = Bogenlänge · 2h).
  * Auf der Traktrix liegt er um einen anderen Mittelpunkt; mit Verrundung ändert sich h dort
  * entlang des Bogens und wird numerisch integriert (Simpson).
@@ -525,10 +536,10 @@ export function crossSection(s, profile, n = 100) {
 
   const areaOf = ({ zCenter, radius, halfAngle, zAxis }) => {
     if (zCenter === s.zFocus) return 2 * halfAngle * radius * (2 * profile(zAxis));
-    // Punkt auf dem Bogen unter dem Winkel ψ zur Achse; Abstand zum Fokus bestimmt die Höhe
+    // Punkt auf dem Bogen unter dem Winkel ψ zur Achse; seine Lage zum Fokus bestimmt die Höhe
     const height = psi => {
       const x = radius * Math.sin(psi), z = zCenter + radius * Math.cos(psi);
-      return profile(s.zFocus + Math.hypot(x, z - s.zFocus));
+      return profile(s.zFocus + focusRadius(s, x, z));
     };
     const m = ARC_SAMPLES, step = halfAngle / m;
     let sum = height(0) + height(halfAngle);
