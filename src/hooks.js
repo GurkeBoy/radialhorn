@@ -76,6 +76,24 @@ export function useZoomPan(ref, { minZoom = ZOOM_MIN, unitsPerPx = () => 1 } = {
   };
 }
 
+/**
+ * Wert, der einem schnell wechselnden Wert gedrosselt folgt: Ändert er sich, zieht der Rückgabewert
+ * nach einer kurzen Pause (gap) auf den dann neuesten Stand nach; die nächste Runde beginnt erst
+ * nach dem Neuzeichnen. So aktualisieren aufwendige Ansichten beim Ziehen eines Reglers laufend,
+ * so schnell sie rechnen können, und zwischen den Runden bleibt Zeit für die Eingabe selbst.
+ */
+export function useThrottledValue(value, gap = 30) {
+  const [shown, setShown] = useState(value);
+  const latest = useRef(value);
+  useEffect(() => { latest.current = value; });
+  useEffect(() => {
+    if (shown === value) return;
+    const timer = setTimeout(() => setShown(latest.current), gap);
+    return () => clearTimeout(timer);
+  }, [shown, value === shown, gap]);   // eslint-disable-line react-hooks/exhaustive-deps -- Takt hängt nur am Abschluss der Runde
+  return shown;
+}
+
 /** useState, dessen Wert gespeichert wird und beim nächsten Start wieder da ist (settings.js). */
 export function usePersistentState(key, initial) {
   const [value, setValue] = useState(() => readSetting(key, initial));

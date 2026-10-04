@@ -110,6 +110,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     let lo = rt * (1 + 1e-9);
     for (let i = 0; i < 90; i++) {
       const m = (lo + hi) / 2;
+      if (m <= lo || m >= hi) break;   // Fließkomma-Auflösung erreicht: weitere Schritte ändern nichts
       f(m) < 0 ? (lo = m) : (hi = m);
     }
     return (lo + hi) / 2;
@@ -272,6 +273,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     }
     for (let i = 0; i < 80; i++) {
       const mid = (lo + hi) / 2;
+      if (mid <= lo || mid >= hi) break;
       const sv  = solveHorn(mid, Lt, rt, dw, dh);
       sv && sv.Ls < LsMax ? (lo = mid) : (hi = mid);
     }
@@ -289,6 +291,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     if (!fits(hi)) return null;
     for (let i = 0; i < 80; i++) {
       const m = (lo + hi) / 2;
+      if (m <= lo || m >= hi) break;
       fits(m) ? (hi = m) : (lo = m);
     }
     return hi;

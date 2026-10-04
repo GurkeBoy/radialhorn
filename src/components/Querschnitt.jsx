@@ -1,5 +1,5 @@
 // Diagramm der Querschnittsfläche A(z) = B·H mit Daten-Zoom.
-import { useMemo, useRef } from "react";
+import { memo, useMemo, useRef } from "react";
 import { hasTraktrix, crossSection } from "../horn-math.js";
 import { COLOR, FONT, S, UI } from "../theme.js";
 import { clamp, niceTicks, svgPath } from "../utils.js";
@@ -13,7 +13,7 @@ const HEADROOM = 1.08;                           // Luft über dem Maximum
 const PART_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn };
 
 /** @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile) */
-export function Querschnitt({ s, profile }) {
+export const Querschnitt = memo(function Querschnitt({ s, profile }) {
   const svgRef = useRef(null);
   const zoom = useZoomPan(svgRef, {
     minZoom: 1,
@@ -99,4 +99,4 @@ export function Querschnitt({ s, profile }) {
       </svg>
     </div>
   );
-}
+});
