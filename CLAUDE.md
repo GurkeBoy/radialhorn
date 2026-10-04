@@ -10,6 +10,7 @@ React + Vite + Tauri App zur Berechnung und Visualisierung von Radialhörnern mi
 | `npm run tauri dev` | Desktop-App (startet Vite selbst, Port 1420 muss frei sein) |
 | `npm test` | Vitest |
 | `npm run lint` | ESLint (inkl. React-Hook-Regeln) |
+| `npm run hornresp` | Referenzhörner für den Hornresp-Vergleich neu rechnen → `docs/hornresp-referenz.md`, `docs/hornresp/*.csv` |
 
 Vor jedem Commit: `npm run lint` und `npm test` grün.
 
@@ -19,6 +20,7 @@ Vor jedem Commit: `npm run lint` und `npm test` grün.
 src/
   main.jsx, App.jsx        — Einstieg; App: Zustand, abgeleitete Geometrie (useMemo), Layout
   horn-math.js             — gesamte Geometrie-Mathematik, rein funktional
+  simulation.js            — 1D-Akustik (Webster, Transfermatrizen, Treiber, Abstrahlung), rein funktional, SI
   horn-mesh.js             — 3D-Körper (Luftvolumen und Schale) als strukturierte Flächengitter
   mesh-buffers.js          — 3D-Netz als Float32-Puffer je Sektion (für den Worker)
   mesh.worker.js           — Web Worker: baut das 3D-Netz abseits des Haupt-Threads
@@ -33,13 +35,17 @@ src/
     Ansicht3D.jsx          — 3D-Ansicht (three.js, OrbitControls, Netz aus dem Worker, Zeichnen nur bei Bedarf)
     FlanschSchnitt.jsx     — Schnittfläche des Throat-Flanschs (Draufsicht, Seitenriss; Kontur: flangeSectionOutline)
     WandSchnitt.jsx        — Schnittfläche der Schale (Wandstärke) in Draufsicht und Seitenriss
+    Frequenzgang.jsx       — SPL und elektrische Impedanz über log f (Simulation), Phase zuschaltbar
   export/
     bspline.js             — kubische B-Spline-Interpolation für DXF-SPLINEs
     dxf.js                 — DXF-Writer (buildDXF) und Export
     pdf.js                 — PDF-Datenblatt (buildDatasheet) und Export
     stl.js                 — STL-Export (binär) von Luftvolumen bzw. Schale
+    csv.js                 — CSV-Export des Frequenzgangs
     download.js            — Datei-Download
   *.test.js                — Vitest, neben dem getesteten Modul
+scripts/hornresp-referenz.js — Referenzhörner für den Hornresp-Vergleich (npm run hornresp)
+docs/hornresp-referenz.md  — Hornresp-Eingaben und Stützwerte (erzeugt), docs/hornresp/*.csv voller Frequenzgang
 ```
 
 ## Architektur
@@ -87,11 +93,24 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 - **Gerundete Längskanten** (eigener Schalter bei der Wandstärke, Radius 1 mm … t, Standard t; `edgeR` in `buildShellGeometry`/`flangeLayout`): nur die vier äußeren Längskanten Seitenwand ↔ Deckel/Boden, Luftkanal bleibt scharf. Mit r ≤ t bleibt die Wand an der Ecke mindestens t dick (Test). Aufbau (`roundEdges`): Außenkörper mit Kontur im Abstand t − r (Höhe der vollen Wandstärke), daran je Kante ein Viertelkreis-Streifen von der Deckelkante Q bis W = Q + r·n − r·oben, Seitenwand zwischen den W. Quer zur Kante ist der Deckel eben, die Rundung liegt in der Ebene aus Wandnormale n und Senkrechter. Am Throat ist n seitlich (Randzug bleibt in der Throat-/Flanschebene) und wird über 2r vom Throat in die Wandnormale übergeblendet – keine Faltung, auch ohne Traktrix. Wo die Traktrix enger gekrümmt ist als t (dicke Wände), bildet Q + r·n wie die einfache Parallelkurve eine Schlaufe: dort liegt W auf der Einhüllenden (`wallEnvelope`), in z nicht rückläufig; fällt W dabei auf die Vorzeile, übernimmt es deren Punkt samt Höhe (sauber entartete Zellen statt hauchdünner Dreiecke). Rundungsstreifen werden über den Kreismittelpunkt orientiert (`edgeTriangles`), ein fester Richtungshinweis kippt bei steil steigendem Deckel. Throat-Randzug, Flansch-Vorderseite und Mund-Stirnflächen laufen um die gerundeten Ecken. Nur 3D/STL – Draufsicht (h = 0) und Seitenriss (x = 0) schneiden die Kanten nicht.
 - **Grundfläche des Eingangs** (`entranceLoft`): Zeilen als Mischung aus Throat-Linie und Naht-Bogen, in x gestreckt und in z verschoben auf die Seitenkonturen. Die frühere Coons-Fläche faltete bei langer Traktrix (Bogen viel breiter als die Kontur in der Mitte) an den Rändern.
 - **Flansch am Throat** (eigener Schalter, nur mit Wandstärke): runde Platte auf der Hornseite, z ∈ [0, Dicke], Öffnung = Throat-Querschnitt (Quadrat 2·rt). Der Außenkörper beginnt dann erst bei z = Dicke (`zStart` in `body`/`contourRight`); statt des Throat-Rings: Rückseite (Kreis − Luftkanal − Bohrungen), Vorderseite (Kreis − Außenkörper − Bohrungen), Zylindermantel, Bohrungswände. Die ebenen Flächen trianguliert earcut (`ShapeUtils.triangulateShape`); earcut lässt kollineare Randpunkte weg – `planarFace` setzt sie wieder in die Kanten ein, sonst gäbe es T-Stöße zur Schale. `flangeLayout` löst die Vorgaben auf: Ø mindestens der Umkreis des Außenkörpers bei z = Dicke (kleinerer Ø wird angehoben, `limited`); ohne Ø-Vorgabe dw, mindestens Minimum + 4·Bohrungs-Ø + 4 mm; ohne Lochkreis mittig zwischen Minimum und Rand; Bohrungen, die nicht ganz im Ring liegen, entfallen (`invalidHoles`, Warnung). Standard (Bohrbild BMS 4591): 10 mm, 4 × Ø 6,6 mm (M6 durch) auf Lochkreis 101,6 mm, 12, 3, 6, 9 Uhr (Winkellage 0°, gemessen von der Breitenachse). Durchgangsbohrungen, die in der Schale landen (`conflicts`), werden nicht gebohrt (Körper und STL bleiben dicht), aber angezeigt: in 3D rot markiert (Scheibe auf der Rückseite, Ringe an Rück- und Vorderseite), im DXF auf Layer `Flansch_Konflikt`. Konflikt-Lösung offen.
-- Die Wellenfront-Betrachtung für den Querschnitt im Traktrix-Bereich ist noch offen.
+- Die Wellenfront-Betrachtung für den Querschnitt im Traktrix-Bereich ist noch offen (wirkt auch auf die Simulation, siehe „Simulation (1D)“).
 
 **Kennwerte:** `mouthArea`, `verticalMouthAngle`, `frequencyEstimates` (Näherungen nach Olson/Beranek, aus der Mundfläche = Bogenlänge × Mundhöhe: fc_low über den flächengleichen Kreismund, fc_cut über m = ln(A_Mund / (2·rt)²) / L).
 
 **Invarianten nie brechen:** `solveR0`, `solveHorn`, `zN`, `xN` – die Tests prüfen sie gegen unabhängige Referenzen (analytisch, numerische Integration, Skalierung).
+
+## Simulation (1D)
+
+`simulation.js`, SI-Einheiten, kennt die Geometrie nur über `areaCurve`. Verlustfrei (Wandverluste: offen, spätere Erweiterung). App rechnet nur bei eingeschaltetem Frequenzgang (`useMemo` auf `p`); 240 Frequenzen (1/24 Oktave, 20 Hz – 20 kHz) mit ~1300 Abschnitten ≈ 50 ms.
+
+- **Flächenkurve** (`areaCurve`): x = Lage der Wellenfront auf der Achse ab der Treiberfront (z aus `crossSection`, Weglänge entlang der Achse – übliche Webster-Verallgemeinerung), S = Wellenfrontfläche. **Modellannahme am Hals:** bei x = 0 die ebene Halsfläche 2·rt × 2·h(0), von dort ein Konusabschnitt zur ersten Wellenfront (`crossSection` hält A sonst bis z = 0 konstant). Hals und erste Wellenfront passen geometrisch nicht zusammen: mit Lt = 60 liegt die erste Wellenfront bei z ≈ 4,4 mm mit 2632 mm² (eben: 2581 mm²), ohne Traktrix bei z ≈ 17,8 mm mit 3355 mm² (+30 %). Der Konus ist ein Notbehelf, unkritisch im Tiefton. Dazu bleibt die Wellenfront im Traktrix-Bereich offen (siehe oben) – beides betrifft das Flächenmodell, nicht den Solver, und lässt sich mit Hornresp nicht prüfen (gleiche 1D-Annahme), nur mit Messung oder BEM.
+- **Transfermatrix** (`coneMatrix`): je Abschnitt ein Konus (√S linear, S ∝ r²) – exakte Webster-Lösung, eine Formel für aufweitend, verengend und zylindrisch (g = Steigung von √S). Weil jeder Abschnitt exakt ist, ändert Unterteilen nichts; die Näherung liegt in der Abtastung von S(x): `areaCurve` tastet ab der ersten Wellenfront mit höchstens λmin/20 ab (`sampleStep`).
+- **Mund** (`radiationImpedance`): Kolben gleicher Fläche (Mund ist Sektor × Höhe, kein Kreis – bekannter Fehler, Hornresp nimmt dasselbe an). 2π exakt (J1, Struve-H1), 4π/π/π/2 als Näherung: dieselbe Formel mit a' = a·√(2π/Ω) – Tiefton-Resistanz ρck²/Ω exakt, 4π-Mündungskorrektur 0,60·a (Levine–Schwinger 0,61·a). π = Raumecke zweier Wände, π/2 zusätzlich am Boden/an der Decke.
+- **Treiber** (`driverResponse`): Re + jωLe, Bl, Mmd (ohne Luftlast, die liefert das Horn), Cms, Rms, Sd. Kompressionskammer Vtc mit Atc als kurzes Rohr (Fläche Atc, Länge Vtc/Atc; im Tiefton = Nachgiebigkeit parallel plus Masse der Luftschicht), mit Atc = 0 reine Nachgiebigkeit; Rückkammer Vrc optional, Standard aus (Rückseite unbelastet). Masse wahlweise als Mms: Mmd = Mms − 2·8ρa³/3 (Annahme: an der Schallwand gemessen). **Platzhalter-Treiber** (`PLACEHOLDER_DRIVER`, generischer 2"-Kompressionstreiber) – UI und Diagramm kennzeichnen ihn.
+- **Ausgabe** (`simulate`): SPL bei 1 m und 2,83 V eff, Mund als Punktquelle in den Raumwinkel Ω: p = jωρ·U_Mund/(Ω·r); Phase des Drucks ohne Laufzeit über r; Z_el komplex; Halsimpedanz normiert auf ρc/S_Hals.
+- **1D-Grenze:** ab `transverseLimit` = c/(2·Halsbreite) (2": ≈ 3,4 kHz) sind im Hals Querwellen möglich; das Diagramm schattiert den Bereich als „1D unsicher“ (Faustregel). Nicht die Mundbreite: am Mund wird abgestrahlt, die Grenze läge dort bei ~250 Hz und wäre bedeutungslos.
+- **Hornresp-Vergleich:** prüft nur den Solver, an Formen, die beide exakt kennen (Konus, Konus + Exponential, Konus mit Kammer) – `npm run hornresp`.
+- **CSV** (`export/csv.js`): Komma, Dezimalpunkt, eine Kopfzeile: f, SPL, Phase, |Z_el|, Phase Z_el, Re/Im Z_el, Re/Im Halsimpedanz (normiert).
 
 ## Koordinatensysteme
 
@@ -171,4 +190,5 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `horn-mesh.test.js` – 3D-Körper (auch Fokus weit im Horn: Mittelschnitt = Seitenprofil, Deckel am Throat eben): wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format
 - `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung, Flansch), PDF (Kennwerte, Maßstab, Layer)
 - `settings.test.js` – Einstellungen: Rundlauf, Typprüfung (falscher Typ, kaputtes JSON, NaN → Standard), null = automatisch, Layer-Auswahl zusammengeführt, Zurücksetzen
+- `simulation.test.js` – 1D-Simulation: Transfermatrix (det = 1, Zylinder = ebene Welle, Unterteilen ändert nichts), Zylinder offen/schallhart (Resonanzen c/2L, c/4L) und mit 2π-Abschluss (Mündungskorrektur 8a/3π), unendlicher Konus (exakt), unendliches Exponentialhorn, Energieerhaltung, Konvergenz; J1/H1 gegen Tabellenwerte und unabhängige Integration, Strahlungsimpedanz-Grenzwerte und Raumwinkel; Treiber (Z_el bei fs, Direktstrahler-SPL, Kammer als Rohr = Nachgiebigkeit, Rückkammer); `areaCurve` (ebener Hals, Abtastweite, Mundfläche); CSV
 - `utils.test.js`
