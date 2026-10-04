@@ -7,8 +7,8 @@
  *   - Gerader Bereich: senkrechte Wände im Öffnungswinkel; Deckel und Boden entstehen durch
  *     Rotation des Seitenprofils um die senkrechte Achse durch den Fokus.
  *   - Eine Regel für den ganzen Körper: halbe Höhe h(x, z) = Profil(zFocus + Abstand zum
- *     Fokus). Im Prisma ergibt das rt; mit Verrundung steigt der Deckel im Ringband vor
- *     dem inneren Teilkreis wie im Seitenriss an.
+ *     Fokus), hinter dem Fokus Profil(z + |x|) (focusRadius). Im Prisma ergibt das rt; mit
+ *     Verrundung steigt der Deckel im Ringband vor dem inneren Teilkreis wie im Seitenriss an.
  *
  * Schale (Wandstärke t senkrecht zur Fläche, scharfe Außenkanten, bündige Enden)
  *   - Außenkörper = derselbe Aufbau mit versetzter Kontur (Parallelkurve der Traktrix bzw.
@@ -20,7 +20,7 @@
  * Koordinaten der Gitterpunkte: [X, Y, Z] = [x (Breite), h (Höhe), z (Achse)] in mm.
  * Nachbarflächen teilen sich an den Nähten exakt dieselben Randpunkte (wasserdicht).
  */
-import { hasTraktrix, hasClothoid, entrancePoints } from "./horn-math.js";
+import { hasTraktrix, hasClothoid, entrancePoints, focusRadius } from "./horn-math.js";
 import { ShapeUtils, Vector2 } from "three";
 import { linspace } from "./utils.js";
 
@@ -144,7 +144,7 @@ function outerHeightField(s, rt, hAt, t) {
   const rise = linspace(0, s.arcR, Math.ceil(s.arcR / (t / 50)))
     .map(r => [r, hAt(r)])
     .filter(([, h]) => h > rt + 1e-9);                    // ansteigender Teil des Deckels
-  const polarOf = (x, z) => [Math.hypot(x, z - s.zFocus), Math.atan2(Math.abs(x), z - s.zFocus)];
+  const polarOf = (x, z) => [focusRadius(s, x, z), Math.atan2(Math.abs(x), z - s.zFocus)];
 
   // Aufdickung über der Grundfläche: im Sektor radial, daneben über den echten Abstand
   const inside = (r, phi) => {
@@ -395,7 +395,7 @@ function surfacesOf(b, invert = false) {
  *   section: "traktrix" | "klothoide" | "linear" | "cap"; outward: Punkt ↦ ungefähre Außenrichtung
  */
 export function buildHornGeometry(s, rt, profile, fillet = null, res = DEFAULT_RES) {
-  const air = body(s, rt, 0, (x, z) => profile(s.zFocus + Math.hypot(x, z - s.zFocus)), fillet, res);
+  const air = body(s, rt, 0, (x, z) => profile(s.zFocus + focusRadius(s, x, z)), fillet, res);
   const radialOut = ([x, , z]) => [x, 0, z - s.zFocus];
   return {
     surfaces: [
@@ -603,7 +603,7 @@ export function flangeSectionOutline(inner, R, d) {
  */
 export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, res = DEFAULT_RES) {
   const hAt = r => profile(s.zFocus + r);
-  const air = body(s, rt, 0, (x, z) => hAt(Math.hypot(x, z - s.zFocus)), fillet, res);
+  const air = body(s, rt, 0, (x, z) => hAt(focusRadius(s, x, z)), fillet, res);
   const outer = outerBody(s, rt, profile, fillet, t, res, flange ? flange.thickness : 0);
   const throatEnd = flange
     ? flangeSurfaces(flange.centers ? flange : flangeLayout(s, rt, profile, fillet, t, flange, res), air.throatLoop, outer.throatLoop)
