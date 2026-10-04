@@ -48,8 +48,8 @@ export const COLOR = {
   drivPlanFill: "rgba(26,26,26,0.6)",
   fillTrak:     "rgba(249,168,212,0.09)",
   fillHorn:     "rgba(134,239,172,0.08)",
-  fillArc:      "rgba(147,197,253,0.06)",
   fillFlansch:  "rgba(196,181,253,0.14)",
+  fillWand:     "rgba(252,211,77,0.10)",
 };
 
 /** Radius der Punkt-Markierungen [px]. */

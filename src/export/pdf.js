@@ -5,12 +5,13 @@
 import {
   hasTraktrix, entrancePoints, linearWallPoints, mouthArea, verticalMouthAngle,
 } from "../horn-math.js";
-import { linspace, svgPath } from "../utils.js";
+import { shellPlanOutline, shellProfileOutline, flangeSectionOutline } from "../horn-mesh.js";
+import { linspace, svgPath, clipFromZ } from "../utils.js";
 import { downloadFile } from "./download.js";
 
 const SCALES = [1, 2, 5, 10, 20, 50];
 const SHEET_MM = 170;             // verfügbare Zeichnungsbreite auf A4
-const C = { dim: "#7c5cff", dimText: "#5a4bbf", line: "#1a1a24", axis: "#c8c8d0", arc: "#7c5cff" };
+const C = { dim: "#7c5cff", dimText: "#5a4bbf", line: "#1a1a24", axis: "#c8c8d0", arc: "#7c5cff", cut: "#ececf2" };
 const CURVE_LABELS = { linear: "Linear", exponential: "Exponential", hypex: "Hypex" };
 
 /** Kontur der Draufsicht (rechte Hälfte) als Punkte [x, z]: Eingang (Traktrix, Klothoide), gerade Wand. */
@@ -25,6 +26,16 @@ function sideOutline(s, rt, profile, fillet) {
   if (fillet) return [[0, rt], ...linspace(fillet.zT1, s.zApex, 500).map(z => [z, profile(z)])];
   const throat = hasTraktrix(s) ? [[0, rt], [s.zInnerApex, rt]] : [];
   return [...throat, ...linspace(hasTraktrix(s) ? s.zInnerApex : 0, s.zApex, 500).map(z => [z, profile(z)])];
+}
+
+/**
+ * Schnittflächen von Schale und Flansch (rechte Hälfte) als Polygone [halbe Breite, z].
+ * inner = Innenkontur von z = 0 bis zum Mund, outer = Außenkontur der Schale ab zShell.
+ */
+function cutSections(inner, outer, flange) {
+  const zShell = flange ? flange.thickness : 0;
+  const shell = [...clipFromZ(inner, zShell), ...[...outer].reverse()];
+  return flange ? [shell, flangeSectionOutline(inner, flange.diameter / 2, flange.thickness)] : [shell];
 }
 
 /** Bemaßungs-Primitive in Zeichnungseinheiten (mm) für einen Maßstab. */
@@ -76,27 +87,36 @@ function dimensioning(massstab) {
 /**
  * Erzeugt das HTML des Datenblatts.
  * @param design  { s, rt, L, hMouth, curve, hypexT, fillet, profile,
- *                  showRaumecke, showWandstaerke, wandstaerke }
+ *                  showRaumecke, showWandstaerke, wandstaerke, wall?, flange? }
+ *                  wall > 0: Schnitt durch die Schale (und den Flansch) in beiden Zeichnungen
  * @param opts    { draufsicht, mundbogen, fokus, seitenprofil, bemassung }
  */
 export function buildDatasheet(design, opts, date = new Date()) {
   const { s, rt, L, hMouth, curve, hypexT, fillet, profile, showRaumecke, showWandstaerke, wandstaerke } = design;
+  const wall = design.wall ?? 0, flange = wall > 0 ? design.flange ?? null : null;
   const trakOn = hasTraktrix(s);
   const wallPts = planOutline(s);
   const profPts = sideOutline(s, rt, profile, fillet);
   const halfMundB = Math.max(...wallPts.map(p => p[0]));
-  const maxX = halfMundB * 2;
+  const zShell = flange ? flange.thickness : 0;
+  const planOuter = wall > 0 ? shellPlanOutline(s, rt, wall, zShell) : null;
+  const profOuter = wall > 0 ? shellProfileOutline(s, rt, profile, wall, zShell) : null;
+  const flangeHalf = flange ? flange.diameter / 2 : 0;
+  const maxX = Math.max(halfMundB, flangeHalf, planOuter ? planOuter[planOuter.length - 1][0] : 0) * 2;
   const maxZ = s.zApex;
-  const profMaxH = Math.max(...profPts.map(p => p[1])) * 2;
+  const profMaxH = Math.max(...profPts.map(p => p[1]), flangeHalf, profOuter ? profOuter[profOuter.length - 1][0] : 0) * 2;
 
   const massstab = SCALES.find(sc => Math.max(maxX, maxZ, profMaxH) / sc <= SHEET_MM) || 100;
   const mm2px = 96 / 25.4 / massstab;
   const { dimH, dimV, dimParallel } = dimensioning(massstab);
   const path = (pts, color) => `<path d="${svgPath(pts, 2)}" fill="none" stroke="${color}" stroke-width="0.5"/>`;
+  // Schnittflächen (Schale, Flansch): hell gefüllt, dünn umrandet, beide Seiten
+  const cuts = (polys, map) => polys.flatMap(poly => [1, -1].map(sign =>
+    `<path d="${svgPath(poly.map(([a, z]) => map(sign * a, z)), 2)} Z" fill="${C.cut}" stroke="${C.line}" stroke-width="0.3"/>`)).join("");
   const svg = (w, h, body) =>
     `<svg width="${w * mm2px}px" height="${h * mm2px}px" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
   const dimPad = massstab * 14;
-  const mundB = maxX.toFixed(0);
+  const mundB = (halfMundB * 2).toFixed(0);   // Innenmaß, ohne Schale
 
   // ── Draufsicht ──────────────────────────────────────────────────
   const dsTopPad = massstab * 8;
@@ -106,6 +126,7 @@ export function buildDatasheet(design, opts, date = new Date()) {
     .map(a => [dsOX + s.arcR * Math.sin(a), dsOY + s.zFocus + s.arcR * Math.cos(a)]);
   const dsSVG = svg(dsW, dsH, `
       <line x1="${dsOX}" y1="${dsOY}" x2="${dsOX}" y2="${dsOY + maxZ}" stroke="${C.axis}" stroke-width="0.2" stroke-dasharray="3 2"/>
+      ${opts.draufsicht && planOuter ? cuts(cutSections(wallPts, planOuter, flange), (x, z) => [dsOX + x, dsOY + z]) : ""}
       ${opts.draufsicht ? [1, -1].map(sign => path(wallPts.map(([x, z]) => [dsOX + sign * x, dsOY + z]), C.line)).join("") : ""}
       ${opts.mundbogen ? path(arcPts, C.arc) : ""}
       ${opts.fokus ? `<circle cx="${dsOX}" cy="${dsOY + s.zFocus}" r="0.7" fill="${C.arc}"/>` : ""}
@@ -115,6 +136,7 @@ export function buildDatasheet(design, opts, date = new Date()) {
         dimV(dsOY, dsOY + maxZ, dsOX - halfMundB - dimPad * 0.5, s.zApex.toFixed(0), false),
         trakOn ? dimV(dsOY, dsOY + s.zInnerApex, dsOX + halfMundB + dimPad * 0.5, s.zInnerApex.toFixed(0), true) : "",
         dimParallel(dsOX - s.xMouth, dsOY + s.zMouth, dsOX - s.xTrans, dsOY + s.zTrans, massstab * 5, (s.arcR - s.rInner).toFixed(0)),
+        planOuter ? (([xE, zE]) => dimParallel(dsOX + xE, dsOY + zE, dsOX + s.xMouth, dsOY + s.zMouth, massstab * 5, wall + ""))(planOuter[planOuter.length - 1]) : "",
       ].join("") : ""}`);
 
   // ── Seitenriss ──────────────────────────────────────────────────
@@ -125,9 +147,11 @@ export function buildDatasheet(design, opts, date = new Date()) {
   const spTopY = spOY - profMaxH / 2 - massstab * 5;
   const spSVG = svg(spW, spH, `
       <line x1="${spOX}" y1="${spOY}" x2="${spOX + maxZ}" y2="${spOY}" stroke="${C.axis}" stroke-width="0.2" stroke-dasharray="3 2"/>
+      ${opts.seitenprofil && profOuter ? cuts(cutSections(profPts.map(([z, h]) => [h, z]), profOuter, flange), (h, z) => [spOX + z, spOY - h]) : ""}
       ${opts.seitenprofil ? [1, -1].map(sign => path(profPts.map(([z, h]) => [spOX + z, spOY - sign * h]), C.line)).join("") : ""}
       ${opts.bemassung ? [
         dimV(spOY - hMouth / 2, spOY + hMouth / 2, spOX + maxZ + massstab * 5, hMouth + "", true),
+        wall > 0 ? dimV(spOY - hMouth / 2 - wall, spOY - hMouth / 2, spOX + maxZ + massstab * 5, wall + "", true) : "",
         dimV(spOY - rt, spOY + rt, spOX - massstab * 5, "Ø" + (rt * 2).toFixed(1), false),
         dimH(spOX, spOX + maxZ, spOY + profMaxH / 2 + massstab * 8, s.zApex.toFixed(0), true),
         trakOn ? dimH(spOX, spOX + s.zInnerApex, spTopY, s.zInnerApex.toFixed(0), false) : "",

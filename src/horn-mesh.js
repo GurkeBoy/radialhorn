@@ -518,6 +518,43 @@ function flangeSurfaces(flange, airLoop, outerLoop) {
 }
 
 /**
+ * Außenkontur der Schale in der Draufsicht (Schnitt h = 0, rechte Seite) als [x, z]: dieselbe
+ * Kontur wie der 3D-Außenkörper (Einhüllende, dann Parallele der geraden Wand), von zStart
+ * (0 oder Flanschdicke) bis zum Ende der Seitenwand E = Mundkante + t·Wandnormale.
+ */
+export function shellPlanOutline(s, rt, t, zStart = 0, axial = 300) {
+  const { pts } = contourRight(s, rt, t, axial, zStart);
+  return [...pts, [s.xMouth + t * Math.cos(s.alpha2), s.zMouth - t * Math.sin(s.alpha2)]];
+}
+
+/**
+ * Außenkontur der Schale im Seitenriss (Schnitt x = 0, obere Hälfte) als [h, z]: Höhe des
+ * 3D-Außenkörpers auf der Achse (senkrechte Aufdickung, am Mund auf hMouth/2 + t begrenzt),
+ * von zStart bis zum Mundscheitel.
+ */
+export function shellProfileOutline(s, rt, profile, t, zStart = 0, n = 300) {
+  const hAt = r => profile(s.zFocus + r);
+  const field = outerHeightField(s, rt, hAt, t);
+  const cap = hAt(s.arcR) + t;
+  return linspace(zStart, s.zApex, n).map(z => [Math.min(field(0, z), cap), z]);
+}
+
+/**
+ * Begrenzung der rechten Flansch-Schnittfläche als [halbe Breite, z]: innen der Luftkanal
+ * (inner, nach z sortiert) von z = 0 bis zur Dicke d, außen der Rand R.
+ */
+export function flangeSectionOutline(inner, R, d) {
+  const at = z => {
+    const k = inner.findIndex(p => p[1] >= z);
+    if (k <= 0) return k === 0 ? inner[0][0] : inner[inner.length - 1][0];
+    const [x0, z0] = inner[k - 1], [x1, z1] = inner[k];
+    return x0 + (x1 - x0) * (z - z0) / (z1 - z0 || 1);
+  };
+  const mid = inner.filter(([, z]) => z > 0 && z < d);
+  return [[at(0), 0], ...mid, [at(d), d], [R, d], [R, 0]];
+}
+
+/**
  * Schale mit Wandstärke t: Außenkörper, Innenseite (Luftvolumen, umgedreht) und Stirnflächen.
  * Deckel und Boden: außen höchstens hMouth/2 + t (am Mund senkrecht gemessen, waagerecht
  * abgeschnitten), Stirnfläche bündig auf dem Mundbogen. Seitenwände: über die volle Höhe,

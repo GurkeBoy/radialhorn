@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet, traktrixPoints } from "./horn-math.js";
-import { buildShellGeometry, offsetHeight, triangulate } from "./horn-mesh.js";
+import { buildShellGeometry, offsetHeight, triangulate, shellPlanOutline, shellProfileOutline } from "./horn-mesh.js";
 
 const RT = 25.4, H_MOUTH = 200, T = 20;
 const s = solveHorn(500, 60, RT, 120, 100);
@@ -105,6 +105,42 @@ describe("Wandstärke senkrecht zur Fläche", () => {
         expect(distToPolyline([top[0], top[2]], innerContour)).toBeCloseTo(T, 1);
       }
     }
+  });
+});
+
+describe("2D-Schnitte der Schale (Draufsicht, Seitenriss)", () => {
+  it("Draufsicht: Außenkontur im Abstand t zur Innenwand, endet an Mundkante + t·Normale", () => {
+    const outline = shellPlanOutline(s, RT, T);
+    const innerContour = [...traktrixPoints(s, 4000), [s.xMouth, s.zMouth]];
+    for (const p of outline.slice(0, -1)) {
+      if (p[1] < 1) continue;   // am Throat-Schnitt z = 0 liegt die Kontur näher an der Achse
+      expect(distToPolyline(p, innerContour)).toBeCloseTo(T, 1);
+    }
+    const [xE, zE] = outline[outline.length - 1];
+    expect(Math.hypot(xE - s.xMouth, zE - s.zMouth)).toBeCloseTo(T, 9);
+    expect(outline[0][1]).toBe(0);
+  });
+
+  it("Draufsicht: Kontur liegt auf der Außenwand des 3D-Körpers", () => {
+    const geo = shell();
+    const wall3d = ["outer.trakWallR", "outer.linWallR"].flatMap(n => surface(geo, n).map(([, top]) => [top[0], top[2]]))
+      .sort((a, b) => a[1] - b[1]);
+    for (const p of shellPlanOutline(s, RT, T)) expect(distToPolyline(p, wall3d)).toBeLessThan(0.5);
+  });
+
+  it("Seitenriss: eben rt + t, am Mund hMouth/2 + t, überall mindestens t von der Innenkontur", () => {
+    const outline = shellProfileOutline(s, RT, profile, T);
+    const inner = outline.map(([, z]) => [profile(z), z]);
+    for (const [h, z] of outline) {
+      if (z > 1 && z < s.zInnerApex - T) expect(h).toBeCloseTo(RT + T, 6);
+      expect(distToPolyline([h, z], inner)).toBeGreaterThan(T - 0.05);
+    }
+    expect(outline[outline.length - 1][0]).toBeCloseTo(H_MOUTH / 2 + T, 6);
+  });
+
+  it("mit Flansch beginnen beide Konturen erst bei z = Flanschdicke", () => {
+    expect(shellPlanOutline(s, RT, T, 10)[0][1]).toBe(10);
+    expect(shellProfileOutline(s, RT, profile, T, 10)[0][1]).toBe(10);
   });
 });
 

@@ -2,11 +2,13 @@
 import { useRef } from "react";
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
-import { svgPath } from "../utils.js";
+import { svgPath, clipFromZ, nestedLayers } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker } from "./ui.jsx";
 import { Dim, DimAligned } from "./Dim.jsx";
 import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
+import { WandSchnitt } from "./WandSchnitt.jsx";
+import { shellPlanOutline } from "../horn-mesh.js";
 
 const TRAKTRIX_SAMPLES = 600;
 const CLOTHOID_SAMPLES = 120;
@@ -29,7 +31,13 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
   const raumeckeEndX = dw / 2 + (s.zApex - (-dh));
   const zMin = s.hatTipZ - 140;
   const zMax = s.zApex + Math.max(16, Math.ceil((s.zApex - zMin) * 30 / 432));
-  const xMax = Math.max(s.xMouth, dw / 2, flange ? flange.diameter / 2 : 0, showRaumecke ? raumeckeEndX + 4 : 0) + 20;
+  // Schale: Schnitt zwischen Innenwand und Außenkontur, mit Flansch erst ab dessen Dicke
+  const t = showWandstaerke ? wandstaerke : 0;
+  const zShell = flange ? flange.thickness : 0;
+  const innerWall = hasTraktrix(s) ? [...entrancePoints(s, 200, 60), ...linearWallPoints(s, 40).slice(1)] : linearWallPoints(s, 40);
+  const shellOuter = t > 0 ? shellPlanOutline(s, rt, t, zShell) : null;
+  const xMax = Math.max(s.xMouth, dw / 2, flange ? flange.diameter / 2 : 0, shellOuter ? shellOuter[shellOuter.length - 1][0] : 0,
+    showRaumecke ? raumeckeEndX + 4 : 0) + 20;
 
   const ml = 50, mr = 58, mt = 22, mb = 22;
   const drawW = VW - ml - mr, drawH = VH - mt - mb;
@@ -51,8 +59,6 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
   const klo  = screen(clothoidPoints(s, CLOTHOID_SAMPLES));
   const wall = screen(linearWallPoints(s, WALL_SAMPLES));
   const entrance = { left: [...trak.left, ...klo.left.slice(1)], right: [...trak.right, ...klo.right.slice(1)] };
-  // Fläche zwischen linker und rechter Wand
-  const areaPath = ({ left, right }) => svgPath([...left, ...[...right].reverse()]) + " Z";
 
   const fy  = toY(s.zFocus);
   const mRx = toX(s.xMouth), mLx = toX(-s.xMouth), mY = toY(s.zMouth);
@@ -111,10 +117,20 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
 
         <Treiber toX={toX} toY={toY} dw={dw} dh={dh} scale={scale} cx={cx} />
 
-        {trak.left.length > 1 && <path d={areaPath(entrance)} fill={COLOR.fillTrak} />}
-        <path d={areaPath(wall)} fill={COLOR.fillHorn} />
-
-        <path d={`M${cx},${fy} L${mRx},${mY} A${rp},${rp} 0 0 1 ${mLx},${mY} Z`} fill={COLOR.fillArc} />
+        {/* Sektionsflächen wie im 3D-Körper: Eingang bis zum inneren Bogen (Radius rInner um den
+            Fokus), linearer Bereich vom inneren Bogen bis zum Mundbogen */}
+        {hasTraktrix(s) && (() => {
+          const irp = s.rInner * scale, [tRx, tRy] = entrance.right[entrance.right.length - 1];
+          const back = svgPath([...entrance.right].reverse()).replace(/^M/, "L");
+          return <>
+            <path d={`${svgPath(entrance.left)} A${irp},${irp} 0 0 0 ${tRx},${tRy} ${back} Z`} fill={COLOR.fillTrak} />
+            <path d={`M${tRx},${tRy} L${mRx},${mY} A${rp},${rp} 0 0 1 ${mLx},${mY} L${tLx},${tLy} A${irp},${irp} 0 0 0 ${tRx},${tRy} Z`}
+              fill={COLOR.fillHorn} />
+          </>;
+        })()}
+        {!hasTraktrix(s) &&
+          <path d={`M${wall.right[0][0]},${wall.right[0][1]} L${mRx},${mY} A${rp},${rp} 0 0 1 ${mLx},${mY} L${wall.left[0][0]},${wall.left[0][1]} Z`}
+            fill={COLOR.fillHorn} />}
         <path d={`M${mRx},${mY} A${rp},${rp} 0 0 1 ${mLx},${mY}`} fill="none" stroke={COLOR.arc} strokeWidth="1.4" />
 
         {hasTraktrix(s) && (() => {
@@ -148,9 +164,19 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
         <path d={svgPath(wall.left)} {...S.hornWall} />
         <path d={svgPath(wall.right)} {...S.hornWall} />
 
-        {showWandstaerke && wandstaerke > 0 && <Wandstaerke s={s} toX={toX} toY={toY} t={wandstaerke} />}
-        {flange && <FlanschSchnitt flange={flange} map={(x, z) => [toX(x), toY(z)]}
-          inner={hasTraktrix(s) ? [...entrancePoints(s, 200, 60), ...linearWallPoints(s, 20).slice(1)] : linearWallPoints(s, 20)} />}
+        {shellOuter && <WandSchnitt inner={clipFromZ(innerWall, zShell)} outer={shellOuter} closeThroat={!flange}
+          map={(x, z) => [toX(x), toY(z)]} />}
+        {shellOuter && [1, -1].map(sign => {
+          const [x, z] = shellOuter[shellOuter.length - 1];
+          return <circle key={sign} cx={toX(sign * x)} cy={toY(z)} r={DOT} fill={COLOR.wand} />;
+        })}
+        {/* Wandstärke: rechts parallel zur Stirnfläche der Seitenwand, außerhalb des Horns */}
+        {shellOuter && (() => {
+          const [xE, zE] = shellOuter[shellOuter.length - 1];
+          return <DimAligned p1={[toX(xE), toY(zE)]} p2={[mRx, mY]} offset={DIM_LAYER}
+            color={COLOR.wand} marker="url(#arrH)" label={`${t} mm`} />;
+        })()}
+        {flange && <FlanschSchnitt flange={flange} map={(x, z) => [toX(x), toY(z)]} inner={innerWall} />}
 
         {/* Übergangspunkte: Traktrix → (Klothoide →) gerade Wand */}
         {[trak.right, trak.left, klo.right, klo.left].filter(side => side.length > 1).map(side => {
@@ -186,11 +212,17 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
             arrowPos={bx + DIM_LAYER_STEP} color={COLOR.trak} marker="url(#arrH)" label={`${s.zInnerApex.toFixed(0)} mm`} />
         }
 
-        {/* Oben: Throat (1. Lage), Treiberbreite (2. Lage) */}
-        <Dim p1={[toX(-rt), toY(0)]} p2={[toX(rt), toY(0)]}
-          arrowPos={hatY - 16} color={COLOR.trak} marker="url(#arrH)" label={`Ø ${(rt*2).toFixed(1)} mm`} />
-        <Dim p1={[toX(-dw/2), toY(-dh)]} p2={[toX(dw/2), toY(-dh)]}
-          arrowPos={hatY - 38} color={COLOR.dim} marker="url(#arrH)" label={`${dw} mm`} />
+        {/* Oben: Throat und Treiberbreite, nach Größe verschachtelt (das kleinere innen) */}
+        {(() => {
+          const [throatLayer, drivLayer] = nestedLayers([2 * rt, dw]);
+          const topY = layer => hatY - 16 - DIM_LAYER_STEP * layer;
+          return <>
+            <Dim p1={[toX(-rt), toY(0)]} p2={[toX(rt), toY(0)]}
+              arrowPos={topY(throatLayer)} color={COLOR.trak} marker="url(#arrH)" label={`Ø ${(rt*2).toFixed(1)} mm`} />
+            <Dim p1={[toX(-dw/2), toY(-dh)]} p2={[toX(dw/2), toY(-dh)]}
+              arrowPos={topY(drivLayer)} color={COLOR.dim} marker="url(#arrH)" label={`${dw} mm`} />
+          </>;
+        })()}
 
         {/* Seitenwand parallel zur Wand: gerader Bereich (1. Lage), Fokus → Mund (2. Lage) */}
         <DimAligned p1={[mLx, mY]} p2={[tLx, tLy]} offset={wallDimOff}
@@ -222,20 +254,6 @@ function Treiber({ toX, toY, dw, dh, scale, cx }) {
 /** Winkelzeichen im Punkt (x, y), Schenkel in Richtung dx bzw. dy (±1). */
 function RightAngleMark({ x, y, dx, dy, size, color }) {
   return <path d={`M${x + dx*size},${y} L${x + dx*size},${y + dy*size} L${x},${y + dy*size}`} fill="none" stroke={color} strokeWidth="0.9" />;
-}
-
-/** Wandstärke an der Mundkante, senkrecht zur geraden Wand nach außen. */
-function Wandstaerke({ s, toX, toY, t }) {
-  const dx = s.xMouth - s.xTrans, dz = s.zMouth - s.zTrans;
-  const len = Math.hypot(dx, dz);
-  const nx = dz / len * t, nz = -dx / len * t;
-  return [1, -1].map(sign => {
-    const x0 = toX(sign * s.xMouth), x1 = toX(sign * (s.xMouth + nx)), y0 = toY(s.zMouth), y1 = toY(s.zMouth + nz);
-    return <g key={sign}>
-      <line x1={x0} y1={y0} x2={x1} y2={y1} stroke={COLOR.wand} strokeWidth="1.4" strokeLinecap="round" />
-      <circle cx={x1} cy={y1} r={DOT} fill={COLOR.wand} />
-    </g>;
-  });
 }
 
 function Legend({ showWandstaerke, showClothoid, showFlange }) {

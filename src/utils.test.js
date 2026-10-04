@@ -1,7 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { linspace, clamp, svgPath, niceTicks } from "./utils.js";
+import { linspace, clamp, svgPath, niceTicks, clipFromZ, nestedLayers } from "./utils.js";
 
 describe("utils", () => {
+  it("nestedLayers: kleinstes Maß innen, größtes außen, Gleichstand in Reihenfolge", () => {
+    expect(nestedLayers([50.8, 182, 120])).toEqual([0, 2, 1]);
+    expect(nestedLayers([50.8, 182, 250])).toEqual([0, 1, 2]);
+    expect(nestedLayers([182, 50.8])).toEqual([1, 0]);
+    expect(nestedLayers([100, 100, 10])).toEqual([1, 2, 0]);
+    expect(nestedLayers([50.8, 182, Infinity])).toEqual([0, 1, 2]);
+  });
+
+  it("clipFromZ: ab der Ebene z0, Schnittpunkt interpoliert", () => {
+    const pts = [[10, 0], [20, 10], [30, 20]];
+    expect(clipFromZ(pts, 5)).toEqual([[15, 5], [20, 10], [30, 20]]);
+    expect(clipFromZ(pts, 0)).toBe(pts);
+    expect(clipFromZ(pts, 10)).toEqual([[20, 10], [30, 20]]);
+    expect(clipFromZ(pts, 25)).toEqual([]);
+  });
+
   it("linspace: n+1 Werte einschließlich beider Enden", () => {
     expect(linspace(0, 1, 4)).toEqual([0, 0.25, 0.5, 0.75, 1]);
     expect(linspace(5, 5, 2)).toEqual([5, 5, 5]);
