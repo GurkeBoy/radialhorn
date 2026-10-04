@@ -28,9 +28,9 @@ export function stlBinary(triangles, header = "Radialhorn") {
 }
 
 /** Alle Dreiecke des geschlossenen Körpers: Schale bei wall > 0 (ggf. mit Flansch), sonst Luftvolumen. */
-export function hornTriangles({ s, rt, profile, fillet, wall = 0, flange = null }) {
+export function hornTriangles({ s, rt, profile, fillet, wall = 0, flange = null, edgeR = 0 }) {
   const geometry = wall > 0
-    ? buildShellGeometry(s, rt, profile, fillet, wall, flange)
+    ? buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR)
     : buildHornGeometry(s, rt, profile, fillet);
   return geometry.surfaces.flatMap(triangulate);
 }

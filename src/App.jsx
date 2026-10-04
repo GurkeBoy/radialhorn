@@ -47,6 +47,8 @@ export default function App() {
   const [filletR,         setFilletR]         = usePersistentState("filletR", 100);
   const [clothoidOn,      setClothoidOn]      = usePersistentState("clothoidOn", false);
   const [clothoidLength,  setClothoidLength]  = usePersistentState("clothoidLength", 30);
+  const [edgeOn,          setEdgeOn]          = usePersistentState("edgeOn", false);
+  const [edgeR,           setEdgeR]           = usePersistentState("edgeR", null);   // null: Wandstärke
   const [flangeOn,        setFlangeOn]        = usePersistentState("flangeOn", false);
   const [flangeD,         setFlangeD]         = usePersistentState("flangeD", null);   // null: Treiberbreite dw, mind. Schale + Bohrungen
   const [flangeT,         setFlangeT]         = usePersistentState("flangeT", 10);
@@ -67,8 +69,10 @@ export default function App() {
   const live = useMemo(() => ({
     throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
+    edgeOn, edgeR,
   }), [throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
-    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle]);
+    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
+    edgeOn, edgeR]);
   const p = useThrottledValue(live);
   const rt = p.throatDiam / 2;
 
@@ -118,18 +122,20 @@ export default function App() {
   );
 
   const wall = p.showWandstaerke ? p.wandstaerke : 0;
+  // gerundete Längskanten außen: Radius höchstens die Wandstärke (sonst würde die Wand an der Ecke dünner)
+  const edge = wall > 0 && p.edgeOn ? Math.min(p.edgeR ?? wall, wall) : 0;
   // Flansch nur an der Schale; Ø und Lochkreis werden gegen den Außenkörper aufgelöst
   const flange = useMemo(
     () => s && wall > 0 && p.flangeOn ? flangeLayout(s, rt, profile, fillet, wall, {
       diameter: p.flangeD, fallback: p.dw, thickness: p.flangeT,
       holes: { count: p.holeCount, circle: p.holeCircle, diameter: p.holeD, angle: p.holeAngle },
-    }) : null,
-    [s, rt, profile, fillet, wall, p.flangeOn, p.flangeD, p.dw, p.flangeT, p.holeCount, p.holeCircle, p.holeD, p.holeAngle],
+    }, edge) : null,
+    [s, rt, profile, fillet, wall, p.flangeOn, p.flangeD, p.dw, p.flangeT, p.holeCount, p.holeCircle, p.holeD, p.holeAngle, edge],
   );
   const flangeOverRaumecke = flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
   const design = {
     s, rt, L: LClamped, hMouth: p.hMouth, curve: p.curve, hypexT: p.hypexT, fillet, profile, wall, flange,
-    showRaumecke: p.showRaumecke, showWandstaerke: p.showWandstaerke, wandstaerke: p.wandstaerke,
+    showRaumecke: p.showRaumecke, showWandstaerke: p.showWandstaerke, wandstaerke: p.wandstaerke, edgeR: edge,
   };
   // Während eines Zugs zeigt der Regler den Live-Wert, sonst den (ggf. begrenzten) gerechneten
   const shown = (key, computed) => live[key] !== p[key] ? live[key] : computed;
@@ -150,6 +156,8 @@ export default function App() {
           {showRaumecke && <Note style={{ paddingLeft: 46, marginTop: -6, marginBottom: 4 }}>Hornbreite auf Raumecken-Diagonale begrenzt</Note>}
           <Toggle label="Wandstärke" checked={showWandstaerke} onChange={setShowWandstaerke} />
           {showWandstaerke && <Slider label="Wandstärke" value={wandstaerke} min={1} max={100} step={1} unit="mm" onChange={setWandstaerke} />}
+          {showWandstaerke && <Toggle label="Kanten verrunden" checked={edgeOn} onChange={setEdgeOn} />}
+          {showWandstaerke && edgeOn && <Slider label="Kantenradius" value={Math.min(edgeR ?? wandstaerke, wandstaerke)} min={1} max={wandstaerke} step={1} unit="mm" onChange={setEdgeR} />}
           {showWandstaerke && <Toggle label="Flansch am Throat" checked={flangeOn} onChange={setFlangeOn} />}
         </Card>
 
@@ -233,7 +241,7 @@ export default function App() {
               showRaumecke={p.showRaumecke} showWandstaerke={p.showWandstaerke} wandstaerke={p.wandstaerke} flange={flange} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={p.dw} dh={p.dh} hMouth={p.hMouth} curve={p.curve} hypexT={p.hypexT} fillet={fillet} wall={wall} flange={flange} showRaumecke={p.showRaumecke} />
+            <Ansicht3D s={s} rt={rt} dw={p.dw} dh={p.dh} hMouth={p.hMouth} curve={p.curve} hypexT={p.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} showRaumecke={p.showRaumecke} />
           </ViewPanel>
         </div>
         <ViewPanel flex={5}>

@@ -148,9 +148,10 @@ function frame(camera, controls, object) {
 /**
  * @param curve, hypexT, fillet  Seitenprofil (der Worker baut daraus makeProfile nach)
  * @param wall     Wandstärke [mm]; 0 zeigt das Luftvolumen, > 0 die Schale
+ * @param edgeR    Radius der gerundeten Längskanten außen [mm], 0 = scharf
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null, nur mit Schale
  */
-export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, flange, showRaumecke }) {
+export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, edgeR = 0, flange, showRaumecke }) {
   const containerRef = useRef(null);
   const { w, h } = useSize(containerRef);
   const three = useRef(null);
@@ -158,9 +159,9 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
   const [showReference, setShowReference] = useState(true);
 
   const meshInput = useMemo(() => s ? {
-    s, rt, hMouth, curve, hypexT, fillet, wall,
+    s, rt, hMouth, curve, hypexT, fillet, wall, edgeR,
     flange: wall > 0 ? flange : null, sections: Object.keys(SECTION_COLOR),
-  } : null, [s, rt, hMouth, curve, hypexT, fillet, wall, flange]);
+  } : null, [s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, flange]);
   const sections = useMeshWorker(meshInput);
 
   // Szene, Kamera, Renderer und Steuerung einmalig anlegen
