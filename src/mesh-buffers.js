@@ -5,16 +5,16 @@ import { makeProfile } from "./horn-math.js";
 import { buildHornGeometry, buildShellGeometry, triangulate, gridLines } from "./horn-mesh.js";
 
 /**
- * @param input  { s, rt, hMouth, curve, hypexT, fillet, wall, flange, sections }
+ * @param input  { s, rt, hMouth, curve, hypexT, fillet, wall, flange, edgeR, sections }
  *               sections: Liste der gewünschten Sektionen (z.B. ohne die Kappen des Luftvolumens)
  * @returns {{ sections: { section, positions, normals, lines }[], buffers: ArrayBuffer[] }}
  *   positions/normals: je Dreieck 9 Werte (Normale flach je Dreieck, wie computeVertexNormals
  *   bei Dreiecken ohne Index); lines: je Gitterstrecke 6 Werte; buffers: zum Übertragen
  */
-export function meshBuffers({ s, rt, hMouth, curve, hypexT, fillet, wall, flange, sections }) {
+export function meshBuffers({ s, rt, hMouth, curve, hypexT, fillet, wall, flange, edgeR = 0, sections }) {
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
   const geometry = wall > 0
-    ? buildShellGeometry(s, rt, profile, fillet, wall, flange)
+    ? buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR)
     : buildHornGeometry(s, rt, profile, fillet);
 
   const out = [];
