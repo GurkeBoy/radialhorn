@@ -20,15 +20,17 @@ src/
   main.jsx, App.jsx        — Einstieg; App: Zustand, abgeleitete Geometrie (useMemo), Layout
   horn-math.js             — gesamte Geometrie-Mathematik, rein funktional
   horn-mesh.js             — 3D-Körper (Luftvolumen und Schale) als strukturierte Flächengitter
+  mesh-buffers.js          — 3D-Netz als Float32-Puffer je Sektion (für den Worker)
+  mesh.worker.js           — Web Worker: baut das 3D-Netz abseits des Haupt-Threads
   theme.js                 — Farben (UI, COLOR), Schrift, SVG-Stile, Raumecken-Strichmuster
   utils.js                 — linspace, clamp, svgPath, niceTicks
-  hooks.js                 — useSize, useZoomPan, usePersistentState
+  hooks.js                 — useSize, useZoomPan, usePersistentState, useThrottledValue
   settings.js              — gespeicherte Einstellungen (localStorage, je Wert geprüft gegen den Standard)
   components/
     ui.jsx                 — Card, Slider, Toggle, SegmentedButtons, Stat, Warn, ZoomControls, FullscreenPanel, ArrowMarker
     Dim.jsx                — Bemaßungen Dim (waagerecht/senkrecht) und DimAligned (schräg)
     Draufsicht.jsx, Seitenriss.jsx, Querschnitt.jsx — 2D-Ansichten und Diagramm
-    Ansicht3D.jsx          — 3D-Ansicht (three.js, OrbitControls, Zeichnen nur bei Bedarf)
+    Ansicht3D.jsx          — 3D-Ansicht (three.js, OrbitControls, Netz aus dem Worker, Zeichnen nur bei Bedarf)
     FlanschSchnitt.jsx     — Schnittfläche des Throat-Flanschs (Draufsicht, Seitenriss; Kontur: flangeSectionOutline)
     WandSchnitt.jsx        — Schnittfläche der Schale (Wandstärke) in Draufsicht und Seitenriss
   export/
@@ -47,6 +49,12 @@ src/
 - **Lösung `s`** (aus `solveHorn`) trägt ihren Winkel mit (`openingAngle`, `alpha2`, `tTrans`). Alles Nachgelagerte – Abtastung, Querschnitt, Kennwerte, Export, Ansichten – braucht nur `s`.
 - **Profil:** `makeProfile(s, rt, hMouth, curve, hypexT, fillet)` liefert `z ↦ halbe Höhe`; App erzeugt es einmal (useMemo) und reicht es an Seitenriss, Querschnitt, Kennwerte und PDF weiter.
 - **App.jsx** rechnet Grenzen und Lösung in einem `useMemo` (die Grenzsuchen sind verschachtelte Bisektionen). Exporte bekommen ein `design`-Objekt plus Layer-Auswahl.
+- **Flüssige Regler** (Messung: vorher ~300 ms je Regler-Schritt mit Schale + Flansch):
+  - Regler zeigen den Live-Zustand; alles Abgeleitete (Rechnung, Ansichten, Export) hängt an `p = useThrottledValue(live)`. Beim Ziehen zieht `p` laufend nach, die nächste Runde erst nach dem Neuzeichnen plus kurzer Pause – die Eingabe bleibt bedienbar, die Ansichten aktualisieren so schnell sie rechnen. Nicht `useDeferredValue`: dessen Hintergrund-Render wird bei jeder Reglerbewegung neu begonnen, beim Dauerziehen standen die Ansichten still. Regler mit gerechnetem Wert (L, Lt, Flansch-Ø, Lochkreis) zeigen während des Ziehens den Live-Wert (`shown`).
+  - Ansichten sind `memo`; teure Kurven in `useMemo` nur abhängig von der Geometrie (nicht von Zoom/Verschieben).
+  - 3D-Netz im Web Worker (`mesh.worker.js` → `meshBuffers`): Eingaben sind reine Daten (`s`, `fillet`, `flange` sind klonbar), das Profil baut der Worker mit `makeProfile` nach. Höchstens eine Berechnung läuft, neuere Eingaben ersetzen wartende. Bezug und Konflikt-Bohrungen werden nur bei geänderten Werten neu gebaut, Zeichnen gebündelt per `requestAnimationFrame`.
+  - `horn-mesh.js`: nächster Wandpunkt und Einhüllende per binärer Suche im z-Fenster statt über alle Wandpunkte, Außenkörper zwischengespeichert (flangeLayout und buildShellGeometry teilen ihn), `triangulate` ohne Hilfs-Arrays; Bisektionen brechen ab, sobald die Fließkomma-Auflösung erreicht ist. Alle Änderungen ergebnisgleich (Bit für Bit gegen einen Referenzstand geprüft).
+  - Im Entwicklungsmodus (`tauri dev`) ist alles langsamer: `React.StrictMode` rendert absichtlich doppelt, React läuft ohne Optimierung.
 - **Farben/Stile** nur aus `theme.js`, keine hartkodierten Farbwerte in Komponenten.
 - `hasTraktrix(s)` statt `s.Lt > 0.5` (Schwelle `LT_MIN`).
 
@@ -156,6 +164,7 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `horn-math.sampling.test.js` – Abtastung, Querschnitt, Kennwerte, Hypex-Cache
 - `horn-mesh.shell.test.js` – Schale: wasserdicht (auch ohne Traktrix, mit Verrundung R < t, bei extremer Wandstärke), Wandstärke t im Profilschnitt und in der Draufsicht, Kante am Knick, Verrundung außen R − t, Enden an Throat und Mund (Deckelhöhe, Stirnflächen)
 - `horn-mesh.flange.test.js` – Flansch: wasserdicht (mit/ohne Bohrungen, Klothoide, ohne Traktrix), Volumenzuwachs = Vorderseite × Dicke, Bohrbild, Mindest-Ø, Automatik-Ø und Lochkreis, ungültige Bohrungen
+- `mesh-buffers.test.js` – Worker-Puffer: dieselben Dreiecke wie `triangulate` (Profil im Worker nachgebaut, Eingaben geklont), Normalen, Sektionsauswahl
 - `horn-mesh.test.js` – 3D-Körper: wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format
 - `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung, Flansch), PDF (Kennwerte, Maßstab, Layer)
 - `settings.test.js` – Einstellungen: Rundlauf, Typprüfung (falscher Typ, kaputtes JSON, NaN → Standard), null = automatisch, Layer-Auswahl zusammengeführt, Zurücksetzen

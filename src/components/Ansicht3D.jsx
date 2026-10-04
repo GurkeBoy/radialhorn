@@ -1,9 +1,9 @@
-// 3D-Ansicht des Luftvolumens mit three.js: Drehen/Zoomen/Verschieben (OrbitControls),
-// Flächen oder Gitter, optional Treiber und Raumecke als Bezug.
-import { useEffect, useMemo, useRef, useState } from "react";
+// 3D-Ansicht (Luftvolumen oder Schale) mit three.js: Drehen/Zoomen/Verschieben (OrbitControls),
+// Flächen oder Gitter, optional Treiber und Raumecke als Bezug. Das Netz entsteht in einem Web
+// Worker (mesh.worker.js), damit Slider und 2D-Ansichten beim Neuaufbau flüssig bleiben.
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { buildHornGeometry, buildShellGeometry, triangulate, gridLines } from "../horn-mesh.js";
 import { COLOR, FONT, UI } from "../theme.js";
 import { useSize } from "../hooks.js";
 
@@ -16,25 +16,65 @@ function bufferGeometry(items) {
   return g;
 }
 
-/** Horn als Gruppe: je Sektion Flächen und Gitterlinien (Kappen des Luftvolumens werden nicht gezeigt). */
-function hornGroup(geometry) {
+/**
+ * Horn als Gruppe aus den Puffern des Workers: je Sektion Flächen und Gitterlinien (Kappen des
+ * Luftvolumens werden nicht angefordert).
+ */
+function hornGroup(sections) {
   const group = new THREE.Group();
-  for (const section of Object.keys(SECTION_COLOR)) {
-    const surfaces = geometry.surfaces.filter(f => f.section === section);
-    if (!surfaces.length) continue;
-    const faces = bufferGeometry(surfaces.flatMap(triangulate));
-    faces.computeVertexNormals();
+  for (const { section, positions, normals, lines } of sections) {
+    const faces = new THREE.BufferGeometry();
+    faces.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    faces.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     const mesh = new THREE.Mesh(faces, new THREE.MeshStandardMaterial({
       color: SECTION_COLOR[section], side: THREE.DoubleSide, roughness: 0.75, metalness: 0,
       polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
     }));
     mesh.userData.kind = "faces";
-    const lines = new THREE.LineSegments(bufferGeometry(surfaces.flatMap(gridLines)),
+    const grid = new THREE.BufferGeometry();
+    grid.setAttribute("position", new THREE.BufferAttribute(lines, 3));
+    const gridMesh = new THREE.LineSegments(grid,
       new THREE.LineBasicMaterial({ color: SECTION_COLOR[section], transparent: true, opacity: 0.8 }));
-    lines.userData.kind = "grid";
-    group.add(mesh, lines);
+    gridMesh.userData.kind = "grid";
+    group.add(mesh, gridMesh);
   }
   return group;
+}
+
+/**
+ * Netz im Web Worker bauen lassen. Es läuft höchstens eine Berechnung; Eingaben, die währenddessen
+ * eintreffen, ersetzen einander, und nur die jeweils neueste wird danach gerechnet. Liefert die
+ * Sektionen der zuletzt fertigen Berechnung (null ohne gültige Eingabe).
+ */
+function useMeshWorker(input) {
+  const [sections, setSections] = useState(null);
+  const state = useRef(null);
+  useEffect(() => {
+    const worker = new Worker(new URL("../mesh.worker.js", import.meta.url), { type: "module" });
+    const st = { worker, busy: false, pending: undefined, wanted: null };
+    st.send = inp => { st.busy = true; worker.postMessage({ input: inp }); };
+    worker.onmessage = ({ data }) => {
+      st.busy = false;
+      if (data.error) console.error("3D-Netz:", data.error);
+      if (st.pending !== undefined) {                 // inzwischen neuere Eingabe: die zuerst rechnen
+        const next = st.pending;
+        st.pending = undefined;
+        if (next) { st.send(next); return; }
+      }
+      setSections(st.wanted ? data.sections ?? null : null);
+    };
+    state.current = st;
+    return () => { worker.terminate(); state.current = null; };
+  }, []);
+  useEffect(() => {
+    const st = state.current;
+    if (!st) return;
+    st.wanted = input;
+    if (!input) { if (st.busy) st.pending = null; return; }
+    if (st.busy) st.pending = input;
+    else st.send(input);
+  }, [input]);
+  return input ? sections : null;
 }
 
 /** Treiber (Zylinder Ø dw, Länge dh, Achse = Hornachse z) und Raumecken-Wände als halbtransparenter Bezug. */
@@ -106,20 +146,22 @@ function frame(camera, controls, object) {
 }
 
 /**
- * @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile)
+ * @param curve, hypexT, fillet  Seitenprofil (der Worker baut daraus makeProfile nach)
  * @param wall     Wandstärke [mm]; 0 zeigt das Luftvolumen, > 0 die Schale
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null, nur mit Schale
  */
-export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, flange, showRaumecke }) {
+export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, flange, showRaumecke }) {
   const containerRef = useRef(null);
   const { w, h } = useSize(containerRef);
   const three = useRef(null);
   const [wireframe, setWireframe] = useState(false);
   const [showReference, setShowReference] = useState(true);
 
-  const geometry = useMemo(() => s && (wall > 0
-    ? buildShellGeometry(s, rt, profile, fillet, wall, flange)
-    : buildHornGeometry(s, rt, profile, fillet)), [s, rt, profile, fillet, wall, flange]);
+  const meshInput = useMemo(() => s ? {
+    s, rt, hMouth, curve, hypexT, fillet, wall,
+    flange: wall > 0 ? flange : null, sections: Object.keys(SECTION_COLOR),
+  } : null, [s, rt, hMouth, curve, hypexT, fillet, wall, flange]);
+  const sections = useMeshWorker(meshInput);
 
   // Szene, Kamera, Renderer und Steuerung einmalig anlegen
   useEffect(() => {
@@ -135,10 +177,15 @@ export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, flange
     const camera = new THREE.PerspectiveCamera(35, 1, 1, 10000);
     const controls = new OrbitControls(camera, renderer.domElement);
     // Zeichnen nur bei Bedarf (Kamerabewegung, Geometrie, Größe, Darstellung) statt Dauerschleife
-    const render = () => renderer.render(scene, camera);
+    // Anforderungen innerhalb eines Bildes werden zu einem Zeichenvorgang zusammengefasst
+    let frameId = 0;
+    const render = () => {
+      if (!frameId) frameId = requestAnimationFrame(() => { frameId = 0; renderer.render(scene, camera); });
+    };
     controls.addEventListener("change", render);
     three.current = { renderer, scene, camera, controls, render, horn: null, reference: null, conflicts: null, framed: false };
     return () => {
+      cancelAnimationFrame(frameId);
       controls.removeEventListener("change", render);
       controls.dispose();
       for (const g of [three.current.horn, three.current.reference, three.current.conflicts]) if (g) disposeGroup(g);
@@ -158,33 +205,49 @@ export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, flange
     t.render();
   }, [w, h]);
 
-  // Horn und Bezug neu aufbauen, wenn sich die Geometrie ändert
+  const replace = (t, key, group) => {
+    if (t[key]) { t.scene.remove(t[key]); disposeGroup(t[key]); }
+    t[key] = group;
+    if (group) t.scene.add(group);
+  };
+
+  // Horn neu aufbauen, sobald der Worker ein neues Netz liefert
   useEffect(() => {
     const t = three.current;
     if (!t) return;
-    for (const key of ["horn", "reference", "conflicts"]) {
-      if (t[key]) { t.scene.remove(t[key]); disposeGroup(t[key]); t[key] = null; }
-    }
-    if (!geometry) return;
-    t.horn = hornGroup(geometry);
-    t.reference = referenceGroup(s, dw, dh, hMouth, showRaumecke);
-    t.conflicts = conflictGroup(wall > 0 ? flange : null);
-    t.scene.add(t.horn, t.reference, t.conflicts);
-    if (!t.framed) { frame(t.camera, t.controls, t.horn); t.framed = true; }
+    replace(t, "horn", sections && hornGroup(sections));
+    if (t.horn && !t.framed) { frame(t.camera, t.controls, t.horn); t.framed = true; }
     t.render();
-  }, [geometry, s, dw, dh, hMouth, showRaumecke, wall, flange]);
+  }, [sections]);
+
+  // Bezug (Treiber, Raumecke) und Konflikt-Bohrungen: sofort, aber nur neu, wenn sich ihre
+  // Werte ändern (nicht bei jedem neuen s- oder Flansch-Objekt mit gleichen Maßen)
+  const referenceKey = s ? JSON.stringify([s.zApex, s.hatTipZ, dw, dh, hMouth, showRaumecke]) : "";
+  const conflictKey = wall > 0 && flange ? JSON.stringify([flange.conflicts, flange.holes.diameter, flange.thickness]) : "";
+  useEffect(() => {
+    const t = three.current;
+    if (!t) return;
+    replace(t, "reference", referenceKey && referenceGroup(s, dw, dh, hMouth, showRaumecke));
+    t.render();
+  }, [referenceKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- referenceKey fasst die Werte zusammen
+  useEffect(() => {
+    const t = three.current;
+    if (!t) return;
+    replace(t, "conflicts", conflictKey && conflictGroup(flange));
+    t.render();
+  }, [conflictKey]);    // eslint-disable-line react-hooks/exhaustive-deps -- conflictKey fasst die Werte zusammen
 
   // Darstellung umschalten
   useEffect(() => {
     const t = three.current;
-    if (!t?.horn) return;
-    t.horn.traverse(o => {
+    if (!t) return;
+    t.horn?.traverse(o => {
       if (o.userData.kind === "faces") o.visible = !wireframe;
       if (o.userData.kind === "grid") o.visible = wireframe;
     });
-    t.reference.visible = showReference;
+    if (t.reference) t.reference.visible = showReference;
     t.render();
-  }, [geometry, wireframe, showReference]);
+  }, [sections, referenceKey, wireframe, showReference]);
 
   const resetView = () => {
     const t = three.current;
@@ -204,7 +267,7 @@ export function Ansicht3D({ s, rt, dw, dh, hMouth, profile, fillet, wall, flange
       {!s && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.trans, fontSize: 12, fontFamily: FONT }}>⚠ Parameter ungültig</div>}
     </div>
   );
-}
+});
 
 function ViewButton({ active, onClick, title, children }) {
   return (

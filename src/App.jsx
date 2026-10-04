@@ -1,5 +1,5 @@
 // Radialhorn-Konfigurator: Parameter in der Seitenleiste, Draufsicht und Seitenriss rechts.
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   createHornMath, hasTraktrix, CURVES, computeFillet, makeProfile,
   mouthArea, verticalMouthAngle, frequencyEstimates,
@@ -12,7 +12,7 @@ import { Draufsicht } from "./components/Draufsicht.jsx";
 import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
 import { Ansicht3D } from "./components/Ansicht3D.jsx";
-import { usePersistentState } from "./hooks.js";
+import { usePersistentState, useThrottledValue } from "./hooks.js";
 import { clearSettings } from "./settings.js";
 import { exportDXF } from "./export/dxf.js";
 import { exportPDF } from "./export/pdf.js";
@@ -60,11 +60,22 @@ export default function App() {
   });
   const setLayer = key => on => setExportLayers(layers => ({ ...layers, [key]: on }));
 
-  const rt = throatDiam / 2;
+  // Regler reagieren sofort; Rechnung und Ansichten folgen gedrosselt (useThrottledValue): beim
+  // Ziehen laufend mit dem jeweils neuesten Wert, mit Pausen für die Eingabe dazwischen. Alles
+  // Abgeleitete hängt deshalb an p, nicht am Live-Zustand; die Ansichten sind memo und rendern
+  // nur, wenn sich p auswirkt.
+  const live = useMemo(() => ({
+    throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
+  }), [throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle]);
+  const p = useThrottledValue(live);
+  const rt = p.throatDiam / 2;
 
   // Grenzen und Lösung der Draufsicht. Die Grenzsuchen sind teuer (verschachtelte
   // Bisektionen) und hängen nur von diesen Parametern ab.
   const geometry = useMemo(() => {
+    const { openingAngle, L, Lt, dw, dh, showRaumecke, showWandstaerke, wandstaerke, clothoidOn, clothoidLength } = p;
     const math = createHornMath(openingAngle, { clothoid: clothoidOn ? clothoidLength : 0 });
     // Wandstärke vergrößert die Außenkante senkrecht zur Wand; ihre Projektion auf die
     // 45°-Raumecke verkleinert den verfügbaren Platz
@@ -93,33 +104,35 @@ export default function App() {
       },
       LtMinClothoid,
     };
-  }, [openingAngle, L, Lt, rt, dw, dh, showRaumecke, showWandstaerke, wandstaerke, clothoidOn, clothoidLength]);
+  }, [p, rt]);
 
   const { s, LtMin, LtMax, LtClamped, LClamped, LMaxRaumecke, Lmin, Lmax, warnings, LtMinClothoid } = geometry;
 
   const fillet = useMemo(
-    () => filletOn ? computeFillet(s, rt, hMouth, curve, hypexT, filletR) : null,
-    [filletOn, s, rt, hMouth, curve, hypexT, filletR],
+    () => p.filletOn ? computeFillet(s, rt, p.hMouth, p.curve, p.hypexT, p.filletR) : null,
+    [p.filletOn, s, rt, p.hMouth, p.curve, p.hypexT, p.filletR],
   );
   const profile = useMemo(
-    () => s && makeProfile(s, rt, hMouth, curve, hypexT, fillet),
-    [s, rt, hMouth, curve, hypexT, fillet],
+    () => s && makeProfile(s, rt, p.hMouth, p.curve, p.hypexT, fillet),
+    [s, rt, p.hMouth, p.curve, p.hypexT, fillet],
   );
 
-  const wall = showWandstaerke ? wandstaerke : 0;
+  const wall = p.showWandstaerke ? p.wandstaerke : 0;
   // Flansch nur an der Schale; Ø und Lochkreis werden gegen den Außenkörper aufgelöst
   const flange = useMemo(
-    () => s && wall > 0 && flangeOn ? flangeLayout(s, rt, profile, fillet, wall, {
-      diameter: flangeD, fallback: dw, thickness: flangeT,
-      holes: { count: holeCount, circle: holeCircle, diameter: holeD, angle: holeAngle },
+    () => s && wall > 0 && p.flangeOn ? flangeLayout(s, rt, profile, fillet, wall, {
+      diameter: p.flangeD, fallback: p.dw, thickness: p.flangeT,
+      holes: { count: p.holeCount, circle: p.holeCircle, diameter: p.holeD, angle: p.holeAngle },
     }) : null,
-    [s, rt, profile, fillet, wall, flangeOn, flangeD, dw, flangeT, holeCount, holeCircle, holeD, holeAngle],
+    [s, rt, profile, fillet, wall, p.flangeOn, p.flangeD, p.dw, p.flangeT, p.holeCount, p.holeCircle, p.holeD, p.holeAngle],
   );
-  const flangeOverRaumecke = flange && showRaumecke && flange.diameter / 2 > dw / 2 + dh;
+  const flangeOverRaumecke = flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
   const design = {
-    s, rt, L: LClamped, hMouth, curve, hypexT, fillet, profile, wall, flange,
-    showRaumecke, showWandstaerke, wandstaerke,
+    s, rt, L: LClamped, hMouth: p.hMouth, curve: p.curve, hypexT: p.hypexT, fillet, profile, wall, flange,
+    showRaumecke: p.showRaumecke, showWandstaerke: p.showWandstaerke, wandstaerke: p.wandstaerke,
   };
+  // Während eines Zugs zeigt der Regler den Live-Wert, sonst den (ggf. begrenzten) gerechneten
+  const shown = (key, computed) => live[key] !== p[key] ? live[key] : computed;
 
   return (
     <div style={{ background: UI.bg, height: "100vh", overflow: "hidden", color: UI.text, fontFamily: FONT, display: "flex" }}>
@@ -141,13 +154,13 @@ export default function App() {
         </Card>
 
         {flange && <Card title="FLANSCH">
-          <Slider label="Durchmesser" value={Math.round(flange.diameter)} min={Math.ceil(flange.minDiameter)} max={400} step={1} unit="mm" onChange={setFlangeD} />
+          <Slider label="Durchmesser" value={shown("flangeD", Math.round(flange.diameter))} min={Math.ceil(flange.minDiameter)} max={400} step={1} unit="mm" onChange={setFlangeD} />
           {flange.limited && <Note style={{ marginTop: -4, marginBottom: 4 }}>mind. {Math.ceil(flange.minDiameter)} mm (umschließt die Schale)</Note>}
           {flangeOverRaumecke && <Warn>⚠ Flansch ragt über die Raumecke</Warn>}
           <Slider label="Dicke" value={flangeT} min={2} max={40} step={1} unit="mm" onChange={setFlangeT} />
           <Slider label="Bohrungen" value={holeCount} min={0} max={12} step={1} unit="" onChange={setHoleCount} />
           {holeCount > 0 && <>
-            <Slider label="Lochkreis-Ø" value={flange.holes.circle} min={Math.ceil(flange.minDiameter / 2)} max={Math.floor(flange.diameter)} step={0.1} unit="mm" onChange={setHoleCircle} />
+            <Slider label="Lochkreis-Ø" value={shown("holeCircle", flange.holes.circle)} min={Math.ceil(flange.minDiameter / 2)} max={Math.floor(flange.diameter)} step={0.1} unit="mm" onChange={setHoleCircle} />
             <Slider label="Bohrungs-Ø" value={holeD} min={2} max={20} step={0.1} unit="mm" onChange={setHoleD} />
             <Slider label="Winkellage" value={holeAngle} min={0} max={Math.round(360 / holeCount)} step={1} unit="°" onChange={setHoleAngle} />
             {flange.invalidHoles > 0 && <Warn>⚠ {flange.invalidHoles} Bohrung{flange.invalidHoles > 1 ? "en" : ""} im Konflikt mit der Schale (rot markiert, nicht gebohrt)</Warn>}
@@ -163,9 +176,9 @@ export default function App() {
 
         <Card title="HORNGEOMETRIE">
           <Slider label="Öffnungswinkel" value={openingAngle} min={60} max={160} step={1} unit="°" onChange={setOpeningAngle} />
-          <Slider label="Gesamtlänge L" value={LClamped} min={Lmin} max={Lmax} step={5} unit="mm" onChange={setL} />
+          <Slider label="Gesamtlänge L" value={shown("L", LClamped)} min={Lmin} max={Lmax} step={5} unit="mm" onChange={setL} />
           {warnings.raumecke && <Warn>⚠ Raumecken-Limit ({LMaxRaumecke.toFixed(0)} mm)</Warn>}
-          <Slider label="Traktrix-Länge Lₜ" value={LtClamped} min={LtMin} max={LtMax} step={1} unit="mm" onChange={setLt} />
+          <Slider label="Traktrix-Länge Lₜ" value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={setLt} />
           {warnings.ltMax && <Warn>⚠ Lₜ-Maximum erreicht ({LtMax.toFixed(0)} mm)</Warn>}
           {warnings.ltMin && <Warn>⚠ Lₜ-Minimum (Raumecke: {LtMin.toFixed(0)} mm)</Warn>}
           <Toggle label="Krümmungsstetiger Übergang" checked={clothoidOn} onChange={setClothoidOn} />
@@ -191,8 +204,8 @@ export default function App() {
         </Card>
 
         {s && <>
-          <KeyFigures s={s} hMouth={hMouth} profile={profile} />
-          <Frequencies s={s} rt={rt} hMouth={hMouth} />
+          <KeyFigures s={s} hMouth={p.hMouth} profile={profile} />
+          <Frequencies s={s} rt={rt} hMouth={p.hMouth} />
           <Querschnitt s={s} profile={profile} />
           <Card title="EXPORT">
             <Note style={{ marginBottom: 6 }}>DXF — Kurven (mm)</Note>
@@ -216,15 +229,15 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 10, gap: 8, overflow: "hidden", minWidth: 0 }}>
         <div style={{ flex: 6, display: "flex", gap: 8, minHeight: 0 }}>
           <ViewPanel flex={1}>
-            <Draufsicht s={s} rt={rt} dw={dw} dh={dh} L={LClamped}
-              showRaumecke={showRaumecke} showWandstaerke={showWandstaerke} wandstaerke={wandstaerke} flange={flange} />
+            <Draufsicht s={s} rt={rt} dw={p.dw} dh={p.dh} L={LClamped}
+              showRaumecke={p.showRaumecke} showWandstaerke={p.showWandstaerke} wandstaerke={p.wandstaerke} flange={flange} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={dw} dh={dh} hMouth={hMouth} profile={profile} fillet={fillet} wall={wall} flange={flange} showRaumecke={showRaumecke} />
+            <Ansicht3D s={s} rt={rt} dw={p.dw} dh={p.dh} hMouth={p.hMouth} curve={p.curve} hypexT={p.hypexT} fillet={fillet} wall={wall} flange={flange} showRaumecke={p.showRaumecke} />
           </ViewPanel>
         </div>
         <ViewPanel flex={5}>
-          <Seitenriss s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} />
+          <Seitenriss s={s} rt={rt} dw={p.dw} dh={p.dh} L={LClamped} hMouth={p.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} />
         </ViewPanel>
       </div>
     </div>
@@ -239,7 +252,7 @@ function ViewPanel({ flex, children }) {
   );
 }
 
-function KeyFigures({ s, hMouth, profile }) {
+const KeyFigures = memo(function KeyFigures({ s, hMouth, profile }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
       <Stat label="Mundbreite"    value={(2 * s.xMouth).toFixed(1) + " mm"} />
@@ -250,9 +263,9 @@ function KeyFigures({ s, hMouth, profile }) {
       <Stat label="Horiz. Winkel" value={s.openingAngle + "°"} />
     </div>
   );
-}
+});
 
-function Frequencies({ s, rt, hMouth }) {
+const Frequencies = memo(function Frequencies({ s, rt, hMouth }) {
   const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt, hMouth);
   return (
     <Card title="FREQUENZEN (NÄHERUNG)">
@@ -264,7 +277,7 @@ function Frequencies({ s, rt, hMouth }) {
       </Note>
     </Card>
   );
-}
+});
 
 function FrequencyRow({ label, value }) {
   return (

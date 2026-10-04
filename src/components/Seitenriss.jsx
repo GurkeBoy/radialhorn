@@ -1,5 +1,5 @@
 // Seitenriss (vertikaler Schnitt): Throat, Aufweitung, optionale Verrundung, Treiber, Raumecke.
-import { useRef } from "react";
+import { memo, useMemo, useRef } from "react";
 import { hasTraktrix } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash, raumDashCenter } from "../theme.js";
 import { linspace, nestedLayers } from "../utils.js";
@@ -16,10 +16,17 @@ import { shellProfileOutline } from "../horn-mesh.js";
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null
  * @param wall     Wandstärke [mm]; > 0 zeichnet den Schnitt durch die Schale
  */
-export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, wall = 0 }) {
+export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, wall = 0 }) {
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
+
+  // Schnitt durch die Schale in Geometrie-Koordinaten: nur bei Geometrieänderung neu, nicht bei Zoom
+  const zShell = flange ? flange.thickness : 0;
+  const shellCut = useMemo(() => s && wall > 0 ? {
+    inner: linspace(zShell, s.zApex, 300).map(z => [profile(z), z]),
+    outer: shellProfileOutline(s, rt, profile, wall, zShell),
+  } : null, [s, rt, profile, wall, zShell]);
 
   if (!s || VW < 10 || VH < 10) return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 
@@ -93,12 +100,8 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, 
           {fillet && <FilletMarks fillet={fillet} rt={rt} zTrans={s.zInnerApex} hTrans={hTrans} toX={toX} toY={toY} />}
         </>}
 
-        {wall > 0 && (() => {
-          const zShell = flange ? flange.thickness : 0;
-          const inner = linspace(zShell, s.zApex, 300).map(z => [profile(z), z]);
-          return <WandSchnitt inner={inner} outer={shellProfileOutline(s, rt, profile, wall, zShell)}
-            closeThroat={!flange} map={(h, z) => [toX(z), toY(h)]} />;
-        })()}
+        {shellCut && <WandSchnitt inner={shellCut.inner} outer={shellCut.outer}
+          closeThroat={!flange} map={(h, z) => [toX(z), toY(h)]} />}
         {flange && <FlanschSchnitt flange={flange} map={(h, z) => [toX(z), toY(h)]}
           inner={linspace(0, flange.thickness, 30).map(z => [profile(z), z])} />}
 
@@ -144,7 +147,7 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, 
       </svg>
     </div>
   );
-}
+});
 
 /** Tangentenpunkte der Verrundung und Radius-Angabe (Leitlinie vom Mittelpunkt, außerhalb der Wand). */
 function FilletMarks({ fillet, rt, zTrans, hTrans, toX, toY }) {

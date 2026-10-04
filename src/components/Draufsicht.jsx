@@ -1,5 +1,5 @@
 // Draufsicht (horizontaler Schnitt): Traktrix, gerade Wand, Mundbogen, Raumecke, Treiber.
-import { useRef } from "react";
+import { memo, useMemo, useRef } from "react";
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
 import { svgPath, clipFromZ, nestedLayers } from "../utils.js";
@@ -16,10 +16,22 @@ const WALL_SAMPLES = 80;
 const DIM_LAYER = 18, DIM_LAYER_STEP = 22;   // Bemaßungslagen [px], siehe CLAUDE.md
 
 /** @param flange  aufgelöster Throat-Flansch (flangeLayout) oder null */
-export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange }) {
+export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange }) {
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
+
+  // Kurven in Geometrie-Koordinaten: hängen nur von der Geometrie ab, nicht von Zoom und
+  // Verschieben – einmal je Änderung berechnen statt bei jedem Neuzeichnen
+  const t = showWandstaerke ? wandstaerke : 0;
+  const zShell = flange ? flange.thickness : 0;
+  const curves = useMemo(() => s && {
+    trak: traktrixPoints(s, TRAKTRIX_SAMPLES),
+    klo: clothoidPoints(s, CLOTHOID_SAMPLES),
+    wall: linearWallPoints(s, WALL_SAMPLES),
+    innerWall: hasTraktrix(s) ? [...entrancePoints(s, 200, 60), ...linearWallPoints(s, 40).slice(1)] : linearWallPoints(s, 40),
+  }, [s]);
+  const shellOuter = useMemo(() => s && t > 0 ? shellPlanOutline(s, rt, t, zShell) : null, [s, rt, t, zShell]);
 
   if (!s || VW < 10 || VH < 10) return (
     <div ref={containerRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: COLOR.trans, fontSize: 12, fontFamily: FONT }}>
@@ -32,10 +44,7 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
   const zMin = s.hatTipZ - 140;
   const zMax = s.zApex + Math.max(16, Math.ceil((s.zApex - zMin) * 30 / 432));
   // Schale: Schnitt zwischen Innenwand und Außenkontur, mit Flansch erst ab dessen Dicke
-  const t = showWandstaerke ? wandstaerke : 0;
-  const zShell = flange ? flange.thickness : 0;
-  const innerWall = hasTraktrix(s) ? [...entrancePoints(s, 200, 60), ...linearWallPoints(s, 40).slice(1)] : linearWallPoints(s, 40);
-  const shellOuter = t > 0 ? shellPlanOutline(s, rt, t, zShell) : null;
+  const { innerWall } = curves;
   const xMax = Math.max(s.xMouth, dw / 2, flange ? flange.diameter / 2 : 0, shellOuter ? shellOuter[shellOuter.length - 1][0] : 0,
     showRaumecke ? raumeckeEndX + 4 : 0) + 20;
 
@@ -55,9 +64,9 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
     right: pts.map(([x, z]) => [toX(x), toY(z)]),
     left:  pts.map(([x, z]) => [toX(-x), toY(z)]),
   });
-  const trak = screen(traktrixPoints(s, TRAKTRIX_SAMPLES));
-  const klo  = screen(clothoidPoints(s, CLOTHOID_SAMPLES));
-  const wall = screen(linearWallPoints(s, WALL_SAMPLES));
+  const trak = screen(curves.trak);
+  const klo  = screen(curves.klo);
+  const wall = screen(curves.wall);
   const entrance = { left: [...trak.left, ...klo.left.slice(1)], right: [...trak.right, ...klo.right.slice(1)] };
 
   const fy  = toY(s.zFocus);
@@ -239,7 +248,7 @@ export function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wa
       <Legend showWandstaerke={showWandstaerke} showClothoid={hasClothoid(s)} showFlange={!!flange} />
     </div>
   );
-}
+});
 
 function Treiber({ toX, toY, dw, dh, scale, cx }) {
   const x0 = toX(-dw / 2), x1 = toX(dw / 2), y0 = toY(-dh), y1 = toY(0);

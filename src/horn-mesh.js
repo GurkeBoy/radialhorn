@@ -98,11 +98,22 @@ function contourRight(s, rt, t, axial, z0 = 0) {
 
   // gerade Wand dicht abtasten, damit die Einhüllende dort exakt die Parallele ist
   const line = linspace(0, 1, 2000).map(f => [s.xTrans + f * (s.xMouth - s.xTrans), s.zTrans + f * (s.zMouth - s.zTrans)]);
-  const samples = [...wall.slice(0, -1), ...line];
-  const envelope = z => samples.reduce((best, [x, zi]) => {
-    const d = z - zi;
-    return Math.abs(d) <= t ? Math.max(best, x + Math.sqrt(t * t - d * d)) : best;
-  }, -Infinity);
+  const samples = [...wall.slice(0, -1), ...line];   // nach z aufsteigend
+  // Nur Stützpunkte mit |z − z_i| ≤ t tragen bei: Fenster per binärer Suche (mit kleiner
+  // Reserve, die exakte Prüfung bleibt), statt alle Stützpunkte abzusuchen
+  const firstAtLeast = z => {
+    let lo = 0, hi = samples.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; samples[mid][1] < z ? (lo = mid + 1) : (hi = mid); }
+    return lo;
+  };
+  const envelope = z => {
+    let best = -Infinity;
+    for (let i = firstAtLeast(z - t - 1e-6); i < samples.length && samples[i][1] <= z + t + 1e-6; i++) {
+      const [x, zi] = samples[i], d = z - zi;
+      if (Math.abs(d) <= t) best = Math.max(best, x + Math.sqrt(t * t - d * d));
+    }
+    return best;
+  };
   // Übergang der Einhüllenden in die Parallele L(z) suchen (ab dem versetzten Übergangspunkt)
   const tan = Math.tan(s.alpha2);
   const L = z => xs + (z - zs) * tan;
@@ -141,7 +152,11 @@ function outerHeightField(s, rt, hAt, t) {
     if (delta <= 0) return radial(r);
     const c = Math.cos(delta);
     let best = rt + t;
-    for (const [r2, h2] of rise) {
+    // rise ist nach r sortiert: nur Stützpunkte mit |r2 − r| ≤ t (Fenster mit Reserve, exakte Prüfung bleibt)
+    let lo = 0, hi = rise.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; rise[mid][0] < r - t - 1e-6 ? (lo = mid + 1) : (hi = mid); }
+    for (let i = lo; i < rise.length && rise[i][0] <= r + t + 1e-6; i++) {
+      const [r2, h2] = rise[i];
       if (Math.abs(r2 - r) > t) continue;
       const d2 = r * r + r2 * r2 - 2 * r * r2 * c;
       if (d2 < t * t) best = Math.max(best, h2 + Math.sqrt(t * t - d2));
@@ -159,22 +174,33 @@ function outerHeightField(s, rt, hAt, t) {
   const isInside = (ax, z, phi) =>
     phi <= s.alpha2 + 1e-12 || (hasTraktrix(s) && z >= 0 && z <= s.zTrans && ax <= xWall(z) + 1e-9);
 
+  // Nächster Punkt auf der Innenwand (Segment i = wall[i−1] → wall[i]). Die Wand steigt in z
+  // monoton, der Abstand ist mindestens der z-Abstand: Suche ab dem Segment auf Höhe z nach
+  // beiden Seiten, bis der z-Abstand den besten Abstand übersteigt. Bei Gleichstand gewinnt
+  // wie bei der vollständigen Suche das vordere Segment.
+  const nearest = (px, pz) => {
+    let bestD = Infinity, bestI = 0, qx = 0, qz = 0;
+    const visit = i => {
+      const ax = wall[i - 1][0], az = wall[i - 1][1], abx = wall[i][0] - ax, abz = wall[i][1] - az;
+      const f = Math.max(0, Math.min(1, ((px - ax) * abx + (pz - az) * abz) / (abx ** 2 + abz ** 2)));
+      const cx = ax + f * abx, cz = az + f * abz;
+      const d = Math.hypot(px - cx, pz - cz);
+      if (d < bestD || (d === bestD && i < bestI)) { bestD = d; bestI = i; qx = cx; qz = cz; }
+    };
+    let lo = 1, hi = wall.length - 1;                 // erstes Segment, dessen Ende ≥ pz liegt
+    while (lo < hi) { const mid = (lo + hi) >> 1; wall[mid][1] < pz ? (lo = mid + 1) : (hi = mid); }
+    for (let i = lo; i < wall.length && wall[i - 1][1] - pz <= bestD; i++) visit(i);
+    for (let i = lo - 1; i >= 1 && pz - wall[i][1] <= bestD; i--) visit(i);
+    return { qx, qz, onLine: bestI > lineStart };
+  };
+
   return (x, z) => {
     const ax = Math.abs(x);
     const [r, phi] = polarOf(ax, z);
     if (isInside(ax, z, phi)) return inside(r, phi);
-    // nächster Punkt auf der Innenwand
-    let best = null;
-    for (let i = 1; i < wall.length; i++) {
-      const a = wall[i - 1], b = wall[i];
-      const ab = [b[0] - a[0], b[1] - a[1]], ap = [ax - a[0], z - a[1]];
-      const f = Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1]) / (ab[0] ** 2 + ab[1] ** 2)));
-      const q = [a[0] + f * ab[0], a[1] + f * ab[1]];
-      const d = Math.hypot(ax - q[0], z - q[1]);
-      if (!best || d < best.d) best = { d, q, onLine: i > lineStart };
-    }
-    const [rq, phiq] = polarOf(best.q[0], best.q[1]);
-    return best.onLine ? radial(rq) : inside(rq, phiq);
+    const { qx, qz, onLine } = nearest(ax, z);
+    const [rq, phiq] = polarOf(qx, qz);
+    return onLine ? radial(rq) : inside(rq, phiq);
   };
 }
 
@@ -438,12 +464,23 @@ export function flangeLayout(s, rt, profile, fillet, t, flange, res = DEFAULT_RE
   };
 }
 
-/** Außenkörper der Schale, optional ab der Ebene zStart (Flansch davor). */
+/**
+ * Außenkörper der Schale, optional ab der Ebene zStart (Flansch davor). Die letzten Ergebnisse
+ * werden zwischengespeichert: flangeLayout und buildShellGeometry brauchen bei jeder Änderung
+ * denselben Körper (gleiche Objekte s, profile, fillet, res).
+ */
+const outerCache = [];
 function outerBody(s, rt, profile, fillet, t, res, zStart = 0) {
+  const key = [s, rt, profile, fillet, t, res, zStart];
+  const hit = outerCache.find(e => e.key.every((v, i) => v === key[i]));
+  if (hit) return hit.body;
   const hAt = r => profile(s.zFocus + r);
   const capHeight = hAt(s.arcR) + t;
   const field = outerHeightField(s, rt, hAt, t);
-  return body(s, rt, t, (x, z) => Math.min(field(x, z), capHeight), fillet, res, zStart);
+  const result = body(s, rt, t, (x, z) => Math.min(field(x, z), capHeight), fillet, res, zStart);
+  outerCache.unshift({ key, body: result });
+  outerCache.length = Math.min(outerCache.length, 4);
+  return result;
 }
 
 /** Ring aus n Punkten [x, h, z] um (cx, ch) in der Ebene z. */
@@ -596,10 +633,6 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, res
   };
 }
 
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-
 /**
  * Dreiecke einer Gitterfläche, nach außen orientiert (Normale zeigt in outward-Richtung).
  * Entartete Dreiecke (z.B. an zusammenfallenden Randpunkten) werden ausgelassen.
@@ -609,11 +642,14 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 export function triangulate({ grid, triangles, outward, oriented }) {
   if (oriented) return triangles;
   const tris = [];
+  // skalar gerechnet (Normale n = (b − a) × (c − a)): wird für zehntausende Dreiecke aufgerufen
   const add = (a, b, c) => {
-    const n = cross(sub(b, a), sub(c, a));
-    if (Math.hypot(...n) < 1e-12) return;
-    const centroid = [0, 1, 2].map(k => (a[k] + b[k] + c[k]) / 3);
-    tris.push(dot(n, outward(centroid)) >= 0 ? [a, b, c] : [a, c, b]);
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    if (Math.hypot(nx, ny, nz) < 1e-12) return;
+    const o = outward([(a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3, (a[2] + b[2] + c[2]) / 3]);
+    tris.push(nx * o[0] + ny * o[1] + nz * o[2] >= 0 ? [a, b, c] : [a, c, b]);
   };
   if (triangles) { for (const [a, b, c] of triangles) add(a, b, c); return tris; }
   for (let i = 0; i < grid.length - 1; i++) {
