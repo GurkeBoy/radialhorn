@@ -10,6 +10,8 @@ import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
 import { WandSchnitt } from "./WandSchnitt.jsx";
 import { shellProfileOutline } from "../horn-mesh.js";
 
+const DIM_LEADER = 24;   // Länge der Radius-Leitlinie außerhalb der Wand [px]
+
 /**
  * @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile)
  * @param fillet   Verrundung (computeFillet) oder null – nur für Markierungen
@@ -97,7 +99,7 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
           )}
           <circle cx={toX(s.zInnerApex)} cy={toY(hTrans)} r={DOT} fill={COLOR.trans} />
           <circle cx={toX(s.zInnerApex)} cy={toY(-hTrans)} r={DOT} fill={COLOR.trans} />
-          {fillet && <FilletMarks fillet={fillet} rt={rt} zTrans={s.zInnerApex} hTrans={hTrans} toX={toX} toY={toY} />}
+          {fillet && <FilletMarks fillet={fillet} rt={rt} wall={wall} scale={scale} toX={toX} toY={toY} />}
         </>}
 
         {shellCut && <WandSchnitt inner={shellCut.inner} outer={shellCut.outer}
@@ -149,15 +151,29 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
   );
 });
 
-/** Tangentenpunkte der Verrundung und Radius-Angabe (Leitlinie vom Mittelpunkt, außerhalb der Wand). */
-function FilletMarks({ fillet, rt, zTrans, hTrans, toX, toY }) {
+/**
+ * Tangentenpunkte der Verrundung und Radiusmaß: kurze Leitlinie auf der Radiallinie durch die
+ * Bogenmitte, Pfeil am Bogen, Richtung Mittelpunkt – nur so lang, dass die Beschriftung außerhalb
+ * der Wand (und der Schale) steht, statt bis zum oft weit entfernten Mittelpunkt. Am unteren
+ * Bogen, oben kreuzen die Hilfslinien der axialen Maße (Traktrix → Mund).
+ */
+function FilletMarks({ fillet, rt, wall, scale, toX, toY }) {
+  const a2 = Math.atan2(fillet.hT2 - fillet.hc, fillet.zT2 - fillet.zc);   // T1 liegt bei −90°
+  const mid = (-Math.PI / 2 + a2) / 2;
+  // unterer Bogen: Spiegelbild des oberen (Mittelpunkt bei −hc)
+  const mx = toX(fillet.zc + fillet.R * Math.cos(mid)), my = toY(-(fillet.hc + fillet.R * Math.sin(mid)));
+  const cx = toX(fillet.zc), cy = toY(-fillet.hc);
+  const dist = Math.hypot(cx - mx, cy - my);
+  const len = Math.min(dist, wall * scale + DIM_LEADER);
+  const ux = (cx - mx) / dist, uy = (cy - my) / dist;
+  const ex = mx + ux * len, ey = my + uy * len;
   return <>
     {[1, -1].map(sign => <g key={sign}>
       <circle cx={toX(fillet.zT1)} cy={toY(sign * rt)}         r={DOT * 0.7} fill={COLOR.trak} />
       <circle cx={toX(fillet.zT2)} cy={toY(sign * fillet.hT2)} r={DOT * 0.7} fill={COLOR.horn} />
     </g>)}
-    <line x1={toX(fillet.zc)} y1={toY(fillet.hc)} x2={toX(zTrans)} y2={toY(hTrans)} {...S.dimRef} stroke={COLOR.trans} />
-    <text x={toX(fillet.zc)} y={toY(fillet.hc) - 6} {...S.label} textAnchor="middle" fill={COLOR.trans}>
+    <line x1={mx} y1={my} x2={ex} y2={ey} strokeWidth="0.7" stroke={COLOR.trans} markerStart="url(#arrV)" />
+    <text x={ex + ux * 8} y={ey + uy * 8} {...S.label} textAnchor="middle" dominantBaseline="central" fill={COLOR.trans}>
       R {fillet.R.toFixed(fillet.R % 1 ? 1 : 0)}
     </text>
   </>;
