@@ -12,12 +12,17 @@ import { Draufsicht } from "./components/Draufsicht.jsx";
 import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
 import { Ansicht3D } from "./components/Ansicht3D.jsx";
+import { Frequenzgang } from "./components/Frequenzgang.jsx";
 import { usePersistentState, useThrottledValue } from "./hooks.js";
 import { clearSettings } from "./settings.js";
 import { exportDXF } from "./export/dxf.js";
 import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
+import { exportCSV } from "./export/csv.js";
 import { flangeLayout } from "./horn-mesh.js";
+import {
+  airAt, logFrequencies, sampleStep, transverseLimit, areaCurve, simulate, driverSI, PLACEHOLDER_DRIVER,
+} from "./simulation.js";
 
 const THROAT_SIZES = [
   { label: '1"',  diameter: 25.4 },
@@ -27,6 +32,10 @@ const THROAT_SIZES = [
 ];
 const CURVE_LABELS = { linear: "Linear", exponential: "Exponential", hypex: "Hypex" };
 const L_MAX = 1200;   // Obergrenze des L-Reglers ohne Raumecke [mm]
+const SIM_FREQS = logFrequencies(20, 20000, 24);
+const MOUTH_OPTIONS = ["4pi", "2pi", "pi", "pi/2"];
+const MOUTH_LABELS = { "4pi": "4π", "2pi": "2π", "pi": "π", "pi/2": "π/2" };
+const isPlaceholder = d => Object.keys(PLACEHOLDER_DRIVER).every(k => d[k] === PLACEHOLDER_DRIVER[k]);
 
 const formatHz = f => f >= 1000 ? (f / 1000).toFixed(2) + " k" : f.toFixed(0);
 
@@ -61,6 +70,12 @@ export default function App() {
     draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, uebergang: true, flansch: true, bemassung: true,
   });
   const setLayer = key => on => setExportLayers(layers => ({ ...layers, [key]: on }));
+  const [simOn,           setSimOn]           = usePersistentState("simOn", false);
+  const [simMouth,        setSimMouth]        = usePersistentState("simMouth", "2pi");
+  const [simTemp,         setSimTemp]         = usePersistentState("simTemp", 20);
+  const [simPhase,        setSimPhase]        = usePersistentState("simPhase", false);
+  const [driver,          setDriver]          = usePersistentState("driver", PLACEHOLDER_DRIVER);
+  const setDriverValue = key => v => setDriver(d => ({ ...d, [key]: v }));
 
   // Regler reagieren sofort; Rechnung und Ansichten folgen gedrosselt (useThrottledValue): beim
   // Ziehen laufend mit dem jeweils neuesten Wert, mit Pausen für die Eingabe dazwischen. Alles
@@ -69,10 +84,10 @@ export default function App() {
   const live = useMemo(() => ({
     throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
-    edgeOn, edgeR,
+    edgeOn, edgeR, simOn, simMouth, simTemp, driver,
   }), [throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
-    edgeOn, edgeR]);
+    edgeOn, edgeR, simOn, simMouth, simTemp, driver]);
   const p = useThrottledValue(live);
   const rt = p.throatDiam / 2;
 
@@ -132,7 +147,18 @@ export default function App() {
     }, edge) : null,
     [s, rt, profile, fillet, wall, p.flangeOn, p.flangeD, p.dw, p.flangeT, p.holeCount, p.holeCircle, p.holeD, p.holeAngle, edge],
   );
-  const flangeOverRaumecke = flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
+  // 1D-Simulation (Webster, Transfermatrizen) – nur bei eingeschaltetem Frequenzgang
+  const sim = useMemo(() => {
+    if (!s || !p.simOn) return null;
+    const air = airAt(p.simTemp);
+    const curve = areaCurve(s, rt, profile, sampleStep(SIM_FREQS.at(-1), air.c) * 1000);
+    return {
+      result: simulate({ curve, air, driver: driverSI(p.driver, air.rho), mouth: p.simMouth, freqs: SIM_FREQS }),
+      fLimit: transverseLimit(2 * rt / 1000, air.c),
+    };
+  }, [s, rt, profile, p.simOn, p.simTemp, p.simMouth, p.driver]);
+
+  const flangeOverRaumecke =flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
   const design = {
     s, rt, L: LClamped, hMouth: p.hMouth, curve: p.curve, hypexT: p.hypexT, fillet, profile, wall, flange,
     showRaumecke: p.showRaumecke, showWandstaerke: p.showWandstaerke, wandstaerke: p.wandstaerke, edgeR: edge,
@@ -211,6 +237,34 @@ export default function App() {
           </>}
         </Card>}
 
+        <Card title="SIMULATION (1D)">
+          <Toggle label="Frequenzgang" checked={simOn} onChange={setSimOn} />
+          {simOn && <>
+            <Note style={{ letterSpacing: "0.12em", marginBottom: 6 }}>Abstrahlung (Mund)</Note>
+            <SegmentedButtons options={MOUTH_OPTIONS} labels={MOUTH_LABELS} value={simMouth} onChange={setSimMouth} />
+            {simMouth !== "2pi" && <Note style={{ marginTop: -4, marginBottom: 6 }}>Näherung – exakt ist nur 2π (Kolben in Schallwand)</Note>}
+            <Slider label="Lufttemperatur" value={simTemp} min={-10} max={40} step={1} unit="°C" onChange={setSimTemp} />
+            <Note style={{ letterSpacing: "0.12em", margin: "8px 0 6px" }}>Treiber (Thiele-Small)</Note>
+            {isPlaceholder(driver) && <Note style={{ color: UI.error, marginBottom: 6 }}>Platzhalter, keine echten Treiberdaten</Note>}
+            <Slider label="Re"  value={driver.Re}  min={1}    max={16}   step={0.1}  unit="Ω"    onChange={setDriverValue("Re")} />
+            <Slider label="Le"  value={driver.Le}  min={0}    max={1}    step={0.01} unit="mH"   onChange={setDriverValue("Le")} />
+            <Slider label="Bl"  value={driver.Bl}  min={1}    max={40}   step={0.1}  unit="T·m"  onChange={setDriverValue("Bl")} />
+            <SegmentedButtons options={["Mmd", "Mms"]} labels={{ Mmd: "Masse = Mmd", Mms: "Masse = Mms" }} value={driver.massIs} onChange={setDriverValue("massIs")} />
+            <Slider label={driver.massIs} value={driver.mass} min={0.1} max={50} step={0.1} unit="g" onChange={setDriverValue("mass")} />
+            {driver.massIs === "Mms" && <Note style={{ marginTop: -4, marginBottom: 6 }}>Mmd = Mms − Luftlast (beidseitig 8ρa³/3, Annahme)</Note>}
+            <Slider label="Cms" value={driver.Cms} min={1}    max={1000} step={1}    unit="µm/N" onChange={setDriverValue("Cms")} />
+            <Slider label="Rms" value={driver.Rms} min={0.01} max={20}   step={0.01} unit="Ns/m" onChange={setDriverValue("Rms")} />
+            <Slider label="Sd"  value={driver.Sd}  min={1}    max={500}  step={0.5}  unit="cm²"  onChange={setDriverValue("Sd")} />
+            <Slider label="Vtc (Kammer)" value={driver.Vtc} min={0} max={50}   step={0.1} unit="cm³" onChange={setDriverValue("Vtc")} />
+            {driver.Vtc > 0 && <Slider label="Atc (Kammer)" value={driver.Atc} min={0} max={200} step={0.5} unit="cm²" onChange={setDriverValue("Atc")} />}
+            <Slider label="Vrc (Rückk.)" value={driver.Vrc} min={0} max={2000} step={1}   unit="cm³" onChange={setDriverValue("Vrc")} />
+            <Note style={{ marginTop: -2, marginBottom: 6 }}>0 = ohne{driver.Vtc > 0 && driver.Atc === 0 ? "; Atc 0 = Kammer als reine Nachgiebigkeit" : ""}</Note>
+            {!isPlaceholder(driver) && <ExportButton onClick={() => setDriver(PLACEHOLDER_DRIVER)}>⟲ Platzhalter-Treiber</ExportButton>}
+            <Toggle label="Phase anzeigen" checked={simPhase} onChange={setSimPhase} />
+            {sim && <ExportButton onClick={() => exportCSV(sim.result)}>↓ CSV (Frequenzgang)</ExportButton>}
+          </>}
+        </Card>
+
         {s && <>
           <KeyFigures s={s} hMouth={p.hMouth} profile={profile} />
           <Frequencies s={s} rt={rt} hMouth={p.hMouth} />
@@ -244,9 +298,14 @@ export default function App() {
             <Ansicht3D s={s} rt={rt} dw={p.dw} dh={p.dh} hMouth={p.hMouth} curve={p.curve} hypexT={p.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} showRaumecke={p.showRaumecke} />
           </ViewPanel>
         </div>
-        <ViewPanel flex={5}>
-          <Seitenriss s={s} rt={rt} dw={p.dw} dh={p.dh} L={LClamped} hMouth={p.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} />
-        </ViewPanel>
+        <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
+          <ViewPanel flex={1}>
+            <Seitenriss s={s} rt={rt} dw={p.dw} dh={p.dh} L={LClamped} hMouth={p.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} />
+          </ViewPanel>
+          {sim && <ViewPanel flex={1}>
+            <Frequenzgang result={sim.result} fLimit={sim.fLimit} mouth={p.simMouth} showPhase={simPhase} placeholder={isPlaceholder(p.driver)} />
+          </ViewPanel>}
+        </div>
       </div>
     </div>
   );

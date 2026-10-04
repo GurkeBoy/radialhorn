@@ -53,6 +53,10 @@ export const COLOR = {
   fillHorn:     "rgba(134,239,172,0.08)",
   fillFlansch:  "rgba(196,181,253,0.14)",
   fillWand:     "rgba(252,211,77,0.10)",
+  spl:          "#7dd3fc",               // Frequenzgang: Schalldruckpegel
+  imp:          "#a5b4fc",               // Frequenzgang: elektrische Impedanz
+  phase:        "#5f8fa8",               // Frequenzgang: Phase des Schalldrucks
+  fill1D:       "rgba(252,165,165,0.06)", // Frequenzgang: Bereich, in dem das 1D-Modell unsicher ist
 };
 
 /** Radius der Punkt-Markierungen [px]. */
