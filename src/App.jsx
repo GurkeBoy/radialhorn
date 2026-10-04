@@ -224,7 +224,7 @@ export default function App() {
           </ViewPanel>
         </div>
         <ViewPanel flex={5}>
-          <Seitenriss s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} profile={profile} fillet={fillet} flange={flange} />
+          <Seitenriss s={s} rt={rt} dw={dw} dh={dh} L={LClamped} hMouth={hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} />
         </ViewPanel>
       </div>
     </div>

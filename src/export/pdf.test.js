@@ -48,4 +48,21 @@ describe("buildDatasheet", () => {
     expect(bare).toContain("SEITENRISS");
     expect(bare).not.toContain(">340<");
   });
+
+  it("Wandstärke: Schnitt durch die Schale in beiden Zeichnungen, Maß t", () => {
+    const cuts = h => (h.match(/fill="#ececf2"/g) || []).length;
+    expect(cuts(html)).toBe(0);                               // ohne Wandstärke keine Schnittflächen
+    const withWall = buildDatasheet(design({ wall: 37, showWandstaerke: true, wandstaerke: 37 }), ALL, DATE);
+    expect(cuts(withWall)).toBe(4);                           // 2 Zeichnungen × 2 Seiten
+    expect(row(withWall, "Mundbreite")).toBe((2 * s.xMouth).toFixed(0) + " mm");   // Innenmaß
+    expect(withWall.match(/>37</g)).toHaveLength(2);          // Maß t in Draufsicht und Seitenriss
+    expect(cuts(buildDatasheet(design({ wall: 37 }), { ...ALL, bemassung: false }, DATE))).toBe(4);
+  });
+
+  it("mit Flansch zusätzlich dessen Schnitt", () => {
+    const flange = { diameter: 182, thickness: 10 };
+    const h = buildDatasheet(design({ wall: 20, flange }), ALL, DATE);
+    expect((h.match(/fill="#ececf2"/g) || []).length).toBe(8);
+    expect((buildDatasheet(design({ wall: 0, flange }), ALL, DATE).match(/fill="#ececf2"/g) || []).length).toBe(0);
+  });
 });

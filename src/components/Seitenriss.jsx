@@ -2,18 +2,21 @@
 import { useRef } from "react";
 import { hasTraktrix } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash, raumDashCenter } from "../theme.js";
-import { linspace } from "../utils.js";
+import { linspace, nestedLayers } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker } from "./ui.jsx";
 import { Dim } from "./Dim.jsx";
 import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
+import { WandSchnitt } from "./WandSchnitt.jsx";
+import { shellProfileOutline } from "../horn-mesh.js";
 
 /**
  * @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile)
  * @param fillet   Verrundung (computeFillet) oder null – nur für Markierungen
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null
+ * @param wall     Wandstärke [mm]; > 0 zeichnet den Schnitt durch die Schale
  */
-export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange }) {
+export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, wall = 0 }) {
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
@@ -21,7 +24,7 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange }
   if (!s || VW < 10 || VH < 10) return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 
   // ── Abbildung Geometrie (z, h) → Bildschirm ───────────────────────
-  const halfMax = Math.max(dw / 2, hMouth / 2, flange ? flange.diameter / 2 : 0) * 1.05;
+  const halfMax = Math.max(dw / 2, hMouth / 2 + wall, flange ? flange.diameter / 2 : 0) * 1.05;
   const zMin = s.hatTipZ - 10, zMax = s.zApex + 10;
   const mT = Math.min(72, VH * 0.3), mB = Math.min(flange ? 62 : 40, VH * 0.15);   // oben: Titel + zwei Maßlagen
   const scale0 = Math.min((VW - Math.min(80, VW * 0.12) * 2) / (zMax - zMin), (VH - mT - mB) / (2 * halfMax));
@@ -45,9 +48,12 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange }
 
   // Bemaßungslagen
   const dimMouthX  = toX(s.zApex) + 18;
-  const dimThroatX = toX(s.hatTipZ) - 18;
-  const dimDrivX   = toX(s.hatTipZ) - 40;
-  const dimFlangeX = toX(s.hatTipZ) - 62;
+  // links verschachtelt nach Größe: Throat, Treiber, Flansch – das kleinste innen
+  const [throatLayer, drivLayer, flangeLayer] = nestedLayers([2 * rt, dw, flange ? flange.diameter : Infinity]);
+  const leftDimX   = layer => toX(s.hatTipZ) - 18 - 22 * layer;
+  const dimThroatX = leftDimX(throatLayer);
+  const dimDrivX   = leftDimX(drivLayer);
+  const dimFlangeX = leftDimX(flangeLayer);
   const dimLY      = toY(-halfMax) + 16;
   const dimTop1Y   = toY(halfMax) - 18;
   const dimTop2Y   = toY(halfMax) - 40;
@@ -87,6 +93,12 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange }
           {fillet && <FilletMarks fillet={fillet} rt={rt} zTrans={s.zInnerApex} hTrans={hTrans} toX={toX} toY={toY} />}
         </>}
 
+        {wall > 0 && (() => {
+          const zShell = flange ? flange.thickness : 0;
+          const inner = linspace(zShell, s.zApex, 300).map(z => [profile(z), z]);
+          return <WandSchnitt inner={inner} outer={shellProfileOutline(s, rt, profile, wall, zShell)}
+            closeThroat={!flange} map={(h, z) => [toX(z), toY(h)]} />;
+        })()}
         {flange && <FlanschSchnitt flange={flange} map={(h, z) => [toX(z), toY(h)]}
           inner={linspace(0, flange.thickness, 30).map(z => [profile(z), z])} />}
 
@@ -95,15 +107,19 @@ export function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange }
         <circle cx={toX(s.zApex)} cy={toY(hMouth/2)} r={DOT} fill={COLOR.arc} />
         <circle cx={toX(s.zApex)} cy={toY(-hMouth/2)} r={DOT} fill={COLOR.arc} />
 
-        {/* Rechts: Mundhöhe */}
+        {/* Rechts: Mundhöhe, als Kette weiter mit der Wandstärke */}
         <Dim p1={[toX(s.zApex), toY(hMouth/2)]} p2={[toX(s.zApex), toY(-hMouth/2)]}
           arrowPos={dimMouthX} color={COLOR.arc} marker="url(#arrV)" label={`${hMouth} mm`} />
-        {/* Links: Throat (1. Lage), Treiberbreite (2. Lage) */}
+        {wall > 0 &&
+          <Dim p1={[toX(s.zApex), toY(hMouth/2 + wall)]} p2={[toX(s.zApex), toY(hMouth/2)]}
+            arrowPos={dimMouthX} color={COLOR.wand} marker="url(#arrV)" label={`${wall} mm`} />
+        }
+        {/* Links: Throat, Treiberbreite, Flansch-Ø – nach Größe verschachtelt */}
         <Dim p1={[toX(0), toY(rt)]} p2={[toX(0), toY(-rt)]}
           arrowPos={dimThroatX} color={COLOR.trak} marker="url(#arrV)" label={`Ø ${(rt*2).toFixed(1)} mm`} />
         <Dim p1={[toX(-dh), toY(dw/2)]} p2={[toX(-dh), toY(-dw/2)]}
           arrowPos={dimDrivX} color={COLOR.dim} marker="url(#arrV)" label={`${dw} mm`} />
-        {/* Links, 3. Lage / unten, 2. Lage: Flansch-Ø und -Dicke */}
+        {/* Flansch-Ø (links, Lage nach Größe) und -Dicke (unten, 2. Lage) */}
         {flange && <>
           <Dim p1={[toX(0), toY(flange.diameter / 2)]} p2={[toX(0), toY(-flange.diameter / 2)]}
             arrowPos={dimFlangeX} color={COLOR.flansch} marker="url(#arrV)" label={`Ø ${flange.diameter.toFixed(0)} mm`} />
