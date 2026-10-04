@@ -153,20 +153,6 @@ export default function App() {
           {showWandstaerke && <Toggle label="Flansch am Throat" checked={flangeOn} onChange={setFlangeOn} />}
         </Card>
 
-        {flange && <Card title="FLANSCH">
-          <Slider label="Durchmesser" value={shown("flangeD", Math.round(flange.diameter))} min={Math.ceil(flange.minDiameter)} max={400} step={1} unit="mm" onChange={setFlangeD} />
-          {flange.limited && <Note style={{ marginTop: -4, marginBottom: 4 }}>mind. {Math.ceil(flange.minDiameter)} mm (umschließt die Schale)</Note>}
-          {flangeOverRaumecke && <Warn>⚠ Flansch ragt über die Raumecke</Warn>}
-          <Slider label="Dicke" value={flangeT} min={2} max={40} step={1} unit="mm" onChange={setFlangeT} />
-          <Slider label="Bohrungen" value={holeCount} min={0} max={12} step={1} unit="" onChange={setHoleCount} />
-          {holeCount > 0 && <>
-            <Slider label="Lochkreis-Ø" value={shown("holeCircle", flange.holes.circle)} min={Math.ceil(flange.minDiameter / 2)} max={Math.floor(flange.diameter)} step={0.1} unit="mm" onChange={setHoleCircle} />
-            <Slider label="Bohrungs-Ø" value={holeD} min={2} max={20} step={0.1} unit="mm" onChange={setHoleD} />
-            <Slider label="Winkellage" value={holeAngle} min={0} max={Math.round(360 / holeCount)} step={1} unit="°" onChange={setHoleAngle} />
-            {flange.invalidHoles > 0 && <Warn>⚠ {flange.invalidHoles} Bohrung{flange.invalidHoles > 1 ? "en" : ""} im Konflikt mit der Schale (rot markiert, nicht gebohrt)</Warn>}
-          </>}
-        </Card>}
-
         <Card title="THROAT">
           <SegmentedButtons
             options={THROAT_SIZES.map(t => t.diameter)}
@@ -202,6 +188,20 @@ export default function App() {
           {filletOn && s && !hasTraktrix(s) && <Warn>Verrundung nur mit Traktrix-Eingang (Lₜ &gt; 0)</Warn>}
           {fillet?.limited && <Warn>Radius zu groß – begrenzt auf {fillet.R.toFixed(1)} mm</Warn>}
         </Card>
+
+        {flange && <Card title="FLANSCH">
+          <Slider label="Durchmesser" value={shown("flangeD", Math.round(flange.diameter))} min={Math.ceil(flange.minDiameter)} max={400} step={1} unit="mm" onChange={setFlangeD} />
+          {flange.limited && <Note style={{ marginTop: -4, marginBottom: 4 }}>mind. {Math.ceil(flange.minDiameter)} mm (umschließt die Schale)</Note>}
+          {flangeOverRaumecke && <Warn>⚠ Flansch ragt über die Raumecke</Warn>}
+          <Slider label="Dicke" value={flangeT} min={2} max={40} step={1} unit="mm" onChange={setFlangeT} />
+          <Slider label="Bohrungen" value={holeCount} min={0} max={12} step={1} unit="" onChange={setHoleCount} />
+          {holeCount > 0 && <>
+            <Slider label="Lochkreis-Ø" value={shown("holeCircle", flange.holes.circle)} min={Math.ceil(flange.minDiameter / 2)} max={Math.floor(flange.diameter)} step={0.1} unit="mm" onChange={setHoleCircle} />
+            <Slider label="Bohrungs-Ø" value={holeD} min={2} max={20} step={0.1} unit="mm" onChange={setHoleD} />
+            <Slider label="Winkellage" value={holeAngle} min={0} max={Math.round(360 / holeCount)} step={1} unit="°" onChange={setHoleAngle} />
+            {flange.invalidHoles > 0 && <Warn>⚠ {flange.invalidHoles} Bohrung{flange.invalidHoles > 1 ? "en" : ""} im Konflikt mit der Schale (rot markiert, nicht gebohrt)</Warn>}
+          </>}
+        </Card>}
 
         {s && <>
           <KeyFigures s={s} hMouth={p.hMouth} profile={profile} />
