@@ -2,6 +2,9 @@
 
 export const FONT = "'DM Mono', monospace";
 
+/** Außenbreite der Seitenleiste mit den Eingaben [px] inkl. Rahmen; das Vollbild einer Ansicht lässt sie frei. */
+export const SIDEBAR_WIDTH = 397;
+
 /** Oberfläche: Hintergründe, Rahmen, Text, Akzent. */
 export const UI = {
   bg:            "#121212",

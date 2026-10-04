@@ -1,6 +1,6 @@
 // Bedienelemente und Rahmen der Seitenleiste und Ansichten.
 import { useState } from "react";
-import { FONT, UI, COLOR } from "../theme.js";
+import { FONT, UI, COLOR, SIDEBAR_WIDTH } from "../theme.js";
 
 const LABEL_WIDTH = 128;   // Breite der Slider-Beschriftung; Warnungen rücken darauf ein
 
@@ -137,7 +137,7 @@ export function FullscreenPanel({ children }) {
   const [full, setFull] = useState(false);
   return (
     <div style={full
-      ? { position: "fixed", inset: 0, zIndex: 1000, background: UI.bg }
+      ? { position: "fixed", top: 0, right: 0, bottom: 0, left: SIDEBAR_WIDTH, zIndex: 1000, background: UI.bg }
       : { position: "relative", width: "100%", height: "100%" }}>
       <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
         <button type="button" onClick={() => setFull(f => !f)} title={full ? "Vollbild beenden" : "Vollbild"} style={{

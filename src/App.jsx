@@ -4,7 +4,7 @@ import {
   createHornMath, hasTraktrix, CURVES, computeFillet, makeProfile,
   mouthArea, verticalMouthAngle, frequencyEstimates,
 } from "./horn-math.js";
-import { FONT, UI } from "./theme.js";
+import { FONT, SIDEBAR_WIDTH, UI } from "./theme.js";
 import {
   Card, Note, Slider, Toggle, SegmentedButtons, Stat, Warn, FullscreenPanel,
 } from "./components/ui.jsx";
@@ -138,7 +138,7 @@ export default function App() {
     <div style={{ background: UI.bg, height: "100vh", overflow: "hidden", color: UI.text, fontFamily: FONT, display: "flex" }}>
 
       {/* Seitenleiste */}
-      <div style={{ width: 368, flexShrink: 0, borderRight: `1px solid ${UI.border}`, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: SIDEBAR_WIDTH, boxSizing: "border-box", flexShrink: 0, borderRight: `1px solid ${UI.border}`, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column" }}>
 
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: UI.accent, letterSpacing: "0.1em" }}>RADIALHORN</div>
