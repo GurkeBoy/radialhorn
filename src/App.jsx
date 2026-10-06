@@ -21,7 +21,7 @@ import { exportSTL } from "./export/stl.js";
 import { exportCSV } from "./export/csv.js";
 import { flangeLayout } from "./horn-mesh.js";
 import {
-  airAt, logFrequencies, sampleStep, transverseLimit, areaCurve, simulate, driverSI, PLACEHOLDER_DRIVER,
+  airAt, logFrequencies, transverseLimit, areaCurve, simulate, driverSI, PLACEHOLDER_DRIVER,
 } from "./simulation.js";
 
 const THROAT_SIZES = [
@@ -147,16 +147,17 @@ export default function App() {
     }, edge) : null,
     [s, rt, profile, fillet, wall, p.flangeOn, p.flangeD, p.dw, p.flangeT, p.holeCount, p.holeCircle, p.holeD, p.holeAngle, edge],
   );
-  // 1D-Simulation (Webster, Transfermatrizen) – nur bei eingeschaltetem Frequenzgang
+  // 1D-Simulation (Webster, Transfermatrizen) – nur bei eingeschaltetem Frequenzgang. S(x) hängt
+  // nur an der Geometrie: Treiber, Abstrahlung und Temperatur rechnen nur die Kette neu.
+  const areaCurveSI = useMemo(() => s && p.simOn ? areaCurve(s, rt, profile) : null, [s, rt, profile, p.simOn]);
   const sim = useMemo(() => {
-    if (!s || !p.simOn) return null;
+    if (!areaCurveSI) return null;
     const air = airAt(p.simTemp);
-    const curve = areaCurve(s, rt, profile, sampleStep(SIM_FREQS.at(-1), air.c) * 1000);
     return {
-      result: simulate({ curve, air, driver: driverSI(p.driver, air.rho), mouth: p.simMouth, freqs: SIM_FREQS }),
+      result: simulate({ curve: areaCurveSI, air, driver: driverSI(p.driver, air.rho), mouth: p.simMouth, freqs: SIM_FREQS }),
       fLimit: transverseLimit(2 * rt / 1000, air.c),
     };
-  }, [s, rt, profile, p.simOn, p.simTemp, p.simMouth, p.driver]);
+  }, [areaCurveSI, rt, p.simTemp, p.simMouth, p.driver]);
 
   const flangeOverRaumecke =flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
   const design = {

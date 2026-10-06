@@ -46,8 +46,15 @@ export function logFrequencies(fMin = 20, fMax = 20000, perOctave = 24) {
   return Array.from({ length: n + 1 }, (_, i) => fMin * (fMax / fMin) ** (i / n));
 }
 
-/** Größte Abtastweite von S(x) [m] für die höchste Frequenz: λmin / 20. */
-export const sampleStep = (fMax, c) => c / fMax / 20;
+/** Größte Abschnittslänge [m] für eine Frequenz: λ / 20. */
+export const sampleStep = (f, c) => c / f / 20;
+
+/**
+ * Abtastweite der Geometrie für areaCurve [mm]. Gemessen gegen eine Abtastung mit 0,25 mm
+ * (Standardhorn, lange Traktrix, ohne Traktrix, Klothoide + Verrundung): Abweichung im SPL
+ * < 0,001 dB, in Z_el < 0,01 %. Bleibt unter λ/10 bei 20 kHz (1,7 mm).
+ */
+export const GEOMETRY_STEP_MM = 1.5;
 
 /**
  * Frequenz [Hz], ab der im Hals Querwellen möglich sind (Breite = λ/2) – ab hier ist das
@@ -110,6 +117,39 @@ export function propagate(curve, k, rhoC, load) {
   return { p, U };
 }
 
+/**
+ * Längste Abschnitte [m] auch bei tiefen Frequenzen. Unterhalb der Horn-Grenzfrequenz bestimmt
+ * die Krümmung von S(x) das Verhalten, nicht die Wellenlänge – gröbere Abschnitte verschieben
+ * dort die (scharfen) Resonanzen: mit λ/20 allein bis 1,2 dB bei langer Traktrix. Gemessen
+ * gegen volle Auflösung (5 Geometrien, 20 Hz – 20 kHz): 3 mm ≤ 0,011 dB, 5 mm ≤ 0,025 dB.
+ */
+export const MAX_SEGMENT = 0.003;
+
+/**
+ * Vergröberte Fassungen der Flächenkurve: Stufe j hat Abschnitte höchstens h0·2^j lang, die
+ * letzte genau hMax (gierig ausgedünnt; Hals, erste Wellenfront und Mund bleiben). Auch
+ * Stufe 0 wird ausgedünnt – areaCurve liegt stellenweise viel dichter als nötig (ungleiche
+ * Wellenfront-Abstände). Weil jeder Abschnitt ein exakter Konus ist, liegt der Fehler einer
+ * Stufe allein in der gröberen Form.
+ * @returns {{ h, curve }[]}  aufsteigend in h
+ */
+export function curveLevels(curve, h0, hMax = MAX_SEGMENT) {
+  const levels = [];
+  const n = curve.x.length - 1;
+  for (let h = Math.min(h0, hMax); !(h <= levels.at(-1)?.h); h = Math.min(2 * h, hMax)) {
+    const idx = n > 1 ? [0, 1] : [0];
+    let i = idx.at(-1);
+    while (i < n) {
+      let k = i + 1;
+      while (k < n && curve.x[k + 1] - curve.x[i] <= h) k++;
+      idx.push(k);
+      i = k;
+    }
+    levels.push({ h, curve: { x: idx.map(j => curve.x[j]), S: idx.map(j => curve.S[j]) } });
+  }
+  return levels;
+}
+
 /** Eingangsimpedanz [Pa·s/m³] des Horns (S(x)) bei Wellenzahl k mit Last am Ende. */
 export function inputImpedance(curve, k, rhoC, load) {
   const { p, U } = propagate(curve, k, rhoC, load);
@@ -120,13 +160,33 @@ export function inputImpedance(curve, k, rhoC, load) {
 // STRAHLUNGSIMPEDANZ
 // ──────────────────────────────────────────────────────────────────
 
+/** Ab hier werden J1 und H1 asymptotisch berechnet (Restfehler < 1e-9). */
+const ASYMPTOTIC_X = 30;
+
+/**
+ * J1 und Y1 für große x aus der Hankel-Asymptotik (Abramowitz/Stegun 9.2.5–9.2.10, μ = 4):
+ * J1 = √(2/πx)·(P cos χ − Q sin χ), Y1 = √(2/πx)·(P sin χ + Q cos χ), χ = x − 3π/4.
+ */
+function hankelAsymptotic(x) {
+  const m = 4, y = 8 * x;
+  const P = 1 - (m - 1) * (m - 9) / (2 * y ** 2) + (m - 1) * (m - 9) * (m - 25) * (m - 49) / (24 * y ** 4);
+  const Q = (m - 1) / y - (m - 1) * (m - 9) * (m - 25) / (6 * y ** 3)
+    + (m - 1) * (m - 9) * (m - 25) * (m - 49) * (m - 81) / (120 * y ** 5);
+  const chi = x - 3 * Math.PI / 4, a = Math.sqrt(2 / (Math.PI * x));
+  return {
+    j1: a * (P * Math.cos(chi) - Q * Math.sin(chi)),
+    y1: a * (P * Math.sin(chi) + Q * Math.cos(chi)),
+  };
+}
+
 /**
  * Besselfunktion J1(x), x ≥ 0: J1(x) = (1/π)∫₀^π cos(θ − x·sin θ) dθ. Der Integrand ist
  * gerade und 2π-periodisch, die Trapezregel konvergiert deshalb exponentiell – mit
  * x + 40 Stützstellen auf Maschinengenauigkeit.
  */
 export function besselJ1(x) {
-  const n = Math.ceil(Math.abs(x)) + 40, h = Math.PI / n;
+  if (x >= ASYMPTOTIC_X) return hankelAsymptotic(x).j1;
+  const n =Math.ceil(Math.abs(x)) + 40, h = Math.PI / n;
   let sum = (Math.cos(0) + Math.cos(Math.PI)) / 2;   // Endpunkte: cos(0 − 0) und cos(π − 0)
   for (let i = 1; i < n; i++) sum += Math.cos(i * h - x * Math.sin(i * h));
   return sum * h / Math.PI;
@@ -134,10 +194,15 @@ export function besselJ1(x) {
 
 /**
  * Struve-Funktion H1(x), x ≥ 0. Kleine x: Potenzreihe
- * H1(x) = Σ (−1)^m (x/2)^{2m+2} / (Γ(m+3/2)·Γ(m+5/2)); große x: Integraldarstellung
- * H1(x) = (2x/π)∫₀^{π/2} sin(x·cos θ)·sin²θ dθ, Simpson mit Schrittweite ≪ 1/x.
+ * H1(x) = Σ (−1)^m (x/2)^{2m+2} / (Γ(m+3/2)·Γ(m+5/2)); mittlere x: Integraldarstellung
+ * H1(x) = (2x/π)∫₀^{π/2} sin(x·cos θ)·sin²θ dθ, Simpson mit Schrittweite ≪ 1/x; große x:
+ * H1 = Y1 + (2/π)·(1 + 1/x² − 3/x⁴ + 45/x⁶ − 1575/x⁸) (Abramowitz/Stegun 12.1.31).
  */
 export function struveH1(x) {
+  if (x >= ASYMPTOTIC_X) {
+    const u = 1 / (x * x);
+    return hankelAsymptotic(x).y1 + 2 / Math.PI * (1 + u * (1 + u * (-3 + u * (45 - 1575 * u))));
+  }
   if (x < 16) {
     // Γ(3/2) = √π/2, Γ(5/2) = 3√π/4; Folgeglieder rekursiv
     let term = (x / 2) ** 2 / (Math.sqrt(Math.PI) / 2 * (3 * Math.sqrt(Math.PI) / 4));
@@ -251,17 +316,22 @@ export function driverResponse(dr, air, f, zThroat, uRatio, e) {
  * @param driver   Treiber in SI (driverSI)
  * @param mouth    "2pi" | "4pi" | "pi" | "pi/2"
  * @param freqs    Frequenzen [Hz]
+ * @param adaptive je Frequenz die gröbste Stufe (curveLevels) mit Abschnitten ≤ λ/20 und
+ *                 ≤ MAX_SEGMENT statt immer der vollen Kurve
  * @returns {{ f, spl, phase, zel, zThroat }}
  *   spl [dB] in distance (Standard 1 m) bei voltage (Standard 2,83 V eff), phase [°] des
  *   Drucks (ohne Laufzeit über distance), zel [Ω] komplex, zThroat komplex normiert auf ρc/S_Hals
  */
-export function simulate({ curve, air, driver, mouth = "2pi", freqs, voltage = 2.83, distance = 1 }) {
+export function simulate({ curve, air, driver, mouth = "2pi", freqs, voltage = 2.83, distance = 1, adaptive = true }) {
   const rhoC = air.rho * air.c, omega = SOLID_ANGLE[mouth];
   const S0 = curve.S[0], Sm = curve.S.at(-1);
+  const levels = adaptive ? curveLevels(curve, sampleStep(Math.max(...freqs), air.c)) : [{ h: 0, curve }];
   const out = { f: freqs, spl: [], phase: [], zel: [], zThroat: [] };
   for (const f of freqs) {
-    const w = 2 * Math.PI * f, k = w / air.c;
-    const { p, U } = propagate(curve, k, rhoC, radiationImpedance(Sm, k, rhoC, mouth));
+    const w = 2 * Math.PI * f, k = w / air.c, hMax = sampleStep(f, air.c);
+    let level = levels[0];
+    for (const l of levels) if (l.h <= hMax) level = l;
+    const { p, U } = propagate(level.curve, k, rhoC, radiationImpedance(Sm, k, rhoC, mouth));
     const zThroat = div(p, U);
     const { zel, uMouth } = driverResponse(driver, air, f, zThroat, inv(U), voltage);
     const pr = mul(cx(0, w * air.rho / (omega * distance)), uMouth);
@@ -285,17 +355,31 @@ export function simulate({ curve, air, driver, mouth = "2pi", freqs, voltage = 2
  * geometrisch nicht genau zusammen). Ab der ersten Wellenfront so fein abgetastet, dass kein
  * Abstand größer als stepMm ist; der Übergang Hals → erste Wellenfront ist ein einzelner
  * Konusabschnitt (dazwischen liefert die Geometrie keine Wellenfront, der Konus ist exakt).
- * @param stepMm  größte Abtastweite [mm] (sampleStep · 1000)
+ * Gleichmäßig an der Wand abgetastet lägen die Wellenfronten auf der Achse sehr ungleich
+ * dicht (bei langer Traktrix um ein Vielfaches). Deshalb: grobe Probe, dann die Wandpunkte so
+ * verteilen, dass die Wellenfronten auf der Achse etwa gleichmäßig liegen; Lücken, die danach
+ * noch zu groß sind, werden halbiert.
+ * @param stepMm  größte Abtastweite [mm]
  */
-export function areaCurve(s, rt, profile, stepMm) {
-  let n = Math.max(20, Math.ceil(s.zMouth / stepMm));
+export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM) {
+  const probe = crossSection(s, profile, 64).slice(1);   // ohne die bis z = 0 verlängerte Kopie
+  let walls = [probe[0].zWall];
+  for (let i = 1; i < probe.length; i++) {
+    const a = probe[i - 1], b = probe[i];
+    const m = Math.ceil((b.z - a.z) / (0.9 * stepMm));
+    for (let j = 1; j <= m; j++) walls.push(a.zWall + (b.zWall - a.zWall) * j / m);
+  }
   let pts;
-  for (let pass = 0; pass < 4; pass++) {
-    pts = crossSection(s, profile, n).slice(1);   // ohne die bis z = 0 verlängerte Kopie
-    let maxDz = 0;
-    for (let i = 1; i < pts.length; i++) maxDz = Math.max(maxDz, pts[i].z - pts[i - 1].z);
-    if (maxDz <= stepMm) break;
-    n = Math.ceil(n * maxDz / stepMm * 1.05);
+  for (let pass = 0; pass < 6; pass++) {
+    pts = crossSection(s, profile, 0, walls).slice(1);
+    const refined = [pts[0].zWall];
+    let tooWide = false;
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i].z - pts[i - 1].z > stepMm) { refined.push((pts[i - 1].zWall + pts[i].zWall) / 2); tooWide = true; }
+      refined.push(pts[i].zWall);
+    }
+    if (!tooWide) break;
+    walls = refined;
   }
   const x = [0], S = [2 * rt * 2 * profile(0) * 1e-6];
   for (const { z, A } of pts) {
