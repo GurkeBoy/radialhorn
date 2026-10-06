@@ -3,6 +3,7 @@ import {
   airAt, logFrequencies, sampleStep, transverseLimit, cx, abs,
   coneMatrix, propagate, inputImpedance, besselJ1, struveH1, radiationImpedance,
   mmdFromMms, driverSI, driverResponse, PLACEHOLDER_DRIVER, simulate, areaCurve, sampleArea,
+  curveLevels, GEOMETRY_STEP_MM, MAX_SEGMENT,
 } from "./simulation.js";
 import { createHornMath, makeProfile, computeFillet, mouthArea, crossSection } from "./horn-math.js";
 import { buildCSV } from "./export/csv.js";
@@ -172,6 +173,17 @@ describe("Strahlungsimpedanz", () => {
     expect(besselJ1(10)).toBeCloseTo(0.0434727462, 10);
   });
 
+  it("J1 asymptotisch (x ≥ 30) gegen die Integraldarstellung, auch an der Bereichsgrenze", () => {
+    // J1(x) = (1/π)∫₀^π cos(θ − x sin θ) dθ, Trapezregel (periodischer Integrand)
+    const ref = x => {
+      const n = Math.ceil(x) + 80, h = Math.PI / n;
+      let s = (1 + Math.cos(Math.PI)) / 2;
+      for (let i = 1; i < n; i++) s += Math.cos(i * h - x * Math.sin(i * h));
+      return s * h / Math.PI;
+    };
+    for (const x of [29.99, 30, 31.7, 77.3, 300, 1000]) expect(besselJ1(x)).toBeCloseTo(ref(x), 9);
+  });
+
   it("H1 gegen Tabellenwerte und gegen eine unabhängige, feine Integration", () => {
     expect(struveH1(1)).toBeCloseTo(0.1984573362, 9);
     expect(struveH1(2)).toBeCloseTo(0.6467637283, 9);
@@ -182,7 +194,8 @@ describe("Strahlungsimpedanz", () => {
       for (let i = 0; i <= n; i++) s += (i === 0 || i === n ? 1 : i % 2 ? 4 : 2) * Math.sin(x * Math.cos(i * h)) * Math.sin(i * h) ** 2;
       return 2 * x / Math.PI * h / 3 * s;
     };
-    for (const x of [0.5, 5, 12, 15.99, 16, 40, 150, 400]) expect(struveH1(x)).toBeCloseTo(ref(x), 7);
+    // Bereichsgrenzen: Reihe | Simpson bei 16, Simpson | Asymptotik bei 30
+    for (const x of [0.5, 5, 12, 15.99, 16, 29.99, 30, 40, 150, 400]) expect(struveH1(x)).toBeCloseTo(ref(x), 7);
   });
 
   it("2π-Kolben: Grenzwerte für kleine und große ka", () => {
@@ -272,18 +285,19 @@ describe("Treiber", () => {
 describe("Geometrie → S(x)", () => {
   const RT = 25.4;
   const cases = [
-    ["mit Traktrix", createHornMath(140), 60, false],
-    ["ohne Traktrix", createHornMath(140), 0, false],
-    ["Klothoide", createHornMath(140, { clothoid: 30 }), 60, false],
-    ["Verrundung", createHornMath(140), 60, true],
+    ["mit Traktrix", createHornMath(140), 500, 60, false],
+    ["ohne Traktrix", createHornMath(140), 500, 0, false],
+    ["lange Traktrix", createHornMath(140), 700, 345, false],
+    ["Klothoide", createHornMath(140, { clothoid: 30 }), 500, 60, false],
+    ["Verrundung", createHornMath(140), 500, 60, true],
   ];
-  for (const [name, math, Lt, withFillet] of cases) {
+  for (const [name, math, L, Lt, withFillet] of cases) {
     it(`areaCurve ${name}: ebener Hals, monoton, fein genug, Mund = mouthArea`, () => {
-      const s = math.solveHorn(500, Lt, RT, 182, 90);
+      const s = math.solveHorn(L, Lt, RT, 182, 90);
       const fillet = withFillet ? computeFillet(s, RT, 200, "exponential", 0.5, 100) : null;
       const profile = makeProfile(s, RT, 200, "exponential", 0.5, fillet);
-      const step = sampleStep(20000, AIR.c) * 1000;
-      const { x, S } = areaCurve(s, RT, profile, step);
+      const step = GEOMETRY_STEP_MM;
+      const { x, S } = areaCurve(s, RT, profile);
       expect(x[0]).toBe(0);
       expect(S[0]).toBeCloseTo((2 * RT) ** 2 * 1e-6, 12);
       // x[1] = erste Wellenfront (Übergang vom ebenen Hals als ein Konusabschnitt)
@@ -296,13 +310,68 @@ describe("Geometrie → S(x)", () => {
       expect(S.at(-1)).toBeCloseTo(mouthArea(s, 200) * 1e-6, 9);
     });
   }
+
+  it("Abtastweite der Geometrie: gegenüber 0,25 mm < 0,002 dB und < 0,02 % in Z_el", () => {
+    const freqs = logFrequencies(20, 20000, 6), driver = driverSI(PLACEHOLDER_DRIVER, AIR.rho);
+    for (const [L, Lt, curve] of [[500, 60, "exponential"], [700, 345, "hypex"], [500, 0, "exponential"]]) {
+      const s = createHornMath(140).solveHorn(L, Lt, RT, 182, 90);
+      const profile = makeProfile(s, RT, 200, curve, 0.5);
+      const run = step => simulate({ curve: areaCurve(s, RT, profile, step), air: AIR, driver, freqs, adaptive: false });
+      const ref = run(0.25), r = run(GEOMETRY_STEP_MM);
+      for (let i = 0; i < freqs.length; i++) {
+        expect(Math.abs(r.spl[i] - ref.spl[i])).toBeLessThan(0.002);
+        expect(relErr(r.zel[i], ref.zel[i])).toBeLessThan(2e-4);
+      }
+    }
+  });
+});
+
+describe("Abtastung je Frequenz", () => {
+  const s = createHornMath(140).solveHorn(700, 345, 25.4, 182, 90);
+  const curve = areaCurve(s, 25.4, makeProfile(s, 25.4, 200, "hypex", 0.5));
+  const h0 = sampleStep(20000, AIR.c);
+  const levels = curveLevels(curve, h0);
+
+  it("curveLevels: h verdoppelt bis MAX_SEGMENT, Hals/erste Wellenfront/Mund bleiben, Abschnitte ≤ h", () => {
+    expect(levels[0].h).toBe(h0);
+    expect(levels.at(-1).h).toBe(MAX_SEGMENT);
+    for (let j = 0; j < levels.length; j++) {
+      const { h, curve: c } = levels[j];
+      if (j > 0) {
+        expect(h).toBe(Math.min(2 * levels[j - 1].h, MAX_SEGMENT));
+        expect(c.x.length).toBeLessThanOrEqual(levels[j - 1].curve.x.length);
+      }
+      expect([c.x[0], c.x[1], c.x.at(-1)]).toEqual([curve.x[0], curve.x[1], curve.x.at(-1)]);
+      expect(c.S.at(-1)).toBe(curve.S.at(-1));
+      for (let i = 2; i < c.x.length; i++) {
+        const gap = c.x[i] - c.x[i - 1];
+        // länger als h nur, wo schon die volle Kurve einen so langen Abschnitt hat
+        if (gap > h) expect(curve.x.indexOf(c.x[i]) - curve.x.indexOf(c.x[i - 1])).toBe(1);
+      }
+    }
+  });
+
+  it("adaptiv = volle Auflösung (< 0,02 dB, < 0,2 % in Z_el), bei viel weniger Abschnitten", () => {
+    const freqs = logFrequencies(20, 20000, 12), driver = driverSI(PLACEHOLDER_DRIVER, AIR.rho);
+    for (const mouth of ["2pi", "pi/2"]) {
+      const full = simulate({ curve, air: AIR, driver, freqs, mouth, adaptive: false });
+      const fast = simulate({ curve, air: AIR, driver, freqs, mouth });
+      for (let i = 0; i < freqs.length; i++) {
+        expect(Math.abs(fast.spl[i] - full.spl[i])).toBeLessThan(0.02);
+        expect(relErr(fast.zel[i], full.zel[i])).toBeLessThan(2e-3);
+      }
+    }
+    // tiefe Frequenzen laufen über die gröbste Stufe (Abschnitte bis 3 mm statt ≤ 1,5 mm)
+    expect(levels.at(-1).curve.x.length).toBeLessThan(0.6 * curve.x.length);
+    expect(levels.at(-1).curve.x.length).toBeGreaterThan((curve.x.at(-1) - curve.x[1]) / MAX_SEGMENT);
+  });
 });
 
 describe("simulate", () => {
   const s = createHornMath(140).solveHorn(500, 60, 25.4, 182, 90);
   const profile = makeProfile(s, 25.4, 200, "exponential", 0.5);
   const freqs = logFrequencies(20, 20000, 6);
-  const curve = areaCurve(s, 25.4, profile, sampleStep(20000, AIR.c) * 1000);
+  const curve = areaCurve(s, 25.4, profile);
   const r = simulate({ curve, air: AIR, driver: driverSI(PLACEHOLDER_DRIVER, AIR.rho), freqs });
 
   it("liefert endliche Werte für alle Frequenzen", () => {
