@@ -10,7 +10,8 @@ React + Vite + Tauri App zur Berechnung und Visualisierung von Radialhörnern mi
 | `npm run tauri dev` | Desktop-App (startet Vite selbst, Port 1420 muss frei sein) |
 | `npm test` | Vitest |
 | `npm run lint` | ESLint (inkl. React-Hook-Regeln) |
-| `npm run hornresp` | Referenzhörner für den Hornresp-Vergleich neu rechnen → `docs/hornresp-referenz.md`, `docs/hornresp/*.csv` |
+| `npm run hornresp` | Hornresp-Referenzdokument neu erzeugen → `validation/hornresp/referenz.md`, `modell-*.csv` |
+| `npm run hornresp:import -- <Fall> <Export.txt>` | Hornresp-Export → Referenzdatei `validation/hornresp/hornresp-<Fall>.csv` |
 
 Vor jedem Commit: `npm run lint` und `npm test` grün.
 
@@ -44,8 +45,10 @@ src/
     csv.js                 — CSV-Export des Frequenzgangs
     download.js            — Datei-Download
   *.test.js                — Vitest, neben dem getesteten Modul
-scripts/hornresp-referenz.js — Referenzhörner für den Hornresp-Vergleich (npm run hornresp)
-docs/hornresp-referenz.md  — Hornresp-Eingaben und Stützwerte (erzeugt), docs/hornresp/*.csv voller Frequenzgang
+validation/                — Prüfcode und Referenzdaten außerhalb der App (README.md)
+  hornresp/                — Abgleich mit Hornresp: faelle.js (Fälle, einzige Quelle), modell.js (Hornresp-Konventionen),
+                             hornresp-<Fall>.csv (Referenzdaten mit Herkunftskopf), hornresp.test.js, referenz.js → referenz.md,
+                             import.js (Export → Referenzdatei)
 ```
 
 ## Architektur
@@ -109,9 +112,9 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 - **Auflösung je Frequenz** (`curveLevels`, `simulate({ adaptive })`): je Frequenz die gröbste ausgedünnte Stufe mit Abschnitten ≤ λ/20 **und** ≤ `MAX_SEGMENT` = 3 mm. Die feste Obergrenze ist nötig: unterhalb der Horn-Grenzfrequenz bestimmt die Krümmung von S(x) das Verhalten, nicht λ – mit λ/20 allein verschoben sich scharfe Resonanzen, bis 1,2 dB bei langer Traktrix. Mit 3 mm ≤ 0,011 dB gegenüber voller Auflösung (5 Geometrien), 5 mm wären ≤ 0,025 dB. Faktor 5–10 weniger Abschnitte.
 - **Mund** (`radiationImpedance`): Kolben gleicher Fläche (Mund ist Sektor × Höhe, kein Kreis – bekannter Fehler, Hornresp nimmt dasselbe an). 2π exakt (J1, Struve-H1; ab x = 30 Hankel- bzw. Struve-Asymptotik statt Integration, Fehler < 1e-9), 4π/π/π/2 als Näherung: dieselbe Formel mit a' = a·√(2π/Ω) – Tiefton-Resistanz ρck²/Ω exakt, 4π-Mündungskorrektur 0,60·a (Levine–Schwinger 0,61·a). π = Raumecke zweier Wände, π/2 zusätzlich am Boden/an der Decke. Standard „Auto“ (Einstellung `abstrahlung`): mit Raumecke π, sonst 2π – Boden und Decke liegen bei Ohrhöhe im Arbeitsbereich des Horns weiter als λ/4 entfernt.
 - **Treiber** (`driverResponse`): Re + jωLe, Bl, Mmd (ohne Luftlast, die liefert das Horn), Cms, Rms, Sd. Kompressionskammer Vtc mit Atc als kurzes Rohr (Fläche Atc, Länge Vtc/Atc; im Tiefton = Nachgiebigkeit parallel plus Masse der Luftschicht), mit Atc = 0 reine Nachgiebigkeit; Rückkammer Vrc optional, Standard aus (Rückseite unbelastet). Masse wahlweise als Mms: Mmd = Mms − 2·8ρa³/3 (Annahme: an der Schallwand gemessen). **Platzhalter-Treiber** (`PLACEHOLDER_DRIVER`, generischer 2"-Kompressionstreiber) – UI und Diagramm kennzeichnen ihn.
-- **Ausgabe** (`simulate`): SPL bei 1 m und 2,83 V eff, Mund als Punktquelle in den Raumwinkel Ω: p = jωρ·U_Mund/(Ω·r); Phase des Drucks ohne Laufzeit über r; Z_el komplex; Halsimpedanz normiert auf ρc/S_Hals.
+- **Ausgabe** (`simulate`): SPL bei 1 m und 2,83 V eff **aus der abgestrahlten Leistung** wie Hornresp („constant directivity SPL“): W = Re(Z_r)·|U_Mund|² gleichmäßig auf Ω, |p| = √(W·ρc/Ω)/r. Im Tiefton gleich dem Monopol ωρ|U|/(Ω·r); der Achsendruck eines ebenen Kolbens (früher verwendet) läge oberhalb ~1 kHz bis 20 dB höher – für den gekrümmten Mund eines Radialhorns unrealistisch. Phase wie beim Monopol (j·U), ohne Laufzeit über r; Z_el komplex; Halsimpedanz normiert auf ρc/S_Hals.
 - **1D-Grenze:** ab `transverseLimit` = c/(2·Halsbreite) (2": ≈ 3,4 kHz) sind im Hals Querwellen möglich; das Diagramm schattiert den Bereich als „1D unsicher“ (Faustregel). Nicht die Mundbreite: am Mund wird abgestrahlt, die Grenze läge dort bei ~250 Hz und wäre bedeutungslos.
-- **Hornresp-Vergleich:** prüft nur den Solver, an Formen, die beide exakt kennen (Konus, Konus + Exponential, Konus mit Kammer) – `npm run hornresp`.
+- **Hornresp-Vergleich** (Hornresp 60.50, `validation/`, `npm run hornresp`): prüft den Solver an Formen, die beide exakt kennen. Fall A (Konus), B (Konus + Kammer) und C (Konus + Exponential, Knick in S(x)) stimmen über alle 533 Frequenzen: Halsimpedanz auf 1e-4, Ze auf 0,01 %, SPL auf 0,01 dB (`validation/hornresp/hornresp.test.js` gegen die Referenzdateien `hornresp-<Fall>.csv`: nur f, Ra, Xa, Ze, SPL, mit Kopf zu Version, Eingaben und Einstellungen; Roh-Exporte nicht im Repo – Open Source geplant, Hornresp „All rights reserved“). Hornresps Konventionen bei Vrc = 0, die von der App abweichen: Rückseite offen (Kolben Sd, 2π) – belastet die Membran und strahlt mit ab („Combined“, kohärent, Weglänge 0); nachgebildet in `validation/hornresp/modell.js`. Luft in Hornresp fest c = 344 m/s, ρ = 1,205 kg/m³ (Referenz rechnet damit). Hornresp lehnt einen Einzel-Konus mit S3 = 0 ab, deshalb zwei Con-Segmente gleicher Steigung von √S. Die Kammer rechnet Hornresp wie die App als Rohr (als reine Nachgiebigkeit wären es bis 1,8 dB Abweichung).
 - **CSV** (`export/csv.js`): Komma, Dezimalpunkt, eine Kopfzeile: f, SPL, Phase, |Z_el|, Phase Z_el, Re/Im Z_el, Re/Im Halsimpedanz (normiert).
 
 ## Koordinatensysteme
@@ -193,4 +196,5 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung, Flansch), PDF (Kennwerte, Maßstab, Layer)
 - `settings.test.js` – Einstellungen: Rundlauf, Typprüfung (falscher Typ, kaputtes JSON, NaN → Standard), null = automatisch, Layer-Auswahl zusammengeführt, Zurücksetzen
 - `simulation.test.js` – 1D-Simulation: Transfermatrix (det = 1, Zylinder = ebene Welle, Unterteilen ändert nichts), Zylinder offen/schallhart (Resonanzen c/2L, c/4L) und mit 2π-Abschluss (Mündungskorrektur 8a/3π), unendlicher Konus (exakt), unendliches Exponentialhorn, Energieerhaltung, Konvergenz; J1/H1 gegen Tabellenwerte und unabhängige Integration, Strahlungsimpedanz-Grenzwerte und Raumwinkel; Treiber (Z_el bei fs, Direktstrahler-SPL, Kammer als Rohr = Nachgiebigkeit, Rückkammer); `areaCurve` (ebener Hals, Abtastweite, Mundfläche); CSV
+- `validation/hornresp/hornresp.test.js` – Abgleich mit Hornresp-Referenzdateien (Fall A, B, C: Ra, Xa, Ze, SPL über 533 Frequenzen), App-SPL = Horn-Anteil des Hornresp-Modells
 - `utils.test.js`
