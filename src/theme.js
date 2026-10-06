@@ -16,17 +16,33 @@ export const UI = {
   borderCard:    "#292929",
   borderStat:    "#2e2e2e",
   borderControl: "#303030",
+  // Textstufen; Kontrast auf UI.card (#1a1a1a): text 14:1, label 6,6:1, faint 4,7:1, muted 4,3:1
   text:          "#e4e4e4",
-  label:         "#8a8a8a",
+  label:         "#9e9e9e",
   value:         "#9a9a9a",
-  muted:         "#6e6e6e",
+  muted:         "#808080",
   subtle:        "#404040",
-  faint:         "#5e5e5e",
+  faint:         "#858585",
   accent:        "#d6cbb8",
   accentSoft:    "rgba(214,203,184,0.15)",
   overlay:       "rgba(20,20,20,0.85)",
   error:         "#fca5a5",
+  errorSoft:     "rgba(252,165,165,0.07)",
+  scrollThumb:   "#2e2e2e",
+  scrollThumbHover: "#3c3c3c",
 };
+
+/** Globale Regeln (main.jsx): dunkle, schmale Scrollbars; Zahlenfelder ohne Pfeiltasten. */
+export const GLOBAL_CSS = `
+  * { scrollbar-width: thin; scrollbar-color: ${UI.scrollThumb} transparent; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: ${UI.scrollThumb}; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: ${UI.scrollThumbHover}; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  button:focus-visible, input:focus-visible { outline: 1px solid ${UI.accent}; outline-offset: 1px; }
+`;
 
 /** Zeichnungen: jede Geometrie hat ihre Farbe, Bemaßungen übernehmen sie. */
 export const COLOR = {

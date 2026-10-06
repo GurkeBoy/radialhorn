@@ -42,6 +42,10 @@ export const Frequenzgang = memo(function Frequenzgang({ result, fLimit, mouth, 
   const gyImp = v => yImp0 + (1 - v / zTop) * hImp;
   const gyPh = v => ySpl0 + (180 - v) / 360 * hSpl;
 
+  // Frequenz-Beschriftungen nur mit genug Abstand (schmales Panel): bei Bedarf jede zweite weglassen
+  const ticksInRange = F_TICKS.filter(v => v >= fMin && v <= fMax);
+  const minGap = Math.min(...ticksInRange.slice(1).map((v, i) => gx(v) - gx(ticksInRange[i])));
+  const fLabels = minGap >= 26 ? ticksInRange : ticksInRange.filter((v, i) => i % 2 === 0);
   const xLim = fLimit < fMax ? gx(Math.max(fMin, fLimit)) : null;
   const onMove = e => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -92,7 +96,7 @@ export const Frequenzgang = memo(function Frequenzgang({ result, fLimit, mouth, 
         <path d={svgPath(f.map((v, i) => [gx(v), gyImp(zMag[i])]), 1)} fill="none" stroke={COLOR.imp} strokeWidth="1.4" strokeLinejoin="round" />
         {frame(yImp0, hImp)}
 
-        {F_TICKS.filter(v => v >= fMin && v <= fMax).map(v =>
+        {fLabels.map(v =>
           <text key={v} x={gx(v)} y={yImp0 + hImp + 13} textAnchor="middle" {...tickText}>{fmtHz(v)}</text>)}
 
         {xLim !== null && <text x={xLim + 4} y={ySpl0 + hSpl - 6} {...tickText} fill={UI.error} opacity="0.8">
