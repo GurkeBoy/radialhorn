@@ -25,12 +25,13 @@ src/
   horn-mesh.js             — 3D-Körper (Luftvolumen und Schale) als strukturierte Flächengitter
   mesh-buffers.js          — 3D-Netz als Float32-Puffer je Sektion (für den Worker)
   mesh.worker.js           — Web Worker: baut das 3D-Netz abseits des Haupt-Threads
-  theme.js                 — Farben (UI, COLOR), Schrift, SVG-Stile, Raumecken-Strichmuster
+  theme.js                 — Farben (UI, COLOR), Schrift, SVG-Stile, Raumecken-Strichmuster, GLOBAL_CSS
+  fonts.js                 — eingebettete Schrift DM Mono (@font-face aus assets/fonts/, OFL 1.1)
   utils.js                 — linspace, clamp, svgPath, niceTicks
   hooks.js                 — useSize, useZoomPan, usePersistentState, useThrottledValue
   settings.js              — gespeicherte Einstellungen (localStorage, je Wert geprüft gegen den Standard)
   components/
-    ui.jsx                 — Card, Slider, Toggle, SegmentedButtons, Stat, Warn, ZoomControls, FullscreenPanel, ArrowMarker
+    ui.jsx                 — Card, Group, Slider, Toggle, SegmentedButtons, Button, Stat, Note, Warn, ZoomControls, FullscreenPanel, ArrowMarker
     Dim.jsx                — Bemaßungen Dim (waagerecht/senkrecht) und DimAligned (schräg)
     Draufsicht.jsx, Seitenriss.jsx, Querschnitt.jsx — 2D-Ansichten und Diagramm
     Ansicht3D.jsx          — 3D-Ansicht (three.js, OrbitControls, Netz aus dem Worker, Zeichnen nur bei Bedarf)
@@ -125,9 +126,23 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 - **Querschnitt:** Daten-Zoom (`minZoom: 1`, `unitsPerPx` wegen viewBox). Achsen im Datenursprung, wandern mit und bleiben am Plotrand, wenn der Ursprung aus dem Bild läuft. Achsenwerte: markante Werte plus beim Zoomen `niceTicks`.
 - **DXF:** Draufsicht `[x, z] → (X = z, Y = x)`, Seitenprofil `[z, h] → (X = z, Y = 0, Z = h)`.
 
+## Seitenleiste
+
+Reihenfolge der Karten: Throat → Horngeometrie → Vertikales Profil → Treiber → Aufstellung (Raumecke) → Ausführung (Wandstärke, Kanten, Flansch) → Simulation → Kennwerte (Kacheln + Grenzfrequenzen) → Querschnitt → Export, darunter „Alle Einstellungen zurücksetzen“. Bausteine nur aus `ui.jsx`, keine Ad-hoc-Stile in `App.jsx`:
+
+- `Card title id`: mit `id` über die Überschrift einklappbar, Zustand gespeichert (Einstellung `open.<id>`). Jede Karte hat einen Titel.
+- `Group title [id] [first]`: Unterabschnitt mit kleiner Überschrift und Trennlinie darüber (`first`: direkt unter dem Kartentitel, ohne Linie); mit `id` einklappbar (Treiberdaten der Simulation: `simulation.treiber`).
+- `Slider`: festes Raster Beschriftung 116 px | Regler | Zahl 62 px (rechtsbündig, gleich breite Ziffern) | Einheit 30 px, Zeilenabstand 8 px.
+- `Toggle hint`: Hinweis unter dem Schalter, auf dessen Text eingerückt. Text grau, eingeschaltet hell.
+- `Note` (grauer Hinweis) und `Warn` (volle Breite, ⚠ wird automatisch vorangestellt – nicht in den Text schreiben).
+- `Button [primary]`: volle Breite; primary nur für die Hauptaktion (DXF).
+- Abstände: Karten 10 px oben/unten innen (letztes Element bringt 8 px mit), 8 px zwischen Karten.
+- **Schrift DM Mono** ist eingebettet (`fonts.js`, `assets/fonts/`: woff2 aus Google Fonts v16, latin + latin-ext, Lizenz `OFL.txt` liegt bei) – offline und auf jedem Rechner gleich. Nur die Schnitte 400 und 500 (DM Mono hat keinen fetteren): Hervorhebungen mit `fontWeight: 500`, nie 700 (sonst künstliches Fett). Zeichen außerhalb der Schrift (π, Ω, ₜ, ⚠ …) kommen aus der Systemschrift. Das PDF-Datenblatt (eigenes Fenster) nutzt die Schrift nicht.
+- Globale Regeln in `theme.js` (`GLOBAL_CSS`, von `main.jsx` eingehängt): dunkle, schmale Scrollbars, Zahlenfelder ohne Pfeiltasten, sichtbarer Tastaturfokus.
+
 ## Farbschema
 
-Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint, Akzent Sandbeige `#d6cbb8`) und `COLOR` (Zeichnungen: Traktrix Rosa, gerade Wand Mint, Mundbogen Sandbeige, Raumecke Orange, Übergänge Koralle, Wandstärke Gelb, Flansch Violett, Bemaßung Grau-Violett). Das PDF hat ein eigenes helles Schema in `export/pdf.js`.
+Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint, Akzent Sandbeige `#d6cbb8`; Textstufen text/label/faint/muted mit Kontrast ≥ 4,3:1 auf `UI.card`, Texte ≥ 4,5:1) und `COLOR` (Zeichnungen: Traktrix Rosa, gerade Wand Mint, Mundbogen Sandbeige, Raumecke Orange, Übergänge Koralle, Wandstärke Gelb, Flansch Violett, Bemaßung Grau-Violett). Das PDF hat ein eigenes helles Schema in `export/pdf.js`.
 
 ## Bemaßungsregeln
 
