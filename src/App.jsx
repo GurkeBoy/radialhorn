@@ -33,8 +33,8 @@ const THROAT_SIZES = [
 const CURVE_LABELS = { linear: "Linear", exponential: "Exponential", hypex: "Hypex" };
 const L_MAX = 1200;   // Obergrenze des L-Reglers ohne Raumecke [mm]
 const SIM_FREQS = logFrequencies(20, 20000, 24);
-const MOUTH_OPTIONS = ["4pi", "2pi", "pi", "pi/2"];
-const MOUTH_LABELS = { "4pi": "4π", "2pi": "2π", "pi": "π", "pi/2": "π/2" };
+const MOUTH_OPTIONS = ["auto", "4pi", "2pi", "pi", "pi/2"];
+const MOUTH_LABELS = { auto: "Auto", "4pi": "4π", "2pi": "2π", "pi": "π", "pi/2": "π/2" };
 const isPlaceholder = d => Object.keys(PLACEHOLDER_DRIVER).every(k => d[k] === PLACEHOLDER_DRIVER[k]);
 
 const formatHz = f => f >= 1000 ? (f / 1000).toFixed(2) + " k" : f.toFixed(0);
@@ -71,7 +71,10 @@ export default function App() {
   });
   const setLayer = key => on => setExportLayers(layers => ({ ...layers, [key]: on }));
   const [simOn,           setSimOn]           = usePersistentState("simOn", false);
-  const [simMouth,        setSimMouth]        = usePersistentState("simMouth", "2pi");
+  // Abstrahlung: "auto" = π in der Raumecke (zwei Wände; Boden/Decke bei Ohrhöhe im Arbeitsbereich
+  // zu weit weg), sonst 2π
+  const [simMouth,        setSimMouth]        = usePersistentState("abstrahlung", "auto");
+  const mouth = simMouth === "auto" ? (showRaumecke ? "pi" : "2pi") : simMouth;
   const [simTemp,         setSimTemp]         = usePersistentState("simTemp", 20);
   const [simPhase,        setSimPhase]        = usePersistentState("simPhase", false);
   const [driver,          setDriver]          = usePersistentState("driver", PLACEHOLDER_DRIVER);
@@ -84,10 +87,10 @@ export default function App() {
   const live = useMemo(() => ({
     throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
-    edgeOn, edgeR, simOn, simMouth, simTemp, driver,
+    edgeOn, edgeR, simOn, mouth, simTemp, driver,
   }), [throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
-    edgeOn, edgeR, simOn, simMouth, simTemp, driver]);
+    edgeOn, edgeR, simOn, mouth, simTemp, driver]);
   const p = useThrottledValue(live);
   const rt = p.throatDiam / 2;
 
@@ -154,10 +157,10 @@ export default function App() {
     if (!areaCurveSI) return null;
     const air = airAt(p.simTemp);
     return {
-      result: simulate({ curve: areaCurveSI, air, driver: driverSI(p.driver, air.rho), mouth: p.simMouth, freqs: SIM_FREQS }),
+      result: simulate({ curve: areaCurveSI, air, driver: driverSI(p.driver, air.rho), mouth: p.mouth, freqs: SIM_FREQS }),
       fLimit: transverseLimit(2 * rt / 1000, air.c),
     };
-  }, [areaCurveSI, rt, p.simTemp, p.simMouth, p.driver]);
+  }, [areaCurveSI, rt, p.simTemp, p.mouth, p.driver]);
 
   const flangeOverRaumecke =flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
   const design = {
@@ -243,7 +246,8 @@ export default function App() {
           {simOn && <>
             <Note style={{ letterSpacing: "0.12em", marginBottom: 6 }}>Abstrahlung (Mund)</Note>
             <SegmentedButtons options={MOUTH_OPTIONS} labels={MOUTH_LABELS} value={simMouth} onChange={setSimMouth} />
-            {simMouth !== "2pi" && <Note style={{ marginTop: -4, marginBottom: 6 }}>Näherung – exakt ist nur 2π (Kolben in Schallwand)</Note>}
+            {simMouth === "auto" && <Note style={{ marginTop: -4, marginBottom: 6 }}>Auto: {showRaumecke ? "π (Raumecke, zwei Wände)" : "2π (Schallwand)"}</Note>}
+            {mouth !== "2pi" && <Note style={{ marginTop: -4, marginBottom: 6 }}>Näherung – exakt ist nur 2π (Kolben in Schallwand)</Note>}
             <Slider label="Lufttemperatur" value={simTemp} min={-10} max={40} step={1} unit="°C" onChange={setSimTemp} />
             <Note style={{ letterSpacing: "0.12em", margin: "8px 0 6px" }}>Treiber (Thiele-Small)</Note>
             {isPlaceholder(driver) && <Note style={{ color: UI.error, marginBottom: 6 }}>Platzhalter, keine echten Treiberdaten</Note>}
@@ -304,7 +308,7 @@ export default function App() {
             <Seitenriss s={s} rt={rt} dw={p.dw} dh={p.dh} L={LClamped} hMouth={p.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} />
           </ViewPanel>
           {sim && <ViewPanel flex={1}>
-            <Frequenzgang result={sim.result} fLimit={sim.fLimit} mouth={p.simMouth} showPhase={simPhase} placeholder={isPlaceholder(p.driver)} />
+            <Frequenzgang result={sim.result} fLimit={sim.fLimit} mouth={p.mouth} showPhase={simPhase} placeholder={isPlaceholder(p.driver)} />
           </ViewPanel>}
         </div>
       </div>
