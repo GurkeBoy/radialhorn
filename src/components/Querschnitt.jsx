@@ -1,7 +1,7 @@
 // Diagramm der Querschnittsfläche A(z) = B·H mit Daten-Zoom.
 import { memo, useMemo, useRef } from "react";
 import { hasTraktrix, crossSection } from "../horn-math.js";
-import { COLOR, FONT, S, UI } from "../theme.js";
+import { COLOR, FONT, S } from "../theme.js";
 import { clamp, niceTicks, svgPath } from "../utils.js";
 import { useZoomPan } from "../hooks.js";
 import { ZoomControls } from "./ui.jsx";
@@ -65,14 +65,14 @@ export const Querschnitt = memo(function Querschnitt({ s, profile }) {
   }
 
   return (
-    <div style={{ position: "relative", background: UI.card, borderRadius: 8, border: `1px solid ${UI.borderCard}`, marginBottom: 8, padding: "4px 0 0 0" }}>
-      <ZoomControls k={k} onReset={zoom.reset} top={4} right={6} compact />
+    <div style={{ position: "relative", margin: "0 -8px 6px" }}>
+      <ZoomControls k={k} onReset={zoom.reset} top={0} right={8} compact />
       <svg ref={svgRef} {...zoom.handlers} viewBox={`0 0 ${VW} ${VH}`}
         style={{ width: "100%", display: "block", cursor: "grab", touchAction: "none", userSelect: "none" }}>
         <defs>
           <clipPath id="csPlot"><rect x={ml} y={mt} width={pw} height={ph} /></clipPath>
         </defs>
-        <text x={ml} y={10} {...S.label} textAnchor="start" fontSize="8" fill={COLOR.text} letterSpacing="0.1em">QUERSCHNITT A(z) = B·H [mm²]</text>
+        <text x={ml} y={10} {...S.label} textAnchor="start" fontSize="8" fill={COLOR.text} letterSpacing="0.1em">A = B·H [mm²] über z [mm]</text>
         <line x1={axX} y1={mt} x2={axX} y2={VH-mb} stroke={COLOR.axis} strokeWidth="0.7" />
         <line x1={ml} y1={axY} x2={VW-mr} y2={axY} stroke={COLOR.axis} strokeWidth="0.7" />
         <g clipPath="url(#csPlot)">

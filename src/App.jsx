@@ -6,7 +6,7 @@ import {
 } from "./horn-math.js";
 import { FONT, SIDEBAR_WIDTH, UI } from "./theme.js";
 import {
-  Card, Note, Slider, Toggle, SegmentedButtons, Stat, Warn, FullscreenPanel,
+  Button, Card, Group, Note, Slider, Toggle, SegmentedButtons, Stat, Warn, FullscreenPanel,
 } from "./components/ui.jsx";
 import { Draufsicht } from "./components/Draufsicht.jsx";
 import { Seitenriss } from "./components/Seitenriss.jsx";
@@ -162,7 +162,7 @@ export default function App() {
     };
   }, [areaCurveSI, rt, p.simTemp, p.mouth, p.driver]);
 
-  const flangeOverRaumecke =flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
+  const flangeOverRaumecke = flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
   const design = {
     s, rt, L: LClamped, hMouth: p.hMouth, curve: p.curve, hypexT: p.hypexT, fillet, profile, wall, flange,
     showRaumecke: p.showRaumecke, showWandstaerke: p.showWandstaerke, wandstaerke: p.wandstaerke, edgeR: edge,
@@ -174,119 +174,137 @@ export default function App() {
     <div style={{ background: UI.bg, height: "100vh", overflow: "hidden", color: UI.text, fontFamily: FONT, display: "flex" }}>
 
       {/* Seitenleiste */}
-      <div style={{ width: SIDEBAR_WIDTH, boxSizing: "border-box", flexShrink: 0, borderRight: `1px solid ${UI.border}`, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: SIDEBAR_WIDTH, boxSizing: "border-box", flexShrink: 0, borderRight: `1px solid ${UI.border}`, overflowY: "auto", padding: "14px 12px 12px 14px" }}>
 
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: UI.accent, letterSpacing: "0.1em" }}>RADIALHORN</div>
-          <div style={{ fontSize: 9, color: UI.faint, letterSpacing: "0.2em", marginTop: 1 }}>KONFIGURATOR · {openingAngle}° · v4</div>
+        <div style={{ marginBottom: 14, padding: "0 2px" }}>
+          <div style={{ fontSize: 18, fontWeight: 500, color: UI.accent, letterSpacing: "0.1em" }}>RADIALHORN</div>
+          <div style={{ fontSize: 10, color: UI.faint, letterSpacing: "0.12em", marginTop: 2 }}>Konfigurator für Radialhörner</div>
         </div>
 
-        <Card>
-          <Toggle label="Raumecke" checked={showRaumecke} onChange={setShowRaumecke} />
-          {showRaumecke && <Note style={{ paddingLeft: 46, marginTop: -6, marginBottom: 4 }}>Hornbreite auf Raumecken-Diagonale begrenzt</Note>}
-          <Toggle label="Wandstärke" checked={showWandstaerke} onChange={setShowWandstaerke} />
-          {showWandstaerke && <Slider label="Wandstärke" value={wandstaerke} min={1} max={100} step={1} unit="mm" onChange={setWandstaerke} />}
-          {showWandstaerke && <Toggle label="Kanten verrunden" checked={edgeOn} onChange={setEdgeOn} />}
-          {showWandstaerke && edgeOn && <Slider label="Kantenradius" value={Math.min(edgeR ?? wandstaerke, wandstaerke)} min={1} max={wandstaerke} step={1} unit="mm" onChange={setEdgeR} />}
-          {showWandstaerke && <Toggle label="Flansch am Throat" checked={flangeOn} onChange={setFlangeOn} />}
-        </Card>
-
-        <Card title="THROAT">
+        <Card title="THROAT" id="throat">
           <SegmentedButtons
             options={THROAT_SIZES.map(t => t.diameter)}
             labels={Object.fromEntries(THROAT_SIZES.map(t => [t.diameter, t.label]))}
             value={throatDiam} onChange={setThroatDiam} />
         </Card>
 
-        <Card title="HORNGEOMETRIE">
+        <Card title="HORNGEOMETRIE" id="geometrie">
           <Slider label="Öffnungswinkel" value={openingAngle} min={60} max={160} step={1} unit="°" onChange={setOpeningAngle} />
           <Slider label="Gesamtlänge L" value={shown("L", LClamped)} min={Lmin} max={Lmax} step={5} unit="mm" onChange={setL} />
-          {warnings.raumecke && <Warn>⚠ Raumecken-Limit ({LMaxRaumecke.toFixed(0)} mm)</Warn>}
+          {warnings.raumecke && <Warn>Raumecken-Limit ({LMaxRaumecke.toFixed(0)} mm)</Warn>}
           <Slider label="Traktrix-Länge Lₜ" value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={setLt} />
-          {warnings.ltMax && <Warn>⚠ Lₜ-Maximum erreicht ({LtMax.toFixed(0)} mm)</Warn>}
-          {warnings.ltMin && <Warn>⚠ Lₜ-Minimum (Raumecke: {LtMin.toFixed(0)} mm)</Warn>}
+          {warnings.ltMax && <Warn>Lₜ-Maximum erreicht ({LtMax.toFixed(0)} mm)</Warn>}
+          {warnings.ltMin && <Warn>Lₜ-Minimum (Raumecke: {LtMin.toFixed(0)} mm)</Warn>}
           <Toggle label="Krümmungsstetiger Übergang" checked={clothoidOn} onChange={setClothoidOn} />
           {clothoidOn && <Slider label="Klothoide ℓ" value={clothoidLength} min={1} max={150} step={1} unit="mm" onChange={setClothoidLength} />}
-          {clothoidOn && warnings.clothoid === "Lt" && <Warn>⚠ Lₜ für diese Klothoide mind. {LtMinClothoid.toFixed(0)} mm</Warn>}
-          {clothoidOn && warnings.clothoid === "zu lang" && <Warn>⚠ Klothoide zu lang für diese Geometrie</Warn>}
+          {clothoidOn && warnings.clothoid === "Lt" && <Warn>Lₜ für diese Klothoide mind. {LtMinClothoid.toFixed(0)} mm</Warn>}
+          {clothoidOn && warnings.clothoid === "zu lang" && <Warn>Klothoide zu lang für diese Geometrie</Warn>}
         </Card>
 
-        <Card title="TREIBER">
-          <Slider label="Breite dw" value={dw} min={10} max={300} step={1} unit="mm" onChange={setDw} />
-          <Slider label="Tiefe dh" value={dh} min={10} max={250} step={1} unit="mm" onChange={setDh} />
-        </Card>
-
-        <Card title="VERTIKALES PROFIL">
+        <Card title="VERTIKALES PROFIL" id="profil">
           <Slider label="Mund-Höhe hₘ" value={hMouth} min={Math.ceil(rt * 2)} max={600} step={1} unit="mm" onChange={setHMouth} />
-          <Note style={{ letterSpacing: "0.12em", marginBottom: 6, marginTop: 4 }}>Aufweitungskurve</Note>
-          <SegmentedButtons options={CURVES} labels={CURVE_LABELS} value={curve} onChange={setCurve} />
-          {curve === "hypex" && <Slider label="Hypex T" value={hypexT} min={0} max={2} step={0.05} unit="" onChange={setHypexT} />}
+          <Group title="Aufweitungskurve">
+            <SegmentedButtons options={CURVES} labels={CURVE_LABELS} value={curve} onChange={setCurve} />
+            {curve === "hypex" && <Slider label="Hypex T" value={hypexT} min={0} max={2} step={0.05} unit="" onChange={setHypexT} />}
+          </Group>
           <Toggle label="Verrundung Übergang" checked={filletOn} onChange={setFilletOn} />
           {filletOn && <Slider label="Radius r" value={filletR} min={1} max={1000} step={1} unit="mm" onChange={setFilletR} />}
           {filletOn && s && !hasTraktrix(s) && <Warn>Verrundung nur mit Traktrix-Eingang (Lₜ &gt; 0)</Warn>}
           {fillet?.limited && <Warn>Radius zu groß – begrenzt auf {fillet.R.toFixed(1)} mm</Warn>}
         </Card>
 
-        {flange && <Card title="FLANSCH">
-          <Slider label="Durchmesser" value={shown("flangeD", Math.round(flange.diameter))} min={Math.ceil(flange.minDiameter)} max={400} step={1} unit="mm" onChange={setFlangeD} />
-          {flange.limited && <Note style={{ marginTop: -4, marginBottom: 4 }}>mind. {Math.ceil(flange.minDiameter)} mm (umschließt die Schale)</Note>}
-          {flangeOverRaumecke && <Warn>⚠ Flansch ragt über die Raumecke</Warn>}
-          <Slider label="Dicke" value={flangeT} min={2} max={40} step={1} unit="mm" onChange={setFlangeT} />
-          <Slider label="Bohrungen" value={holeCount} min={0} max={12} step={1} unit="" onChange={setHoleCount} />
-          {holeCount > 0 && <>
-            <Slider label="Lochkreis-Ø" value={shown("holeCircle", flange.holes.circle)} min={Math.ceil(flange.minDiameter / 2)} max={Math.floor(flange.diameter)} step={0.1} unit="mm" onChange={setHoleCircle} />
-            <Slider label="Bohrungs-Ø" value={holeD} min={2} max={20} step={0.1} unit="mm" onChange={setHoleD} />
-            <Slider label="Winkellage" value={holeAngle} min={0} max={Math.round(360 / holeCount)} step={1} unit="°" onChange={setHoleAngle} />
-            {flange.invalidHoles > 0 && <Warn>⚠ {flange.invalidHoles} Bohrung{flange.invalidHoles > 1 ? "en" : ""} im Konflikt mit der Schale (rot markiert, nicht gebohrt)</Warn>}
-          </>}
-        </Card>}
+        <Card title="TREIBER" id="treiber">
+          <Slider label="Breite dw" value={dw} min={10} max={300} step={1} unit="mm" onChange={setDw} />
+          <Slider label="Tiefe dh" value={dh} min={10} max={250} step={1} unit="mm" onChange={setDh} />
+        </Card>
 
-        <Card title="SIMULATION (1D)">
-          <Toggle label="Frequenzgang" checked={simOn} onChange={setSimOn} />
+        <Card title="AUFSTELLUNG" id="aufstellung">
+          <Toggle label="Raumecke" checked={showRaumecke} onChange={setShowRaumecke}
+            hint={showRaumecke ? "Hornbreite auf die Raumecken-Diagonale begrenzt" : null} />
+        </Card>
+
+        <Card title="AUSFÜHRUNG" id="ausfuehrung">
+          <Toggle label="Wandstärke" checked={showWandstaerke} onChange={setShowWandstaerke}
+            hint={showWandstaerke ? null : "Ohne Wandstärke: Luftvolumen (Innenform)"} />
+          {showWandstaerke && <>
+            <Slider label="Wandstärke t" value={wandstaerke} min={1} max={100} step={1} unit="mm" onChange={setWandstaerke} />
+            <Toggle label="Kanten verrunden" checked={edgeOn} onChange={setEdgeOn} />
+            {edgeOn && <Slider label="Kantenradius" value={Math.min(edgeR ?? wandstaerke, wandstaerke)} min={1} max={wandstaerke} step={1} unit="mm" onChange={setEdgeR} />}
+            <Toggle label="Flansch am Throat" checked={flangeOn} onChange={setFlangeOn} />
+          </>}
+          {flange && <Group title="Flansch">
+            <Slider label="Durchmesser" value={shown("flangeD", Math.round(flange.diameter))} min={Math.ceil(flange.minDiameter)} max={400} step={1} unit="mm" onChange={setFlangeD} />
+            {flange.limited && <Note>mind. {Math.ceil(flange.minDiameter)} mm (umschließt die Schale)</Note>}
+            {flangeOverRaumecke && <Warn>Flansch ragt über die Raumecke</Warn>}
+            <Slider label="Dicke" value={flangeT} min={2} max={40} step={1} unit="mm" onChange={setFlangeT} />
+            <Slider label="Bohrungen" value={holeCount} min={0} max={12} step={1} unit="" onChange={setHoleCount} />
+            {holeCount > 0 && <>
+              <Slider label="Lochkreis-Ø" value={shown("holeCircle", flange.holes.circle)} min={Math.ceil(flange.minDiameter / 2)} max={Math.floor(flange.diameter)} step={0.1} unit="mm" onChange={setHoleCircle} />
+              <Slider label="Bohrungs-Ø" value={holeD} min={2} max={20} step={0.1} unit="mm" onChange={setHoleD} />
+              <Slider label="Winkellage" value={holeAngle} min={0} max={Math.round(360 / holeCount)} step={1} unit="°" onChange={setHoleAngle} />
+              {flange.invalidHoles > 0 && <Warn>{flange.invalidHoles} Bohrung{flange.invalidHoles > 1 ? "en" : ""} im Konflikt mit der Schale (rot markiert, nicht gebohrt)</Warn>}
+            </>}
+          </Group>}
+        </Card>
+
+        <Card title="SIMULATION (1D)" id="simulation">
+          <Toggle label="Frequenzgang" checked={simOn} onChange={setSimOn}
+            hint={simOn ? null : "SPL und Impedanz über der Frequenz (Webster, 1D)"} />
           {simOn && <>
-            <Note style={{ letterSpacing: "0.12em", marginBottom: 6 }}>Abstrahlung (Mund)</Note>
-            <SegmentedButtons options={MOUTH_OPTIONS} labels={MOUTH_LABELS} value={simMouth} onChange={setSimMouth} />
-            {simMouth === "auto" && <Note style={{ marginTop: -4, marginBottom: 6 }}>Auto: {showRaumecke ? "π (Raumecke, zwei Wände)" : "2π (Schallwand)"}</Note>}
-            {mouth !== "2pi" && <Note style={{ marginTop: -4, marginBottom: 6 }}>Näherung – exakt ist nur 2π (Kolben in Schallwand)</Note>}
+            <Group title="Abstrahlung (Mund)">
+              <SegmentedButtons options={MOUTH_OPTIONS} labels={MOUTH_LABELS} value={simMouth} onChange={setSimMouth} />
+              {(simMouth === "auto" || mouth !== "2pi") && <Note>
+                {simMouth === "auto" && (showRaumecke ? "Auto: π (Raumecke, zwei Wände). " : "Auto: 2π (Schallwand). ")}
+                {mouth !== "2pi" && "Näherung – exakt ist nur 2π (Kolben in Schallwand)."}
+              </Note>}
+            </Group>
             <Slider label="Lufttemperatur" value={simTemp} min={-10} max={40} step={1} unit="°C" onChange={setSimTemp} />
-            <Note style={{ letterSpacing: "0.12em", margin: "8px 0 6px" }}>Treiber (Thiele-Small)</Note>
-            {isPlaceholder(driver) && <Note style={{ color: UI.error, marginBottom: 6 }}>Platzhalter, keine echten Treiberdaten</Note>}
-            <Slider label="Re"  value={driver.Re}  min={1}    max={16}   step={0.1}  unit="Ω"    onChange={setDriverValue("Re")} />
-            <Slider label="Le"  value={driver.Le}  min={0}    max={1}    step={0.01} unit="mH"   onChange={setDriverValue("Le")} />
-            <Slider label="Bl"  value={driver.Bl}  min={1}    max={40}   step={0.1}  unit="T·m"  onChange={setDriverValue("Bl")} />
-            <SegmentedButtons options={["Mmd", "Mms"]} labels={{ Mmd: "Masse = Mmd", Mms: "Masse = Mms" }} value={driver.massIs} onChange={setDriverValue("massIs")} />
-            <Slider label={driver.massIs} value={driver.mass} min={0.1} max={50} step={0.1} unit="g" onChange={setDriverValue("mass")} />
-            {driver.massIs === "Mms" && <Note style={{ marginTop: -4, marginBottom: 6 }}>Mmd = Mms − Luftlast (beidseitig 8ρa³/3, Annahme)</Note>}
-            <Slider label="Cms" value={driver.Cms} min={1}    max={1000} step={1}    unit="µm/N" onChange={setDriverValue("Cms")} />
-            <Slider label="Rms" value={driver.Rms} min={0.01} max={20}   step={0.01} unit="Ns/m" onChange={setDriverValue("Rms")} />
-            <Slider label="Sd"  value={driver.Sd}  min={1}    max={500}  step={0.5}  unit="cm²"  onChange={setDriverValue("Sd")} />
-            <Slider label="Vtc (Kammer)" value={driver.Vtc} min={0} max={50}   step={0.1} unit="cm³" onChange={setDriverValue("Vtc")} />
-            {driver.Vtc > 0 && <Slider label="Atc (Kammer)" value={driver.Atc} min={0} max={200} step={0.5} unit="cm²" onChange={setDriverValue("Atc")} />}
-            <Slider label="Vrc (Rückk.)" value={driver.Vrc} min={0} max={2000} step={1}   unit="cm³" onChange={setDriverValue("Vrc")} />
-            <Note style={{ marginTop: -2, marginBottom: 6 }}>0 = ohne{driver.Vtc > 0 && driver.Atc === 0 ? "; Atc 0 = Kammer als reine Nachgiebigkeit" : ""}</Note>
-            {!isPlaceholder(driver) && <ExportButton onClick={() => setDriver(PLACEHOLDER_DRIVER)}>⟲ Platzhalter-Treiber</ExportButton>}
             <Toggle label="Phase anzeigen" checked={simPhase} onChange={setSimPhase} />
-            {sim && <ExportButton onClick={() => exportCSV(sim.result)}>↓ CSV (Frequenzgang)</ExportButton>}
+            <Group title="Treiber (Thiele-Small)" id="simulation.treiber">
+              {isPlaceholder(driver) && <Warn>Platzhalter – keine echten Treiberdaten</Warn>}
+              <Slider label="Re"  value={driver.Re}  min={1}    max={16}   step={0.1}  unit="Ω"    onChange={setDriverValue("Re")} />
+              <Slider label="Le"  value={driver.Le}  min={0}    max={1}    step={0.01} unit="mH"   onChange={setDriverValue("Le")} />
+              <Slider label="Bl"  value={driver.Bl}  min={1}    max={40}   step={0.1}  unit="T·m"  onChange={setDriverValue("Bl")} />
+              <SegmentedButtons options={["Mmd", "Mms"]} labels={{ Mmd: "Masse = Mmd", Mms: "Masse = Mms" }} value={driver.massIs} onChange={setDriverValue("massIs")} />
+              <Slider label={driver.massIs} value={driver.mass} min={0.1} max={50} step={0.1} unit="g" onChange={setDriverValue("mass")} />
+              {driver.massIs === "Mms" && <Note>Mmd = Mms − Luftlast (beidseitig 8ρa³/3, Annahme)</Note>}
+              <Slider label="Cms" value={driver.Cms} min={1}    max={1000} step={1}    unit="µm/N" onChange={setDriverValue("Cms")} />
+              <Slider label="Rms" value={driver.Rms} min={0.01} max={20}   step={0.01} unit="Ns/m" onChange={setDriverValue("Rms")} />
+              <Slider label="Sd"  value={driver.Sd}  min={1}    max={500}  step={0.5}  unit="cm²"  onChange={setDriverValue("Sd")} />
+              <Slider label="Vtc (Kammer)" value={driver.Vtc} min={0} max={50}   step={0.1} unit="cm³" onChange={setDriverValue("Vtc")} />
+              {driver.Vtc > 0 && <Slider label="Atc (Kammer)" value={driver.Atc} min={0} max={200} step={0.5} unit="cm²" onChange={setDriverValue("Atc")} />}
+              <Slider label="Vrc (Rückkammer)" value={driver.Vrc} min={0} max={2000} step={1}   unit="cm³" onChange={setDriverValue("Vrc")} />
+              <Note>Vtc, Vrc = 0: ohne Kammer{driver.Vtc > 0 && driver.Atc === 0 ? "; Atc = 0: Kammer als reine Nachgiebigkeit" : ""}</Note>
+              {!isPlaceholder(driver) && <Button onClick={() => setDriver(PLACEHOLDER_DRIVER)}>⟲ Platzhalter-Treiber</Button>}
+            </Group>
+            {sim && <Button onClick={() => exportCSV(sim.result)}>↓ CSV (Frequenzgang)</Button>}
           </>}
         </Card>
 
         {s && <>
-          <KeyFigures s={s} hMouth={p.hMouth} profile={profile} />
-          <Frequencies s={s} rt={rt} hMouth={p.hMouth} />
-          <Querschnitt s={s} profile={profile} />
-          <Card title="EXPORT">
-            <Note style={{ marginBottom: 6 }}>DXF — Kurven (mm)</Note>
-            <Toggle label="Draufsicht-Wände" checked={exportLayers.draufsicht}   onChange={setLayer("draufsicht")} />
-            <Toggle label="Mundbogen"        checked={exportLayers.mundbogen}    onChange={setLayer("mundbogen")} />
-            <Toggle label="Fokuspunkt"       checked={exportLayers.fokus}        onChange={setLayer("fokus")} />
-            <Toggle label="Seitenprofil"     checked={exportLayers.seitenprofil} onChange={setLayer("seitenprofil")} />
-            <Toggle label="Übergangspunkt"   checked={exportLayers.uebergang}    onChange={setLayer("uebergang")} />
-            {flange && <Toggle label="Flansch"  checked={exportLayers.flansch}      onChange={setLayer("flansch")} />}
-            <Note style={{ margin: "8px 0 6px" }}>PDF — zusätzlich zu Kurven oben</Note>
-            <Toggle label="Bemaßungen"       checked={exportLayers.bemassung}    onChange={setLayer("bemassung")} />
-            <ExportButton primary onClick={() => exportDXF(design, exportLayers)}>↓ DXF exportieren</ExportButton>
-            <ExportButton onClick={() => exportPDF(design, exportLayers)}>↓ PDF (Zeichnungen)</ExportButton>
-            <ExportButton onClick={() => exportSTL(design)}>↓ STL (3D, {wall > 0 ? `Schale ${wall} mm${flange ? " + Flansch" : ""}` : "Luftvolumen"})</ExportButton>
+          <KeyFigures s={s} rt={rt} hMouth={p.hMouth} profile={profile} />
+          <Card title="QUERSCHNITT A(z)" id="querschnitt">
+            <Querschnitt s={s} profile={profile} />
+          </Card>
+          <Card title="EXPORT" id="export">
+            <Group title="DXF – Kurven (mm)" first>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 8 }}>
+                <Toggle label="Draufsicht"     checked={exportLayers.draufsicht}   onChange={setLayer("draufsicht")} />
+                <Toggle label="Mundbogen"      checked={exportLayers.mundbogen}    onChange={setLayer("mundbogen")} />
+                <Toggle label="Fokuspunkt"     checked={exportLayers.fokus}        onChange={setLayer("fokus")} />
+                <Toggle label="Seitenprofil"   checked={exportLayers.seitenprofil} onChange={setLayer("seitenprofil")} />
+                <Toggle label="Übergang"       checked={exportLayers.uebergang}    onChange={setLayer("uebergang")} />
+                {flange && <Toggle label="Flansch" checked={exportLayers.flansch}  onChange={setLayer("flansch")} />}
+              </div>
+            </Group>
+            <Group title="PDF – zusätzlich zu den Kurven">
+              <Toggle label="Bemaßungen" checked={exportLayers.bemassung} onChange={setLayer("bemassung")} />
+            </Group>
+            <div style={{ marginTop: 4 }}>
+              <Button primary onClick={() => exportDXF(design, exportLayers)}>↓ DXF exportieren</Button>
+              <Button onClick={() => exportPDF(design, exportLayers)}>↓ PDF (Zeichnungen)</Button>
+              <Button onClick={() => exportSTL(design)}>↓ STL (3D, {wall > 0 ? `Schale ${wall} mm${flange ? " + Flansch" : ""}` : "Luftvolumen"})</Button>
+            </div>
           </Card>
         </>}
         <ResetSettingsButton />
@@ -324,38 +342,33 @@ function ViewPanel({ flex, children }) {
   );
 }
 
-const KeyFigures = memo(function KeyFigures({ s, hMouth, profile }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
-      <Stat label="Mundbreite"    value={(2 * s.xMouth).toFixed(1) + " mm"} />
-      <Stat label="Mund-Höhe"     value={hMouth + " mm"} />
-      <Stat label="A(Mund)"       value={(mouthArea(s, hMouth) / 1e6).toFixed(4) + " m²"} />
-      <Stat label="Bogenlänge"    value={s.arcLen.toFixed(1) + " mm"} />
-      <Stat label="Vert. Winkel"  value={verticalMouthAngle(s, profile).toFixed(1) + "°"} />
-      <Stat label="Horiz. Winkel" value={s.openingAngle + "°"} />
-    </div>
-  );
-});
-
-const Frequencies = memo(function Frequencies({ s, rt, hMouth }) {
+/** Kennwerte des Horns und grobe Grenzfrequenzen in einer Karte. */
+const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile }) {
   const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt, hMouth);
   return (
-    <Card title="FREQUENZEN (NÄHERUNG)">
-      <FrequencyRow label="fc_low  — Mund (Umfang=λ)"   value={fcLow} />
-      <FrequencyRow label="fc_cut  — Horn-Cutoff"     value={fcCut} />
-      <FrequencyRow label="fc_high — Throat (λ=2r)"   value={fcHigh} />
-      <Note style={{ fontSize: 8, marginTop: 6, lineHeight: 1.4 }}>
-        Bandbreite: {fcLow.toFixed(0)} – {fcHigh >= 1000 ? (fcHigh / 1000).toFixed(1) + "k" : fcHigh.toFixed(0)} Hz
-      </Note>
+    <Card title="KENNWERTE" id="kennwerte">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 12 }}>
+        <Stat label="Mundbreite"    value={(2 * s.xMouth).toFixed(1) + " mm"} />
+        <Stat label="Mund-Höhe"     value={hMouth + " mm"} />
+        <Stat label="A(Mund)"       value={(mouthArea(s, hMouth) / 1e6).toFixed(4) + " m²"} />
+        <Stat label="Bogenlänge"    value={s.arcLen.toFixed(1) + " mm"} />
+        <Stat label="Vert. Winkel"  value={verticalMouthAngle(s, profile).toFixed(1) + "°"} />
+        <Stat label="Horiz. Winkel" value={s.openingAngle + "°"} />
+      </div>
+      <Group title="Grenzfrequenzen (Näherung)">
+        <FrequencyRow label="fc_low — Mund (Umfang = λ)" value={fcLow} />
+        <FrequencyRow label="fc_cut — Horn-Cutoff"       value={fcCut} />
+        <FrequencyRow label="fc_high — Throat (λ = 2r)"  value={fcHigh} />
+      </Group>
     </Card>
   );
 });
 
 function FrequencyRow({ label, value }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
-      <span style={{ fontSize: 10, color: UI.muted, fontFamily: FONT }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: 700, color: UI.value, fontFamily: FONT }}>{formatHz(value)} Hz</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+      <span style={{ fontSize: 11, color: UI.label, fontFamily: FONT }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 500, color: UI.text, fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>{formatHz(value)} Hz</span>
     </div>
   );
 }
@@ -373,17 +386,5 @@ function ResetSettingsButton() {
     clearSettings();
     window.location.reload();
   };
-  return <ExportButton onClick={reset}>{armed ? "Wirklich zurücksetzen? Nochmal klicken" : "⟲ Alle Einstellungen zurücksetzen"}</ExportButton>;
-}
-
-function ExportButton({ primary, onClick, children }) {
-  return (
-    <button type="button" onClick={onClick} style={{
-      width: "100%", marginTop: primary ? 8 : 6, padding: "7px 0", borderRadius: 5, cursor: "pointer",
-      border: `1px solid ${primary ? UI.accent : UI.borderControl}`,
-      background: primary ? UI.accentSoft : UI.button,
-      color: primary ? UI.accent : UI.muted,
-      fontFamily: FONT, fontSize: 11, letterSpacing: "0.05em",
-    }}>{children}</button>
-  );
+  return <Button onClick={reset}>{armed ? "Wirklich zurücksetzen? Nochmal klicken" : "⟲ Alle Einstellungen zurücksetzen"}</Button>;
 }
