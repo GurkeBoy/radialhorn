@@ -525,11 +525,14 @@ const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
  * ab. Mit Klothoide ist die Krümmung stetig und A glatt.
  *
  * @param profile  z ↦ halbe Höhe (makeProfile)
- * @returns {{z: number, A: number, part: "traktrix" | "klothoide" | "linear"}[]}  aufsteigend in z
+ * @param zWallList  statt der gleichmäßigen Abtastung diese Wandpunkte (z, 0 … zMouth); die
+ *                   Sektionsgrenzen kommen in jedem Fall dazu (Simulation: gezielt dichter)
+ * @returns {{z: number, A: number, part: "traktrix" | "klothoide" | "linear", zWall: number}[]}
+ *   aufsteigend in z; zWall = zugehöriger Wandpunkt
  */
-export function crossSection(s, profile, n = 100) {
+export function crossSection(s, profile, n = 100, zWallList = null) {
   const clothoid = hasClothoid(s) ? clothoidTable(s.clothoid, 400) : null;
-  const zWalls = Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
+  const zWalls = zWallList ? [...zWallList] : Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
   if (hasTraktrix(s)) zWalls.push(s.zTrans);
   if (clothoid) zWalls.push(clothoid[0].z);
   zWalls.sort((a, b) => a - b);
@@ -549,7 +552,7 @@ export function crossSection(s, profile, n = 100) {
 
   const pts = zWalls.map(zWall => {
     const wf = wavefrontAt(s, zWall, clothoid);
-    return { z: wf.zAxis, A: areaOf(wf), part: wf.part };
+    return { z: wf.zAxis, A: areaOf(wf), part: wf.part, zWall };
   });
   return [{ ...pts[0], z: 0 }, ...pts];
 }
