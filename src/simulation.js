@@ -19,7 +19,10 @@
  *   - Mund: Kolben gleicher Fläche. 2π exakt (unendliche Schallwand), 4π/π/π/2 als Näherung.
  *   - Treiber: Re + jωLe, Bl, Mmd, Cms, Rms, Sd; Kompressionskammer Vtc (mit Atc als kurzes
  *     Rohr), optional geschlossene Rückkammer Vrc.
- *   - SPL: Mund als Punktquelle in den Raumwinkel Ω, p(r) = jωρ·U_Mund / (Ω·r).
+ *   - SPL wie Hornresp („constant directivity SPL“): die abgestrahlte Leistung W = Re(Z_r)·|U_Mund|²
+ *     gleichmäßig auf den Raumwinkel Ω verteilt, |p| = √(W·ρc/Ω)/r. Im Tiefton gleich dem
+ *     Monopol ωρ|U|/(Ω·r); darüber nicht der Achsendruck eines ebenen Kolbens, der für den
+ *     gekrümmten Mund eines Radialhorns bis 20 dB zu hoch läge. Gegen Hornresp geprüft.
  *   - Verlustfrei (Wandverluste: spätere Erweiterung).
  */
 import { crossSection } from "./horn-math.js";
@@ -319,8 +322,8 @@ export function driverResponse(dr, air, f, zThroat, uRatio, e) {
  * @param adaptive je Frequenz die gröbste Stufe (curveLevels) mit Abschnitten ≤ λ/20 und
  *                 ≤ MAX_SEGMENT statt immer der vollen Kurve
  * @returns {{ f, spl, phase, zel, zThroat }}
- *   spl [dB] in distance (Standard 1 m) bei voltage (Standard 2,83 V eff), phase [°] des
- *   Drucks (ohne Laufzeit über distance), zel [Ω] komplex, zThroat komplex normiert auf ρc/S_Hals
+ *   spl [dB] in distance (Standard 1 m) bei voltage (Standard 2,83 V eff), aus der Leistung
+ *   (siehe oben), phase [°] des Drucks (Monopol, ohne Laufzeit über distance), zel [Ω] komplex, zThroat komplex normiert auf ρc/S_Hals
  */
 export function simulate({ curve, air, driver, mouth = "2pi", freqs, voltage = 2.83, distance = 1, adaptive = true }) {
   const rhoC = air.rho * air.c, omega = SOLID_ANGLE[mouth];
@@ -331,10 +334,13 @@ export function simulate({ curve, air, driver, mouth = "2pi", freqs, voltage = 2
     const w = 2 * Math.PI * f, k = w / air.c, hMax = sampleStep(f, air.c);
     let level = levels[0];
     for (const l of levels) if (l.h <= hMax) level = l;
-    const { p, U } = propagate(level.curve, k, rhoC, radiationImpedance(Sm, k, rhoC, mouth));
+    const zr = radiationImpedance(Sm, k, rhoC, mouth);
+    const { p, U } = propagate(level.curve, k, rhoC, zr);
     const zThroat = div(p, U);
     const { zel, uMouth } = driverResponse(driver, air, f, zThroat, inv(U), voltage);
-    const pr = mul(cx(0, w * air.rho / (omega * distance)), uMouth);
+    // abgestrahlte Leistung Re(Z_r)·|U|², gleichmäßig auf Ω verteilt: |p| = √(W·ρc/Ω)/r,
+    // Phase wie beim Monopol (j·U)
+    const pr = mul(cx(0, Math.sqrt(zr.re * rhoC / omega) / distance), uMouth);
     out.spl.push(20 * Math.log10(abs(pr) / 20e-6));
     out.phase.push(arg(pr) * 180 / Math.PI);
     out.zel.push(zel);
