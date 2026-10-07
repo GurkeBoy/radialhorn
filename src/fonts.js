@@ -5,6 +5,10 @@ import regularLatin from "./assets/fonts/DMMono-400-latin.woff2";
 import regularLatinExt from "./assets/fonts/DMMono-400-latin-ext.woff2";
 import mediumLatin from "./assets/fonts/DMMono-500-latin.woff2";
 import mediumLatinExt from "./assets/fonts/DMMono-500-latin-ext.woff2";
+// Fürs PDF-Datenblatt als data:-URL (Vite ?inline): das Dokument läuft in eigenem Fenster bzw. als
+// gespeicherte HTML-Datei und kommt an die Schriftdateien der App nicht heran
+import regularLatinInline from "./assets/fonts/DMMono-400-latin.woff2?inline";
+import mediumLatinInline from "./assets/fonts/DMMono-500-latin.woff2?inline";
 
 // unicode-range wie bei Google Fonts
 const LATIN = "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, "
@@ -16,6 +20,12 @@ const face = (weight, url, range) => `@font-face {
   font-family: 'DM Mono'; font-style: normal; font-weight: ${weight}; font-display: swap;
   src: url(${url}) format('woff2'); unicode-range: ${range};
 }`;
+
+/**
+ * @font-face-Regeln mit eingebetteter Schrift (nur „latin“, ≈ 40 KB) für das PDF-Datenblatt –
+ * es enthält keine Zeichen aus latin-ext.
+ */
+export const FONT_CSS_EMBEDDED = [face(400, regularLatinInline, LATIN), face(500, mediumLatinInline, LATIN)].join("\n");
 
 /** @font-face-Regeln für main.jsx. */
 export const FONT_CSS = [
