@@ -15,6 +15,8 @@ React + Vite + Tauri App zur Berechnung und Visualisierung von Radialhörnern mi
 
 Vor jedem Commit: `npm run lint` und `npm test` grün. Dasselbe prüft die CI bei jedem Push auf `master` und jedem PR (`.github/workflows/ci.yml`, Ubuntu, Node 24).
 
+**Release:** `.github/workflows/release.yml` baut bei einem Tag `v<version>` (oder von Hand: Actions → Release → Run workflow) die Installer – Windows (NSIS .exe, .msi), macOS universal (.dmg, Apple Silicon + Intel), Linux (.deb, .rpm, .AppImage; Ubuntu 22.04 für ältere glibc) – mit `tauri-apps/tauri-action` und hängt sie an einen **Release-Entwurf** (sichtbar erst nach Veröffentlichen). Ablauf: Version in `package.json`, `src-tauri/tauri.conf.json` und `src-tauri/Cargo.toml` erhöhen (`version.test.js` prüft Gleichstand), mergen, Tag `v<version>` auf master pushen, Entwurf prüfen, veröffentlichen. Installer sind nicht signiert (Hinweise in README und Release-Text). **App-Icon** aus der Geometrie: `src-tauri/icons/make-icon.mjs` → `icon.svg` → PNG 1024 px (`app-icon.png`, z. B. per kopflosem Chrome) → `npx tauri icon src-tauri/icons/app-icon.png` (danach `android/`, `ios/`, `64x64.png` löschen – nicht genutzt).
+
 **Open Source:** MIT-Lizenz (`LICENSE`, © Julius Schirmer; auch in `package.json` und `Cargo.toml`). README auf Englisch (`README.md`) und Deutsch (`README.de.md`), beide mit Screenshot aus `docs/images/` – aufgenommen mit kopflosem Chrome (eigenes Wegwerf-Profil, 1600 × 1000, `--lang` passend zur Sprache, sonst zeigen Zahlenfelder das falsche Dezimalzeichen) bei Wandstärke, Flansch und Frequenzgang an. Diese Datei und `validation/README.md` bleiben deutsch.
 
 ## Projektstruktur
