@@ -7,7 +7,8 @@ Prüfcode und Referenzdaten, die nicht Teil der App sind. Die Tests hier laufen 
 [Hornresp](http://www.hornresp.net/) ist ein verbreitetes Simulationsprogramm für Horn- und
 Direktstrahler-Lautsprecher von David J McBean. Es ist ein eigenständiges Programm; dieses Projekt steht
 in keiner Verbindung dazu und enthält weder Hornresp noch Teile davon. Die Referenzdateien enthalten nur
-Zahlenwerte, die Hornresp für die dokumentierten Eingaben berechnet hat. Sie dienen dem Vergleich.
+Zahlenwerte, die Hornresp für die dokumentierten Eingaben berechnet hat. Sie dienen dem Vergleich und sind
+mit freundlicher Genehmigung von David J McBean enthalten (E-Mail, Oktober 2026).
 
 Der Abgleich prüft den 1D-Rechenkern (`src/simulation.js`: Webster-Transfermatrizen, Strahlungsimpedanz,
 Treiber, Kompressionskammer) an Hörnern, die beide Programme exakt kennen:

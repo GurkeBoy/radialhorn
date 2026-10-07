@@ -82,4 +82,5 @@ New UI languages need only a dictionary in [`src/locales/`](src/locales/) – a 
 
 Third-party: the [DM Mono](https://github.com/googlefonts/dm-mono) font is embedded under the
 [SIL Open Font License 1.1](src/assets/fonts/OFL.txt). Hornresp is a separate program by David J McBean; this project is
-not affiliated with it and includes only numerical Hornresp results as reference data.
+not affiliated with it and includes only numerical Hornresp results as reference data, with the kind permission of
+David J McBean.

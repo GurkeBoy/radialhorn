@@ -3,6 +3,7 @@
 # Hornresp ist ein eigenständiges Programm von David J McBean; dieses Projekt steht in keiner Verbindung
 # dazu. Die Werte sind mit Hornresp berechnete Ergebnisse für die unten genannten Eingaben und dienen
 # nur dem Vergleich (validation/hornresp/hornresp.test.js).
+# Mit freundlicher Genehmigung von David J McBean (E-Mail, Oktober 2026).
 #
 # Eingaben: Ang = 2,0 x Pi, Eg = 2,83, Rg = 0, S1 = 20, S2 = 268.25, L12 (Con) = 25, S3 = 800, L23 (Con) = 25, Sd = 45, Bl = 15, Cms = 3.00e-5, Rms = 1.5, Mmd = 2.5, Le = 0.06, Re = 5.8, Nd = 1, Vrc = 0, Lrc = 0, Vtc = 10, Atc = 45
 # Einheiten wie in Hornresp: S cm², L cm, Sd cm², Cms m/N, Mmd g, Le mH, Vtc cm³, Atc cm²

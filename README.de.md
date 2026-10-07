@@ -85,4 +85,4 @@ Aufbau, Konventionen und Bemaßungsregeln: [CLAUDE.md](CLAUDE.md). Weitere Sprac
 Fremdbestandteile: Die Schrift [DM Mono](https://github.com/googlefonts/dm-mono) ist unter der
 [SIL Open Font License 1.1](src/assets/fonts/OFL.txt) eingebettet. Hornresp ist ein eigenständiges Programm von David
 J McBean; dieses Projekt steht in keiner Verbindung dazu und enthält nur berechnete Hornresp-Ergebnisse als
-Referenzdaten.
+Referenzdaten, mit freundlicher Genehmigung von David J McBean.
