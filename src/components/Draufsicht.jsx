@@ -3,7 +3,7 @@ import { memo, useMemo, useRef } from "react";
 import { useT } from "../i18n.js";
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
-import { svgPath, clipFromZ, nestedLayers } from "../utils.js";
+import { svgPath, clipFromZ, nestedLayers, fmtLength } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker } from "./ui.jsx";
 import { Dim, DimAligned } from "./Dim.jsx";
@@ -201,7 +201,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
 
         {/* Links: Gesamtlänge L */}
         <Dim p1={[cx, hatY]} p2={[cx, toY(s.zApex)]}
-          arrowPos={ax} color={COLOR.dimL} marker="url(#arrH)" label={`L=${L} mm`} sw="0.8" />
+          arrowPos={ax} color={COLOR.dimL} marker="url(#arrH)" label={`L=${fmtLength(L)} mm`} sw="0.8" />
 
         {/* Rechts, 1. Lage: Kette Hut-Spitze → Treiberrückseite → Treiberfront; 2. Lage: Traktrix */}
         <Dim p1={[toX(dw/2), toY(-dh)]} p2={[toX(dw/2), toY(0)]} orient="v"

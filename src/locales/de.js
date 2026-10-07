@@ -6,6 +6,9 @@ export default {
 
   // Karten
   "card.throat": "THROAT",
+  "throat.custom": "Eigene",
+  "throat.size14": "1,4\"",
+  "throat.diameter": "Durchmesser Ø",
   "card.geometry": "HORNGEOMETRIE",
   "card.profile": "VERTIKALES PROFIL",
   "card.driver": "TREIBER",
