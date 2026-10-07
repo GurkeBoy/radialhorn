@@ -105,7 +105,8 @@ export function Warn({ children }) {
 
 /**
  * Schieberegler mit Zahlenfeld. Getipptes übernimmt das Zahlenfeld erst bei Enter oder Verlassen
- * (halbe Eingaben rechnen nicht); ungültige Eingaben werden verworfen. Solange nicht getippt wird,
+ * (halbe Eingaben rechnen nicht); Enter verlässt danach das Feld, Esc verwirft die Eingabe und
+ * verlässt es ebenfalls. Ungültige Eingaben werden verworfen. Solange nicht getippt wird,
  * zeigt es den aktuellen Wert mit einer Nachkommastelle (gerechnet wird mit dem genauen).
  *
  * Schritte über eigene ▲▼-Knöpfe (immer sichtbar, gedrückt halten wiederholt) und ↑/↓ – nicht über
@@ -122,9 +123,11 @@ export function Slider({ label, value, min, max, step, unit, onChange }) {
   const display = String(Number(value.toFixed(Math.max(1, decimals))));
   const clampTo = v => Math.max(min, Math.min(max, v));
 
+  const discard = useRef(false);   // Esc: beim folgenden Verlassen nichts übernehmen
   const commit = () => {
     const v = parseFloat(draft);
-    if (draft !== null && !isNaN(v)) onChange(clampTo(v));
+    if (!discard.current && draft !== null && !isNaN(v)) onChange(clampTo(v));
+    discard.current = false;
     setDraft(null);
   };
 
@@ -147,7 +150,8 @@ export function Slider({ label, value, min, max, step, unit, onChange }) {
           onChange={e => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={e => {
-            if (e.key === "Enter") commit();
+            if (e.key === "Enter") e.currentTarget.blur();   // Verlassen übernimmt (onBlur → commit)
+            else if (e.key === "Escape") { discard.current = true; e.currentTarget.blur(); }
             else if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); stepBy(e.key === "ArrowUp" ? 1 : -1); }
           }}
           onWheel={e => e.currentTarget.blur()}   // Mausrad soll die Seite scrollen, nicht den Wert ändern
