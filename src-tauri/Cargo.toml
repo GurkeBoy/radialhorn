@@ -1,7 +1,9 @@
 [package]
 name = "radialhorn"
 version = "0.1.0"
-description = "Radialhorn-Konfigurator – Desktop-App"
+description = "Radial horn configurator – desktop app"
+authors = ["Julius Schirmer"]
+license = "MIT"
 edition = "2021"
 
 [lib]

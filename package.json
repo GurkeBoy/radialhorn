@@ -2,7 +2,9 @@
   "name": "radialhorn",
   "private": true,
   "version": "0.1.0",
-  "description": "Radialhorn-Konfigurator: Berechnung, Zeichnung und CAD-Export von Radialhörnern mit Traktrix-Eingang",
+  "description": "Radial horn configurator: geometry, drawings, CAD export and 1D acoustic simulation of radial horns with a tractrix entrance",
+  "license": "MIT",
+  "author": "Julius Schirmer",
   "type": "module",
   "scripts": {
     "dev": "vite",
