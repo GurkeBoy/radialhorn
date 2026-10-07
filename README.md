@@ -11,6 +11,7 @@ Desktop-App zur Auslegung von Radialhörnern mit Traktrix-Eingang für den Lauts
 - **3D-Ansicht:** das Luftvolumen oder – mit Wandstärke – die Schale des Horns zum Drehen und Zoomen, als Fläche oder Gitter, mit Treiber und Raumecke als Bezug.
 - **Gerundete Kanten:** die äußeren Längskanten der Schale optional verrundet (Radius bis zur Wandstärke).
 - **Flansch am Throat:** runde Platte mit quadratischer Throat-Öffnung und Bohrbild (Anzahl, Lochkreis, Bohrungs-Ø, Winkellage) zum Anschrauben des Treibers – in 3D/STL, Draufsicht, Seitenriss und DXF.
+- **Deutsch und Englisch:** Oberfläche und PDF-Datenblatt umschaltbar, beim ersten Start in der Systemsprache.
 - **Einstellungen bleiben erhalten:** Alle Parameter werden gespeichert, beim nächsten Start geht es dort weiter, wo man aufgehört hat; ein Knopf setzt alles auf die Standardwerte zurück.
 - **Kennwerte:** Mundfläche, vertikaler Öffnungswinkel, akustische Grenzfrequenzen (Näherung).
 - **Frequenzgang (1D-Simulation):** Webster-Horngleichung per Transfermatrizen aus der Wellenfrontfläche S(x), Treiber mit Thiele-Small-Parametern und Kompressionskammer, Abstrahlung in 2π (exakt) oder 4π/π/π/2 (Näherung). SPL bei 1 m / 2,83 V und elektrische Impedanz als Diagramm, Export als CSV. Validiert an Rohr, Konus und Exponentialhorn; mit Hornresp abgeglichen (Konus, Kompressionskammer, Konus + Exponential: SPL ±0,01 dB), siehe [validation/](validation/README.md).

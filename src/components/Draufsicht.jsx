@@ -1,5 +1,6 @@
 // Draufsicht (horizontaler Schnitt): Traktrix, gerade Wand, Mundbogen, Raumecke, Treiber.
 import { memo, useMemo, useRef } from "react";
+import { useT } from "../i18n.js";
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
 import { svgPath, clipFromZ, nestedLayers } from "../utils.js";
@@ -17,6 +18,7 @@ const DIM_LAYER = 18, DIM_LAYER_STEP = 22;   // Bemaßungslagen [px], siehe CLAU
 
 /** @param flange  aufgelöster Throat-Flansch (flangeLayout) oder null */
 export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange }) {
+  const tr = useT();
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
@@ -35,7 +37,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
 
   if (!s || VW < 10 || VH < 10) return (
     <div ref={containerRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: COLOR.trans, fontSize: 12, fontFamily: FONT }}>
-      {!s ? "⚠ Parameter ungültig" : ""}
+      {!s ? tr("view.invalid") : ""}
     </div>
   );
 
@@ -112,7 +114,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
         <defs><ArrowMarker id="arrH" /></defs>
 
         <line x1={cx} y1={toY(s.hatTipZ - 6)} x2={cx} y2={toY(s.zApex) + 6} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
-        <text x={cx0} y={14} textAnchor="middle" fontSize="9" fill={COLOR.text} fontFamily={FONT} letterSpacing="0.12em">DRAUFSICHT · HORIZONTALER SCHNITT</text>
+        <text x={cx0} y={14} textAnchor="middle" fontSize="9" fill={COLOR.text} fontFamily={FONT} letterSpacing="0.12em">{tr("view.topTitle")}</text>
 
         {showRaumecke && <>
           {[reRx, reLx].map(x => (
@@ -251,12 +253,13 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
 });
 
 function Treiber({ toX, toY, dw, dh, scale, cx }) {
+  const tr = useT();
   const x0 = toX(-dw / 2), x1 = toX(dw / 2), y0 = toY(-dh), y1 = toY(0);
   return <>
     <rect x={x0} y={y0} width={dw * scale} height={dh * scale} fill={COLOR.drivPlanFill} stroke={COLOR.drivPlan} strokeWidth="1.3" rx="2" />
     <line x1={x0} y1={y0} x2={x1} y2={y1} stroke={COLOR.drivPlanDiag} strokeWidth="0.5" opacity="0.5" />
     <line x1={x1} y1={y0} x2={x0} y2={y1} stroke={COLOR.drivPlanDiag} strokeWidth="0.5" opacity="0.5" />
-    <text x={cx} y={toY(-dh / 2)} textAnchor="middle" dominantBaseline="central" fontSize="10" fill={COLOR.text} fontFamily={FONT}>Treiber</text>
+    <text x={cx} y={toY(-dh / 2)} textAnchor="middle" dominantBaseline="central" fontSize="10" fill={COLOR.text} fontFamily={FONT}>{tr("view.driver")}</text>
   </>;
 }
 
@@ -266,17 +269,18 @@ function RightAngleMark({ x, y, dx, dy, size, color }) {
 }
 
 function Legend({ showWandstaerke, showClothoid, showFlange }) {
+  const tr = useT();
   const items = [
-    { col: COLOR.trak,     label: "Traktrix" },
-    ...(showClothoid ? [{ col: COLOR.klo, label: "Klothoide" }] : []),
-    { col: COLOR.horn,     label: "Lin. Bereich" },
-    { col: COLOR.arc,      label: "Teilkreis" },
-    { col: COLOR.trans,    label: "Übergang",   kind: "dot" },
-    { col: COLOR.drivPlan, label: "Treiber",    kind: "fill" },
-    { col: COLOR.raum,     label: "Raumecke",   dash: true },
-    ...(showWandstaerke ? [{ col: COLOR.wand, label: "Wandstärke" }] : []),
-    ...(showFlange ? [{ col: COLOR.flansch, label: "Flansch", kind: "fill" }] : []),
-    { col: COLOR.dim,      label: "Bemaßung" },
+    { col: COLOR.trak,     label: tr("legend.tractrix") },
+    ...(showClothoid ? [{ col: COLOR.klo, label: tr("legend.clothoid") }] : []),
+    { col: COLOR.horn,     label: tr("legend.linear") },
+    { col: COLOR.arc,      label: tr("legend.arc") },
+    { col: COLOR.trans,    label: tr("legend.transition"), kind: "dot" },
+    { col: COLOR.drivPlan, label: tr("legend.driver"),     kind: "fill" },
+    { col: COLOR.raum,     label: tr("legend.corner"),     dash: true },
+    ...(showWandstaerke ? [{ col: COLOR.wand, label: tr("legend.wall") }] : []),
+    ...(showFlange ? [{ col: COLOR.flansch, label: tr("legend.flange"), kind: "fill" }] : []),
+    { col: COLOR.dim,      label: tr("legend.dimension") },
   ];
   return (
     <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", flexDirection: "column", gap: 3 }}>
