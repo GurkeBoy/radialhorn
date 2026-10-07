@@ -131,15 +131,16 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 
 Reihenfolge der Karten: Throat → Horngeometrie → Vertikales Profil → Treiber → Aufstellung (Raumecke) → Ausführung (Wandstärke, Kanten, Flansch) → Simulation → Kennwerte (Kacheln + Grenzfrequenzen) → Querschnitt → Export, darunter „Alle Einstellungen zurücksetzen“. Bausteine nur aus `ui.jsx`, keine Ad-hoc-Stile in `App.jsx`:
 
+- **Throat:** Knöpfe 1" | 1,4" (35,5 mm, Herstellerangabe; Beschriftung je Sprache mit Dezimalkomma bzw. -punkt) | 2" | Eigene (`THROAT_SIZES`, `THROAT_CUSTOM`); „Eigene“ zeigt den Regler Durchmesser Ø (10–150 mm). Eigene gilt, wenn gewählt (Einstellung `throatCustom`) oder wenn der gespeicherte `throatDiam` keiner Knopfgröße entspricht – so werden früher gespeicherte 1½" (38,1 mm) und 3" (76,2 mm) zu „Eigene“.
 - `Card title id`: mit `id` über die Überschrift einklappbar, Zustand gespeichert (Einstellung `open.<id>`). Jede Karte hat einen Titel.
 - `Group title [id] [first]`: Unterabschnitt mit kleiner Überschrift und Trennlinie darüber (`first`: direkt unter dem Kartentitel, ohne Linie); mit `id` einklappbar (Treiberdaten der Simulation: `simulation.treiber`).
-- `Slider`: festes Raster Beschriftung 116 px | Regler | Zahl 62 px (rechtsbündig, gleich breite Ziffern) | Einheit 30 px, Zeilenabstand 8 px.
+- `Slider`: festes Raster Beschriftung 116 px | Regler | Zahl 70 px mit eigenen ▲▼ (rechtsbündig, gleich breite Ziffern) | Einheit 30 px, Zeilenabstand 8 px. Zahlenfeld: Getipptes gilt erst bei Enter oder Verlassen; ▲▼ (Klick, Halten wiederholt) und ↑/↓ wirken sofort. **Nicht die Pfeile des Browsers:** die zählen ab `min` (bei gerechnetem min wie einem begrenzten Lₜ landet „nach oben“ wieder auf demselben Wert) und verhalten sich in WebView2 (Tauri) anders als in Chrome – deshalb ausgeblendet (`GLOBAL_CSS`). Ein Schritt geht vom auf die Schrittweite gerundeten Wert aus (126,341 → 127) und wird auf [min, max] begrenzt. Angezeigt mit einer Nachkommastelle (bei feinerer Schrittweite wie Le 0,01 deren Stellen), ohne unnötige Null; gerechnet wird mit dem genauen Wert; Längen in Beschriftungen mit `fmtLength` (höchstens eine Nachkommastelle).
 - `Toggle hint`: Hinweis unter dem Schalter, auf dessen Text eingerückt. Text grau, eingeschaltet hell.
 - `Note` (grauer Hinweis) und `Warn` (volle Breite, ⚠ wird automatisch vorangestellt – nicht in den Text schreiben).
 - `Button [primary]`: volle Breite; primary nur für die Hauptaktion (DXF).
 - Abstände: Karten 10 px oben/unten innen (letztes Element bringt 8 px mit), 8 px zwischen Karten.
 - **Schrift DM Mono** ist eingebettet (`fonts.js`, `assets/fonts/`: woff2 aus Google Fonts v16, latin + latin-ext, Lizenz `OFL.txt` liegt bei) – offline und auf jedem Rechner gleich. Nur die Schnitte 400 und 500 (DM Mono hat keinen fetteren): Hervorhebungen mit `fontWeight: 500`, nie 700 (sonst künstliches Fett). Zeichen außerhalb der Schrift (π, Ω, ₜ, ⚠ …) kommen aus der Systemschrift. Das PDF-Datenblatt läuft in eigenem Fenster bzw. als gespeicherte HTML-Datei und kommt an die Schriftdateien nicht heran: dort ist DM Mono als data:-URL eingebettet (`FONT_CSS_EMBEDDED`, Vite `?inline`, nur „latin“, ≈ 40 KB; das Datenblatt wächst auf ≈ 80 KB), auch für die Bemaßungstexte der Zeichnungen.
-- Globale Regeln in `theme.js` (`GLOBAL_CSS`, von `main.jsx` eingehängt): dunkle, schmale Scrollbars, Zahlenfelder ohne Pfeiltasten, sichtbarer Tastaturfokus.
+- Globale Regeln in `theme.js` (`GLOBAL_CSS`, von `main.jsx` eingehängt und beim Hot-Reload erneuert): dunkle, schmale Scrollbars, Zahlenfelder ohne Browser-Pfeile (eigene ▲▼ im `Slider`), sichtbarer Tastaturfokus.
 
 ## Sprachen
 
