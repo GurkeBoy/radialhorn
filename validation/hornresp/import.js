@@ -23,6 +23,7 @@ const header = [
   "# Hornresp ist ein eigenständiges Programm von David J McBean; dieses Projekt steht in keiner Verbindung",
   "# dazu. Die Werte sind mit Hornresp berechnete Ergebnisse für die unten genannten Eingaben und dienen",
   "# nur dem Vergleich (validation/hornresp/hornresp.test.js).",
+  "# Mit freundlicher Genehmigung von David J McBean (E-Mail, Oktober 2026).",
   "#",
   `# Eingaben: ${hornrespInputs(c).map(([k, v]) => `${k} = ${v}`).join(", ")}`,
   "# Einheiten wie in Hornresp: S cm², L cm, Sd cm², Cms m/N, Mmd g, Le mH, Vtc cm³, Atc cm²",
