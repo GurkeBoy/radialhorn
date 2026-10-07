@@ -4,6 +4,17 @@ export default {
   "app.subtitle": "Konfigurator für Radialhörner",
   "app.language": "Sprache",
 
+  // Projektdateien
+  "project.open": "↑ Öffnen…",
+  "project.save": "↓ Speichern",
+  "project.opened": "Geöffnet: {name}.",
+  "project.defaultsOne": "1 Wert ungültig oder fehlend, Standard verwendet: {keys}.",
+  "project.defaults": "{n} Werte ungültig oder fehlend, Standard verwendet: {keys}.",
+  "project.newer": "Datei aus einer neueren Version – unbekannte Angaben ignoriert.",
+  "project.error.json": "Die Datei ist kein gültiges JSON.",
+  "project.error.format": "Keine Radialhorn-Projektdatei.",
+  "project.error.read": "Die Datei konnte nicht gelesen werden.",
+
   // Karten
   "card.throat": "THROAT",
   "throat.custom": "Eigene",

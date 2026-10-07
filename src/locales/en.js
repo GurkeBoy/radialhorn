@@ -4,6 +4,17 @@ export default {
   "app.subtitle": "Radial horn configurator",
   "app.language": "Language",
 
+  // Project files
+  "project.open": "↑ Open…",
+  "project.save": "↓ Save",
+  "project.opened": "Opened: {name}.",
+  "project.defaultsOne": "1 value invalid or missing, default used: {keys}.",
+  "project.defaults": "{n} values invalid or missing, defaults used: {keys}.",
+  "project.newer": "File from a newer version – unknown entries ignored.",
+  "project.error.json": "The file is not valid JSON.",
+  "project.error.format": "Not a Radialhorn project file.",
+  "project.error.read": "The file could not be read.",
+
   // Cards
   "card.throat": "THROAT",
   "throat.custom": "Custom",
