@@ -21,6 +21,15 @@ export function readSetting(key, initial, storage = defaultStorage()) {
     if (raw == null) return initial;
     value = JSON.parse(raw);
   } catch { return initial; }
+  return checkSetting(value, initial);
+}
+
+/**
+ * Wert gegen seinen Standard prüfen (Regeln wie bei readSetting); passt er nicht, der Standard.
+ * Auch für Projektdateien (project.js).
+ */
+export function checkSetting(value, initial) {
+  if (value === undefined) return initial;
   if (value === null) return initial === null || typeof initial === "number" ? value : initial;
   if (initial !== null && typeof initial === "object") {
     if (typeof value !== "object" || Array.isArray(value)) return initial;
