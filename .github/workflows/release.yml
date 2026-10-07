@@ -1,0 +1,74 @@
+name: Release
+
+# Baut die Installer für Windows, macOS und Linux und hängt sie an einen Release-Entwurf.
+# Auslösen: Tag v<version> pushen (Version wie in src-tauri/tauri.conf.json) oder von Hand
+# (Actions → Release → Run workflow). Der Entwurf wird erst durch Veröffentlichen sichtbar.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            platform: windows-latest
+            args: ""
+          - name: macOS
+            platform: macos-latest
+            args: "--target universal-apple-darwin"
+          - name: Linux
+            platform: ubuntu-22.04
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # macOS: beide Architekturen für das Universal-Paket
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Radialhorn v__VERSION__
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+          releaseBody: |
+            Radial horn configurator – geometry, drawings, CAD export and 1D acoustic simulation.
+
+            **Installation**
+            - **Windows:** run the `.exe` (or `.msi`). The installer is not code-signed, so SmartScreen may warn: *More info → Run anyway*.
+            - **macOS** (Apple Silicon and Intel): open the `.dmg` and drag Radialhorn to Applications. The app is not notarized; if macOS says it is damaged or cannot be opened, run `xattr -cr /Applications/Radialhorn.app` in Terminal once.
+            - **Linux:** `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE) or the portable `.AppImage` (make it executable first).
+
+            See the [README](https://github.com/GurkeBoy/radialhorn#readme) for features and limitations.

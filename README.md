@@ -10,6 +10,16 @@ simulates its frequency response, and exports DXF for CAD, STL for 3D printing a
 
 ![Radialhorn: input column, top view, 3D shell, side view and frequency response](docs/images/app-en.png)
 
+## Download
+
+Installers for **Windows**, **macOS** (Apple Silicon and Intel) and **Linux** (.deb, .rpm, AppImage) are attached to
+each [release](https://github.com/GurkeBoy/radialhorn/releases). They are not code-signed:
+
+- **Windows:** SmartScreen may warn – *More info → Run anyway*.
+- **macOS:** if the app is reported as damaged or cannot be opened, run `xattr -cr /Applications/Radialhorn.app` once in
+  Terminal.
+- **Linux:** make the AppImage executable before starting it.
+
 ## Features
 
 - **Horizontal profile:** tractrix entrance → straight wall at half the opening angle → mouth arc around the focal
