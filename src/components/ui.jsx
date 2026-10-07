@@ -260,6 +260,21 @@ const controlStyle = {
   color: UI.muted, fontFamily: FONT,
 };
 
+/**
+ * Titel einer Ansicht oben links, auf Höhe der Knöpfe; kürzt mit „…“, statt unter die Knöpfe zu laufen.
+ * reserve = Platz rechts für Vollbild- und Zoom-Knöpfe [px].
+ */
+export function ViewTitle({ children, reserve = 160 }) {
+  return (
+    <div style={{
+      position: "absolute", top: 6, left: 12, right: reserve, height: 24, display: "flex", alignItems: "center", pointerEvents: "none",
+      fontSize: 9, color: COLOR.text, fontFamily: FONT, letterSpacing: "0.12em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+    }}>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{children}</span>
+    </div>
+  );
+}
+
 /** Zoomstufe + Zurücksetzen oben rechts (Standard: links neben dem Vollbild-Button). */
 export function ZoomControls({ k, onReset, top = 6, right = 36, compact = false }) {
   const tr = useT();

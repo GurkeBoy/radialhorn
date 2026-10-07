@@ -5,7 +5,7 @@ import { hasTraktrix } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash, raumDashCenter } from "../theme.js";
 import { linspace, nestedLayers, fmtLength } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
-import { ZoomControls, ArrowMarker } from "./ui.jsx";
+import { ZoomControls, ArrowMarker, ViewTitle } from "./ui.jsx";
 import { Dim } from "./Dim.jsx";
 import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
 import { WandSchnitt } from "./WandSchnitt.jsx";
@@ -72,11 +72,11 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
   return (
     <div ref={containerRef} {...zoom.handlers}
       style={{ position: "relative", width: "100%", height: "100%", cursor: "grab", touchAction: "none", userSelect: "none" }}>
+      <ViewTitle>{tr("view.sideTitle")}</ViewTitle>
       <ZoomControls k={k} onReset={zoom.reset} />
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs><ArrowMarker id="arrV" /></defs>
 
-        <text x={VW / 2} y={10} textAnchor="middle" fontSize="9" fill={COLOR.text} fontFamily={FONT} letterSpacing="0.12em">{tr("view.sideTitle")}</text>
         <line x1={toX(s.hatTipZ)} y1={toY(0)} x2={toX(s.zApex)} y2={toY(0)} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
 
         {/* Treiber */}

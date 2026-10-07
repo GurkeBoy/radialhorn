@@ -259,13 +259,16 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
 
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: 10, left: 0, right: 0, textAlign: "center", fontSize: 9, color: COLOR.text, fontFamily: FONT, letterSpacing: "0.12em", pointerEvents: "none" }}>
-        {wall > 0 ? tr("view.3dShell", { mm: wall }) : tr("view.3dAir")}
-      </div>
-      <div style={{ position: "absolute", top: 6, right: 36, zIndex: 10, display: "flex", gap: 4 }}>
-        <ViewButton active={wireframe} onClick={() => setWireframe(v => !v)} title={tr("view.gridTitle")}>{tr("view.grid")}</ViewButton>
-        <ViewButton active={showReference} onClick={() => setShowReference(v => !v)} title={tr("view.referenceTitle")}>{tr("view.reference")}</ViewButton>
-        <ViewButton onClick={resetView} title={tr("view.resetView")}>{tr("view.reset")}</ViewButton>
+      {/* Kopfzeile: Titel links (kürzt mit …), Knöpfe rechts neben dem Vollbild-Knopf */}
+      <div style={{ position: "absolute", top: 6, left: 12, right: 36, zIndex: 10, display: "flex", alignItems: "center", gap: 8, pointerEvents: "none" }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 9, color: COLOR.text, fontFamily: FONT, letterSpacing: "0.12em" }}>
+          {wall > 0 ? tr("view.3dShell", { mm: wall }) : tr("view.3dAir")}
+        </span>
+        <div style={{ display: "flex", gap: 4, flexShrink: 0, pointerEvents: "auto" }}>
+          <ViewButton active={wireframe} onClick={() => setWireframe(v => !v)} title={tr("view.gridTitle")}>{tr("view.grid")}</ViewButton>
+          <ViewButton active={showReference} onClick={() => setShowReference(v => !v)} title={tr("view.referenceTitle")}>{tr("view.reference")}</ViewButton>
+          <ViewButton onClick={resetView} title={tr("view.resetView")}>{tr("view.reset")}</ViewButton>
+        </div>
       </div>
       {!s && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.trans, fontSize: 12, fontFamily: FONT }}>{tr("view.invalid")}</div>}
     </div>
