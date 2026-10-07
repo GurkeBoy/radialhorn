@@ -1,5 +1,6 @@
 // Diagramm der Querschnittsfläche A(z) = B·H mit Daten-Zoom.
 import { memo, useMemo, useRef } from "react";
+import { useT } from "../i18n.js";
 import { hasTraktrix, crossSection } from "../horn-math.js";
 import { COLOR, FONT, S } from "../theme.js";
 import { clamp, niceTicks, svgPath } from "../utils.js";
@@ -14,6 +15,7 @@ const PART_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.h
 
 /** @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile) */
 export const Querschnitt = memo(function Querschnitt({ s, profile }) {
+  const tr = useT();
   const svgRef = useRef(null);
   const zoom = useZoomPan(svgRef, {
     minZoom: 1,
@@ -72,7 +74,7 @@ export const Querschnitt = memo(function Querschnitt({ s, profile }) {
         <defs>
           <clipPath id="csPlot"><rect x={ml} y={mt} width={pw} height={ph} /></clipPath>
         </defs>
-        <text x={ml} y={10} {...S.label} textAnchor="start" fontSize="8" fill={COLOR.text} letterSpacing="0.1em">A = B·H [mm²] über z [mm]</text>
+        <text x={ml} y={10} {...S.label} textAnchor="start" fontSize="8" fill={COLOR.text} letterSpacing="0.1em">{tr("cs.axes")}</text>
         <line x1={axX} y1={mt} x2={axX} y2={VH-mb} stroke={COLOR.axis} strokeWidth="0.7" />
         <line x1={ml} y1={axY} x2={VW-mr} y2={axY} stroke={COLOR.axis} strokeWidth="0.7" />
         <g clipPath="url(#csPlot)">
@@ -80,7 +82,7 @@ export const Querschnitt = memo(function Querschnitt({ s, profile }) {
             <line x1={gx(zTrans)} y1={mt} x2={gx(zTrans)} y2={VH-mb} stroke={COLOR.trak} strokeWidth="0.6" strokeDasharray="3 2" opacity="0.4" />
             {/* unsichtbare, breitere Trefferfläche für den Hinweis */}
             <line x1={gx(zTrans)} y1={mt} x2={gx(zTrans)} y2={VH-mb} stroke="transparent" strokeWidth="6" style={{ pointerEvents: "stroke" }}>
-              <title>{`Übergang Traktrix → gerade Wand (z = ${zTrans.toFixed(0)} mm). Der Knick in A(z) ist geometrisch bedingt: die Wandkrümmung in der Draufsicht springt hier, und die Wellenfrontbreite hängt vom Tangentenwinkel der Wand ab.`}</title>
+              <title>{tr("cs.kinkTitle", { z: zTrans.toFixed(0) })}</title>
             </line>
           </>}
           {segments.map((seg, i) => (

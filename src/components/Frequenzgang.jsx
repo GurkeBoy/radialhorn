@@ -1,5 +1,6 @@
 // Frequenzgang aus der 1D-Simulation: SPL (oben) und elektrische Impedanz (unten) über log f.
 import { memo, useRef, useState } from "react";
+import { useT } from "../i18n.js";
 import { abs } from "../simulation.js";
 import { COLOR, FONT, S, UI } from "../theme.js";
 import { niceTicks, svgPath } from "../utils.js";
@@ -19,6 +20,7 @@ const fmtHz = f => f >= 1000 ? `${+(f / 1000).toFixed(f >= 10000 ? 1 : 2)}k` : f
  * @param placeholder  Treiberdaten sind der Platzhalter
  */
 export const Frequenzgang = memo(function Frequenzgang({ result, fLimit, mouth, showPhase, placeholder }) {
+  const tr = useT();
   const ref = useRef(null);
   const { w: VW, h: VH } = useSize(ref);
   const [hover, setHover] = useState(null);   // Index der Frequenz unter dem Mauszeiger
@@ -66,9 +68,9 @@ export const Frequenzgang = memo(function Frequenzgang({ result, fLimit, mouth, 
     <div ref={ref} style={{ width: "100%", height: "100%" }}>
       <svg width={VW} height={VH} onPointerMove={onMove} onPointerLeave={() => setHover(null)} style={{ display: "block", userSelect: "none" }}>
         <text x={ml} y={14} {...S.label} fill={COLOR.text} letterSpacing="0.1em">
-          FREQUENZGANG · 2,83 V / 1 m · {MOUTH_LABEL[mouth]}
+          {tr("fr.title", { mouth: MOUTH_LABEL[mouth] })}
         </text>
-        {placeholder && <text x={ml} y={26} {...S.label} fontSize="8" fill={UI.error}>Platzhalter-Treiber – Werte nicht belastbar</text>}
+        {placeholder && <text x={ml} y={26} {...S.label} fontSize="8" fill={UI.error}>{tr("fr.placeholder")}</text>}
 
         {/* SPL */}
         {limitBand(ySpl0, hSpl)}
@@ -100,8 +102,8 @@ export const Frequenzgang = memo(function Frequenzgang({ result, fLimit, mouth, 
           <text key={v} x={gx(v)} y={yImp0 + hImp + 13} textAnchor="middle" {...tickText}>{fmtHz(v)}</text>)}
 
         {xLim !== null && <text x={xLim + 4} y={ySpl0 + hSpl - 6} {...tickText} fill={UI.error} opacity="0.8">
-          <title>{`Ab ${fmtHz(fLimit)} Hz sind im Hals Querwellen möglich (Breite = λ/2) – das 1D-Modell (Webster) wird unsicher. Faustregel, keine harte Grenze.`}</title>
-          1D unsicher
+          <title>{tr("fr.uncertainTitle", { f: fmtHz(fLimit) })}</title>
+          {tr("fr.uncertain")}
         </text>}
 
         {hover !== null && <g pointerEvents="none">

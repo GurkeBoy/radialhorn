@@ -14,6 +14,18 @@ const DATE = new Date(2026, 9, 1);
 const row = (html, key) => html.match(new RegExp(`<td>${key}</td><td>([^<]*)</td>`))?.[1];
 
 describe("buildDatasheet", () => {
+  it("Englisch: Kennwerte, Beschriftungen und Datum übersetzt, Zahlen gleich", () => {
+    const en = buildDatasheet(design(), ALL, DATE, "en");
+    expect(en).toContain('<html lang="en">');
+    expect(row(en, "Opening angle horiz.")).toBe("140 °");
+    expect(row(en, "Total length L")).toBe("500 mm");
+    expect(row(en, "Flare")).toBe("Exponential");
+    expect(row(en, "Room corner")).toBe("yes");
+    expect(en).toContain("<b>Date</b> 01/10/2026");
+    expect(en).toContain("TECHNICAL DATASHEET");
+    expect(en).not.toMatch(/Kennwerte|Datum|Raumecke|Öffnungswinkel/);
+  });
+
   const html = buildDatasheet(design(), ALL, DATE);
 
   it("Kennwerte", () => {
