@@ -13,7 +13,9 @@ React + Vite + Tauri App zur Berechnung und Visualisierung von Radialhörnern mi
 | `npm run hornresp` | Hornresp-Referenzdokument neu erzeugen → `validation/hornresp/referenz.md`, `modell-*.csv` |
 | `npm run hornresp:import -- <Fall> <Export.txt>` | Hornresp-Export → Referenzdatei `validation/hornresp/hornresp-<Fall>.csv` |
 
-Vor jedem Commit: `npm run lint` und `npm test` grün.
+Vor jedem Commit: `npm run lint` und `npm test` grün. Dasselbe prüft die CI bei jedem Push auf `master` und jedem PR (`.github/workflows/ci.yml`, Ubuntu, Node 24).
+
+**Open Source:** MIT-Lizenz (`LICENSE`, © Julius Schirmer; auch in `package.json` und `Cargo.toml`). README auf Englisch (`README.md`) und Deutsch (`README.de.md`), beide mit Screenshot aus `docs/images/` – aufgenommen mit kopflosem Chrome (eigenes Wegwerf-Profil, 1600 × 1000, `--lang` passend zur Sprache, sonst zeigen Zahlenfelder das falsche Dezimalzeichen) bei Wandstärke, Flansch und Frequenzgang an. Diese Datei und `validation/README.md` bleiben deutsch.
 
 ## Projektstruktur
 
@@ -123,6 +125,7 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 
 - **Draufsicht:** z-Achse vertikal (Treiber oben bei z = 0, Mund unten), x horizontal symmetrisch. `toX(x) = cx + x·scale`, `toY(z) = topOffset + (z − zMin)·scale`.
 - **Seitenriss:** z horizontal (links Treiber, rechts Mund), h vertikal symmetrisch um `cy`.
+- **Ansichtstitel** oben links auf Höhe der Knöpfe, als HTML (`ViewTitle` in Draufsicht und Seitenriss, Kopfzeile mit Flex in 3D): kürzt mit „…“, statt unter Zoom- und Vollbild-Knöpfe zu laufen (vorher mittig als SVG-Text – kollidierte bei langen Titeln, Englisch oder schmalem Fenster).
 - **Zoom/Pan** (`useZoomPan`): Bildschirm-Transformation `p' = t + k·p` auf die Basis-Abbildung. Nur die Geometrie skaliert; Bemaßungsabstände, Text, Punkte und Strichstärken sind Pixelwerte. Titel bleiben fest.
 - **Querschnitt:** Daten-Zoom (`minZoom: 1`, `unitsPerPx` wegen viewBox). Achsen im Datenursprung, wandern mit und bleiben am Plotrand, wenn der Ursprung aus dem Bild läuft. Achsenwerte: markante Werte plus beim Zoomen `niceTicks`.
 - **DXF:** Draufsicht `[x, z] → (X = z, Y = x)`, Seitenprofil `[z, h] → (X = z, Y = 0, Z = h)`.

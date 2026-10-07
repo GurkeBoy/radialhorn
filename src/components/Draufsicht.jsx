@@ -5,7 +5,7 @@ import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoint
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
 import { svgPath, clipFromZ, nestedLayers, fmtLength } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
-import { ZoomControls, ArrowMarker } from "./ui.jsx";
+import { ZoomControls, ArrowMarker, ViewTitle } from "./ui.jsx";
 import { Dim, DimAligned } from "./Dim.jsx";
 import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
 import { WandSchnitt } from "./WandSchnitt.jsx";
@@ -109,12 +109,12 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
   return (
     <div ref={containerRef} {...zoom.handlers}
       style={{ position: "relative", width: "100%", height: "100%", cursor: "grab", touchAction: "none", userSelect: "none" }}>
+      <ViewTitle>{tr("view.topTitle")}</ViewTitle>
       <ZoomControls k={k} onReset={zoom.reset} />
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs><ArrowMarker id="arrH" /></defs>
 
         <line x1={cx} y1={toY(s.hatTipZ - 6)} x2={cx} y2={toY(s.zApex) + 6} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
-        <text x={cx0} y={14} textAnchor="middle" fontSize="9" fill={COLOR.text} fontFamily={FONT} letterSpacing="0.12em">{tr("view.topTitle")}</text>
 
         {showRaumecke && <>
           {[reRx, reLx].map(x => (

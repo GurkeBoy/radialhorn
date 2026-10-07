@@ -1,33 +1,74 @@
-# Radialhorn-Konfigurator
+# Radialhorn
 
-Desktop-App zur Auslegung von Radialhörnern mit Traktrix-Eingang für den Lautsprecher-Eigenbau. Die Geometrie wird aus wenigen Parametern berechnet, als maßstäbliche Draufsicht und Seitenriss gezeichnet und als DXF (für CAD, z.B. Siemens NX) oder PDF-Datenblatt exportiert.
+**English** · [Deutsch](README.de.md)
 
-## Funktionen
+[![CI](https://github.com/GurkeBoy/radialhorn/actions/workflows/ci.yml/badge.svg)](https://github.com/GurkeBoy/radialhorn/actions/workflows/ci.yml)
 
-- **Horizontale Kontur:** Traktrix-Eingang → gerade Wand unter dem halben Öffnungswinkel → Mundbogen um den Fokuspunkt; optional krümmungsstetiger Übergang (Klothoide) zwischen Traktrix und Wand. Öffnungswinkel, Gesamtlänge, Traktrix-Länge, Throat und Treibermaße einstellbar.
-- **Raumecke:** Begrenzt die Hornbreite auf die 45°-Diagonale einer Raumecke, optional mit Wandstärke.
-- **Vertikales Profil:** Aufweitung linear, exponentiell oder Hypex; optionale Verrundung des Übergangs Throat → Aufweitung.
-- **Ansichten:** Draufsicht und Seitenriss mit Bemaßung, Zoom (Mausrad) und Verschieben (Ziehen), Vollbild; Querschnittsfläche A(z) als Diagramm.
-- **3D-Ansicht:** das Luftvolumen oder – mit Wandstärke – die Schale des Horns zum Drehen und Zoomen, als Fläche oder Gitter, mit Treiber und Raumecke als Bezug.
-- **Gerundete Kanten:** die äußeren Längskanten der Schale optional verrundet (Radius bis zur Wandstärke).
-- **Flansch am Throat:** runde Platte mit quadratischer Throat-Öffnung und Bohrbild (Anzahl, Lochkreis, Bohrungs-Ø, Winkellage) zum Anschrauben des Treibers – in 3D/STL, Draufsicht, Seitenriss und DXF.
-- **Deutsch und Englisch:** Oberfläche und PDF-Datenblatt umschaltbar, beim ersten Start in der Systemsprache.
-- **Einstellungen bleiben erhalten:** Alle Parameter werden gespeichert, beim nächsten Start geht es dort weiter, wo man aufgehört hat; ein Knopf setzt alles auf die Standardwerte zurück.
-- **Kennwerte:** Mundfläche, vertikaler Öffnungswinkel, akustische Grenzfrequenzen (Näherung).
-- **Frequenzgang (1D-Simulation):** Webster-Horngleichung per Transfermatrizen aus der Wellenfrontfläche S(x), Treiber mit Thiele-Small-Parametern und Kompressionskammer, Abstrahlung in 2π (exakt) oder 4π/π/π/2 (Näherung). SPL bei 1 m / 2,83 V und elektrische Impedanz als Diagramm, Export als CSV. Validiert an Rohr, Konus und Exponentialhorn; mit Hornresp abgeglichen (Konus, Kompressionskammer, Konus + Exponential: SPL ±0,01 dB), siehe [validation/](validation/README.md).
-- **Export:** DXF mit exakten Kurven (SPLINE/ARC/LINE statt Polylinien, damit CAD glatte Körper erzeugt), PDF-Datenblatt mit maßstäblichen Zeichnungen und STL der Schale bzw. des Luftvolumens (z.B. für den 3D-Druck).
+A desktop app for designing **radial horns with a tractrix entrance** for DIY loudspeakers. From a handful of
+parameters it computes the horn geometry, draws scaled top and side views with dimensions, shows the horn in 3D,
+simulates its frequency response, and exports DXF for CAD, STL for 3D printing and a PDF datasheet.
 
-## Entwicklung
+![Radialhorn: input column, top view, 3D shell, side view and frequency response](docs/images/app-en.png)
 
-Voraussetzungen: Node.js, Rust und die [Tauri-Voraussetzungen](https://tauri.app/start/prerequisites/).
+## Features
+
+- **Horizontal profile:** tractrix entrance → straight wall at half the opening angle → mouth arc around the focal
+  point; optional curvature-continuous transition (clothoid) between tractrix and wall. Opening angle, total length,
+  tractrix length, throat (1", 1.4", 2" or custom) and driver dimensions are adjustable.
+- **Vertical profile:** linear, exponential or hypex flare; optional fillet at the transition throat → flare.
+- **Room corner:** limits the horn width to the 45° diagonal of a room corner, optionally including wall thickness.
+- **Views:** top view and side view with dimensions, zoom (mouse wheel), pan (drag) and fullscreen; cross-section
+  area A(z) as a chart.
+- **3D view:** the air volume or – with wall thickness – the horn shell, to rotate and zoom, as surfaces or wireframe,
+  with driver and room corner as reference.
+- **Construction:** wall thickness, rounded outer edges, and a round throat flange with a bolt pattern for mounting
+  the driver.
+- **Frequency response (1D simulation):** Webster horn equation solved by transfer matrices from the wavefront area
+  S(x); driver from Thiele-Small parameters with throat (compression) chamber; radiation into 2π (exact) or 4π / π /
+  π/2 (approximation). SPL at 1 m / 2.83 V and electrical impedance as a chart, export as CSV.
+- **Key figures:** mouth area, vertical opening angle, approximate cutoff frequencies.
+- **Export:** DXF with exact curves (SPLINE/ARC/LINE instead of polylines, so CAD builds smooth solids), STL of the
+  shell or air volume, and a PDF datasheet with scaled drawings.
+- **English and German**, switchable; settings are kept between sessions.
+
+## Validation
+
+The 1D solver is tested against cases with known solutions (cylindrical pipe resonances, infinite cone and
+exponential horn, energy conservation, convergence) and **compared with [Hornresp](http://www.hornresp.net/)**: for
+a conical horn, a conical horn with throat chamber, and a conical + exponential horn, SPL and electrical impedance
+match Hornresp at all 533 frequencies from 10 Hz to 20 kHz (SPL within 0.01 dB). These comparisons run as part of the
+test suite – see [validation/](validation/README.md) (in German).
+
+## Limitations
+
+- The simulation is **one-dimensional** (Webster). It assumes a spherical-cap wavefront; above roughly
+  c / (2 · throat width) cross modes can form in the throat, and the chart marks that range as “1D uncertain”. It says
+  nothing about directivity.
+- The wavefront model in the tractrix region and at the planar throat is an assumption that has not been verified
+  by measurement or 3D simulation.
+- Wall losses are not modelled yet.
+- The simulation ships with a **placeholder driver**; enter the data of your own driver for meaningful results.
+
+## Development
+
+Requirements: Node.js (24), Rust and the [Tauri prerequisites](https://tauri.app/start/prerequisites/).
 
 ```bash
 npm install
-npm run tauri dev    # Desktop-App
-npm run dev          # nur Web-Oberfläche, http://localhost:1420
-npm test             # Tests (Vitest)
+npm run tauri dev    # desktop app
+npm run dev          # web UI only, http://localhost:1420
+npm test             # tests (Vitest)
 npm run lint         # ESLint
-npm run tauri build  # Installer bauen
+npm run tauri build  # build installers
 ```
 
-Aufbau, Konventionen und Bemaßungsregeln: siehe [CLAUDE.md](CLAUDE.md).
+Architecture, conventions and dimensioning rules are documented in [CLAUDE.md](CLAUDE.md) (in German).
+New UI languages need only a dictionary in [`src/locales/`](src/locales/) – a test checks that no key is missing.
+
+## License
+
+[MIT](LICENSE) © 2026 Julius Schirmer
+
+Third-party: the [DM Mono](https://github.com/googlefonts/dm-mono) font is embedded under the
+[SIL Open Font License 1.1](src/assets/fonts/OFL.txt). Hornresp is a separate program by David J McBean; this project is
+not affiliated with it and includes only numerical Hornresp results as reference data.
