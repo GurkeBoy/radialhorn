@@ -1,5 +1,6 @@
 // Seitenriss (vertikaler Schnitt): Throat, Aufweitung, optionale Verrundung, Treiber, Raumecke.
 import { memo, useMemo, useRef } from "react";
+import { useT } from "../i18n.js";
 import { hasTraktrix } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash, raumDashCenter } from "../theme.js";
 import { linspace, nestedLayers } from "../utils.js";
@@ -19,6 +20,7 @@ const DIM_LEADER = 24;   // Länge der Radius-Leitlinie außerhalb der Wand [px]
  * @param wall     Wandstärke [mm]; > 0 zeichnet den Schnitt durch die Schale
  */
 export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, wall = 0 }) {
+  const tr = useT();
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
@@ -74,14 +76,14 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs><ArrowMarker id="arrV" /></defs>
 
-        <text x={VW / 2} y={10} textAnchor="middle" fontSize="9" fill={COLOR.text} fontFamily={FONT} letterSpacing="0.12em">SEITENRISS · VERTIKALER SCHNITT</text>
+        <text x={VW / 2} y={10} textAnchor="middle" fontSize="9" fill={COLOR.text} fontFamily={FONT} letterSpacing="0.12em">{tr("view.sideTitle")}</text>
         <line x1={toX(s.hatTipZ)} y1={toY(0)} x2={toX(s.zApex)} y2={toY(0)} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
 
         {/* Treiber */}
         <rect x={toX(-dh)} y={toY(dw/2)} width={dh*scale} height={dw*scale} fill={COLOR.drivFill} stroke={COLOR.driv} strokeWidth="1.3" rx="2" />
         <line x1={toX(-dh)} y1={toY(dw/2)} x2={toX(0)} y2={toY(-dw/2)} stroke={COLOR.driv} strokeWidth="0.5" opacity="0.4" />
         <line x1={toX(0)} y1={toY(dw/2)} x2={toX(-dh)} y2={toY(-dw/2)} stroke={COLOR.driv} strokeWidth="0.5" opacity="0.4" />
-        <text x={toX(-dh/2)} y={toY(0)} {...S.label} textAnchor="middle" dominantBaseline="central" fill={COLOR.text}>Treiber</text>
+        <text x={toX(-dh/2)} y={toY(0)} {...S.label} textAnchor="middle" dominantBaseline="central" fill={COLOR.text}>{tr("view.driver")}</text>
 
         {/* Raumecke: von der Achse aus nach oben und unten, Strichmuster symmetrisch zur Achse */}
         {[halfMax, -halfMax].map(hEnd =>

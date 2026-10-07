@@ -5,6 +5,7 @@
 import {
   hasTraktrix, entrancePoints, linearWallPoints, mouthArea, verticalMouthAngle,
 } from "../horn-math.js";
+import { LANGUAGES, translate } from "../i18n.js";
 import { shellPlanOutline, shellProfileOutline, flangeSectionOutline } from "../horn-mesh.js";
 import { linspace, svgPath, clipFromZ } from "../utils.js";
 import { downloadFile } from "./download.js";
@@ -12,7 +13,6 @@ import { downloadFile } from "./download.js";
 const SCALES = [1, 2, 5, 10, 20, 50];
 const SHEET_MM = 170;             // verfügbare Zeichnungsbreite auf A4
 const C = { dim: "#7c5cff", dimText: "#5a4bbf", line: "#1a1a24", axis: "#c8c8d0", arc: "#7c5cff", cut: "#ececf2" };
-const CURVE_LABELS = { linear: "Linear", exponential: "Exponential", hypex: "Hypex" };
 
 /** Kontur der Draufsicht (rechte Hälfte) als Punkte [x, z]: Eingang (Traktrix, Klothoide), gerade Wand. */
 function planOutline(s) {
@@ -91,7 +91,8 @@ function dimensioning(massstab) {
  *                  wall > 0: Schnitt durch die Schale (und den Flansch) in beiden Zeichnungen
  * @param opts    { draufsicht, mundbogen, fokus, seitenprofil, bemassung }
  */
-export function buildDatasheet(design, opts, date = new Date()) {
+export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
+  const tr = (key, params) => translate(lang, key, params);
   const { s, rt, L, hMouth, curve, hypexT, fillet, profile, showRaumecke, showWandstaerke, wandstaerke } = design;
   const wall = design.wall ?? 0, flange = wall > 0 ? design.flange ?? null : null;
   const trakOn = hasTraktrix(s);
@@ -160,24 +161,24 @@ export function buildDatasheet(design, opts, date = new Date()) {
 
   // ── Kennwerte ───────────────────────────────────────────────────
   const kv = [
-    ["Öffnungswinkel horiz.", s.openingAngle + " °"],
-    ["Öffnungswinkel vert.",  verticalMouthAngle(s, profile).toFixed(1) + " °"],
-    ["Gesamtlänge L",         L + " mm"],
-    ["Traktrix-Länge",        s.Lt.toFixed(0) + " mm"],
-    ["Throat Ø",              (rt * 2).toFixed(1) + " mm"],
-    ["Mundbreite",            mundB + " mm"],
-    ["Mund-Höhe",             hMouth + " mm"],
-    ["Mundfläche A",          (mouthArea(s, hMouth) / 1e6).toFixed(4) + " m²"],
-    ["Teilkreis-Radius",      s.arcR.toFixed(1) + " mm"],
-    ["Aufweitung",            CURVE_LABELS[curve] + (curve === "hypex" ? ` (T=${hypexT})` : "")],
-    ["Verrundung Übergang",   fillet ? "R " + fillet.R.toFixed(1) + " mm" : "–"],
-    ["Raumecke",              showRaumecke ? "ja" : "nein"],
-    ["Wandstärke",            showWandstaerke ? wandstaerke + " mm" : "–"],
+    [tr("pdf.openingHoriz"),   s.openingAngle + " °"],
+    [tr("pdf.openingVert"),    verticalMouthAngle(s, profile).toFixed(1) + " °"],
+    [tr("pdf.length"),         L + " mm"],
+    [tr("pdf.tractrixLength"), s.Lt.toFixed(0) + " mm"],
+    [tr("pdf.throat"),         (rt * 2).toFixed(1) + " mm"],
+    [tr("pdf.mouthWidth"),     mundB + " mm"],
+    [tr("pdf.mouthHeight"),    hMouth + " mm"],
+    [tr("pdf.mouthArea"),      (mouthArea(s, hMouth) / 1e6).toFixed(4) + " m²"],
+    [tr("pdf.arcRadius"),      s.arcR.toFixed(1) + " mm"],
+    [tr("pdf.flare"),          tr("profile." + curve) + (curve === "hypex" ? ` (T=${hypexT})` : "")],
+    [tr("pdf.fillet"),         fillet ? "R " + fillet.R.toFixed(1) + " mm" : "–"],
+    [tr("pdf.corner"),         showRaumecke ? tr("pdf.yes") : tr("pdf.no")],
+    [tr("pdf.wall"),           showWandstaerke ? wandstaerke + " mm" : "–"],
   ];
   const kvRows = kv.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Radialhorn – Datenblatt</title>
+<html lang="${lang}"><head><meta charset="utf-8"><title>${tr("pdf.docTitle")}</title>
 <style>
   @page { size: A4 portrait; margin: 0; }
   * { box-sizing: border-box; }
@@ -202,47 +203,47 @@ export function buildDatasheet(design, opts, date = new Date()) {
 </style></head>
 <body>
   <div class="page">
-    <div class="hint">💡 Speichern als PDF: <b>Strg/Cmd + P</b> → "Als PDF speichern". Bei 100 % Druckgröße ist der Maßstab 1:${massstab} exakt.</div>
+    <div class="hint">${tr("pdf.hint", { scale: massstab })}</div>
     <div class="header">
       <div>
         <div class="title">RADIALHORN</div>
-        <div class="subtitle">TECHNISCHES DATENBLATT</div>
+        <div class="subtitle">${tr("pdf.subtitle")}</div>
       </div>
       <div class="docmeta">
         <span class="scale-badge">1 : ${massstab}</span><br>
-        <b>Datum</b> ${date.toLocaleDateString("de-DE")}<br>
-        <b>Einheit</b> Millimeter
+        <b>${tr("pdf.date")}</b> ${date.toLocaleDateString(LANGUAGES[lang]?.locale ?? "de-DE")}<br>
+        <b>${tr("pdf.unit")}</b> ${tr("pdf.millimetre")}
       </div>
     </div>
     <div class="grid">
       <div>
-        <div class="section-label">KENNWERTE</div>
+        <div class="section-label">${tr("pdf.keyFigures")}</div>
         <table>${kvRows}</table>
       </div>
       <div>
-        ${opts.draufsicht || opts.mundbogen || opts.fokus ? `<div class="section-label">DRAUFSICHT · HORIZONTALSCHNITT</div>
+        ${opts.draufsicht || opts.mundbogen || opts.fokus ? `<div class="section-label">${tr("pdf.topView")}</div>
         <div class="drawing">${dsSVG}</div>` : ""}
-        ${opts.seitenprofil ? `<div class="section-label">SEITENRISS · VERTIKALSCHNITT</div>
+        ${opts.seitenprofil ? `<div class="section-label">${tr("pdf.sideView")}</div>
         <div class="drawing">${spSVG}</div>` : ""}
       </div>
     </div>
     <div class="footer">
-      <span>Radialhorn-Konfigurator · Traktrix + linearer Bereich + Teilkreis</span>
-      <span>L = Raumecke (Hut-Spitze) → Teilkreis-Scheitelpunkt</span>
+      <span>${tr("pdf.footerLeft")}</span>
+      <span>${tr("pdf.footerRight")}</span>
     </div>
   </div>
 </body></html>`;
 }
 
 /** Öffnet das Datenblatt zum Drucken; ohne Pop-up-Erlaubnis als HTML-Datei. */
-export function exportPDF(design, opts) {
-  const html = buildDatasheet(design, opts);
+export function exportPDF(design, opts, lang = "de") {
+  const html = buildDatasheet(design, opts, new Date(), lang);
   const win = window.open("", "_blank");
   if (win) {
     win.document.write(html);
     win.document.close();
     setTimeout(() => win.print(), 400);
   } else {
-    downloadFile(html, `radialhorn_${design.s.openingAngle}deg_L${design.L}_datenblatt.html`, "text/html");
+    downloadFile(html, `radialhorn_${design.s.openingAngle}deg_L${design.L}_${translate(lang, "pdf.fileName")}.html`, "text/html");
   }
 }

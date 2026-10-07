@@ -27,6 +27,7 @@ src/
   mesh.worker.js           — Web Worker: baut das 3D-Netz abseits des Haupt-Threads
   theme.js                 — Farben (UI, COLOR), Schrift, SVG-Stile, Raumecken-Strichmuster, GLOBAL_CSS
   fonts.js                 — eingebettete Schrift DM Mono (@font-face aus assets/fonts/, OFL 1.1)
+  i18n.js, locales/        — Sprachen der Oberfläche (de.js = Referenz, en.js), useT, translate
   utils.js                 — linspace, clamp, svgPath, niceTicks
   hooks.js                 — useSize, useZoomPan, usePersistentState, useThrottledValue
   settings.js              — gespeicherte Einstellungen (localStorage, je Wert geprüft gegen den Standard)
@@ -140,6 +141,15 @@ Reihenfolge der Karten: Throat → Horngeometrie → Vertikales Profil → Treib
 - **Schrift DM Mono** ist eingebettet (`fonts.js`, `assets/fonts/`: woff2 aus Google Fonts v16, latin + latin-ext, Lizenz `OFL.txt` liegt bei) – offline und auf jedem Rechner gleich. Nur die Schnitte 400 und 500 (DM Mono hat keinen fetteren): Hervorhebungen mit `fontWeight: 500`, nie 700 (sonst künstliches Fett). Zeichen außerhalb der Schrift (π, Ω, ₜ, ⚠ …) kommen aus der Systemschrift. Das PDF-Datenblatt (eigenes Fenster) nutzt die Schrift nicht.
 - Globale Regeln in `theme.js` (`GLOBAL_CSS`, von `main.jsx` eingehängt): dunkle, schmale Scrollbars, Zahlenfelder ohne Pfeiltasten, sichtbarer Tastaturfokus.
 
+## Sprachen
+
+Oberfläche, Ansichten und PDF-Datenblatt in Deutsch und Englisch (`i18n.js`, Wörterbücher `locales/de.js`, `locales/en.js`), ohne Bibliothek. Umschalter DE | EN im Kopf der Seitenleiste; beim ersten Start die Systemsprache (de-* → Deutsch, sonst Englisch), danach gespeichert (Einstellung `sprache`); `<html lang>` folgt.
+
+- **Keine Texte im Code**, nur Schlüssel: in `App.jsx` `t("…")`, in Komponenten `const tr = useT()` (`t` steht dort oft für Wandstärke oder Kurvenparameter), im PDF `translate(lang, …)`. Platzhalter `{name}`: `t("warn.ltMax", { mm: 120 })`.
+- `de.js` ist die Referenz. `i18n.test.js` prüft, dass jede Sprache dieselben Schlüssel und Platzhalter hat und kein Text leer ist. Neue Sprache: `locales/<code>.js` anlegen und in `LANGUAGES` eintragen.
+- **Nicht übersetzt:** DXF-Layernamen (technische Bezeichner, CAD-Vorlagen hängen daran), Formelzeichen und Einheiten (Re, Bl, mm, …), Bemaßungen, Code-Kommentare und diese Datei.
+- Texte müssen ins Zeilenraster passen (Beschriftung 116 px, ≈ 17 Zeichen): beim Übersetzen kürzen statt abschneiden lassen.
+
 ## Farbschema
 
 Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint, Akzent Sandbeige `#d6cbb8`; Textstufen text/label/faint/muted mit Kontrast ≥ 4,3:1 auf `UI.card`, Texte ≥ 4,5:1) und `COLOR` (Zeichnungen: Traktrix Rosa, gerade Wand Mint, Mundbogen Sandbeige, Raumecke Orange, Übergänge Koralle, Wandstärke Gelb, Flansch Violett, Bemaßung Grau-Violett). Das PDF hat ein eigenes helles Schema in `export/pdf.js`.
@@ -208,8 +218,9 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `horn-mesh.flange.test.js` – Flansch: wasserdicht (mit/ohne Bohrungen, Klothoide, ohne Traktrix), Volumenzuwachs = Vorderseite × Dicke, Bohrbild, Mindest-Ø, Automatik-Ø und Lochkreis, ungültige Bohrungen
 - `mesh-buffers.test.js` – Worker-Puffer: dieselben Dreiecke wie `triangulate` (Profil im Worker nachgebaut, Eingaben geklont), Normalen, Sektionsauswahl
 - `horn-mesh.test.js` – 3D-Körper (auch Fokus weit im Horn: Mittelschnitt = Seitenprofil, Deckel am Throat eben): wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format
-- `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung, Flansch), PDF (Kennwerte, Maßstab, Layer)
+- `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung, Flansch), PDF (Kennwerte, Maßstab, Layer, englisches Datenblatt)
 - `settings.test.js` – Einstellungen: Rundlauf, Typprüfung (falscher Typ, kaputtes JSON, NaN → Standard), null = automatisch, Layer-Auswahl zusammengeführt, Zurücksetzen
 - `simulation.test.js` – 1D-Simulation: Transfermatrix (det = 1, Zylinder = ebene Welle, Unterteilen ändert nichts), Zylinder offen/schallhart (Resonanzen c/2L, c/4L) und mit 2π-Abschluss (Mündungskorrektur 8a/3π), unendlicher Konus (exakt), unendliches Exponentialhorn, Energieerhaltung, Konvergenz; J1/H1 gegen Tabellenwerte und unabhängige Integration, Strahlungsimpedanz-Grenzwerte und Raumwinkel; Treiber (Z_el bei fs, Direktstrahler-SPL, Kammer als Rohr = Nachgiebigkeit, Rückkammer); `areaCurve` (ebener Hals, Abtastweite, Mundfläche); CSV
 - `validation/hornresp/hornresp.test.js` – Abgleich mit Hornresp-Referenzdateien (Fall A, B, C: Ra, Xa, Ze, SPL über 533 Frequenzen), App-SPL = Horn-Anteil des Hornresp-Modells
+- `i18n.test.js` – Wörterbücher: gleiche Schlüssel und Platzhalter wie Deutsch, keine leeren Texte; translate (Platzhalter, Rückfall), Spracherkennung
 - `utils.test.js`

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { FONT, UI, COLOR, SIDEBAR_WIDTH } from "../theme.js";
 import { usePersistentState } from "../hooks.js";
+import { useT } from "../i18n.js";
 
 // Raster der Seitenleiste: Zeilen aus Beschriftung | Regler | Zahl | Einheit; Abstände auf 4/8 px
 const ROW_COLUMNS = "116px minmax(0, 1fr) 62px 30px";
@@ -205,6 +206,7 @@ const controlStyle = {
 
 /** Zoomstufe + Zurücksetzen oben rechts (Standard: links neben dem Vollbild-Button). */
 export function ZoomControls({ k, onReset, top = 6, right = 36, compact = false }) {
+  const tr = useT();
   const h = compact ? 18 : 24, fs = compact ? 9 : 10;
   return (
     <div onPointerDown={e => e.stopPropagation()} style={{
@@ -213,9 +215,9 @@ export function ZoomControls({ k, onReset, top = 6, right = 36, compact = false 
       <span style={{ ...controlStyle, fontSize: fs, height: h, boxSizing: "border-box", padding: "0 6px", display: "flex", alignItems: "center" }}>
         {Math.round(k * 100)} %
       </span>
-      <button type="button" onClick={onReset} title="Zoom zurücksetzen"
+      <button type="button" onClick={onReset} title={tr("view.resetZoom")}
         style={{ ...controlStyle, fontSize: fs, height: h, padding: compact ? "0 5px" : "0 7px", cursor: "pointer" }}>
-        ⟲ Reset
+        {tr("view.reset")}
       </button>
     </div>
   );
@@ -227,13 +229,14 @@ export function ZoomControls({ k, onReset, top = 6, right = 36, compact = false 
  * Darstellung der Ansicht erhalten bleiben.
  */
 export function FullscreenPanel({ children }) {
+  const tr = useT();
   const [full, setFull] = useState(false);
   return (
     <div style={full
       ? { position: "fixed", top: 0, right: 0, bottom: 0, left: SIDEBAR_WIDTH, zIndex: 1000, background: UI.bg }
       : { position: "relative", width: "100%", height: "100%" }}>
       <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
-        <button type="button" onClick={() => setFull(f => !f)} title={full ? "Vollbild beenden" : "Vollbild"} style={{
+        <button type="button" onClick={() => setFull(f => !f)} title={full ? tr("view.exitFullscreen") : tr("view.fullscreen")} style={{
           ...controlStyle, position: "absolute", top: 6, right: 6, zIndex: 10, cursor: "pointer",
           width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 12, lineHeight: 1,
