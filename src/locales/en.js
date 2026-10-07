@@ -9,7 +9,7 @@ export default {
   "throat.custom": "Custom",
   "throat.size14": "1.4\"",
   "throat.diameter": "Diameter Ø",
-  "card.geometry": "HORN GEOMETRY",
+  "card.geometry": "HORIZONTAL PROFILE",
   "card.profile": "VERTICAL PROFILE",
   "card.driver": "DRIVER",
   "card.placement": "PLACEMENT",
@@ -19,7 +19,7 @@ export default {
   "card.crossSection": "CROSS-SECTION A(z)",
   "card.export": "EXPORT",
 
-  // Horn geometry
+  // Horizontal profile
   "geometry.openingAngle": "Opening angle",
   "geometry.length": "Total length L",
   "geometry.tractrixLength": "Tractrix length Lₜ",
