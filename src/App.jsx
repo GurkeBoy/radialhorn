@@ -25,12 +25,14 @@ import {
   airAt, logFrequencies, transverseLimit, areaCurve, simulate, driverSI, PLACEHOLDER_DRIVER,
 } from "./simulation.js";
 
+// Gängige Austrittsdurchmesser von Kompressionstreibern; 1,4" wird mit 35,5 mm angegeben (Herstellerangabe)
 const THROAT_SIZES = [
-  { label: '1"',  diameter: 25.4 },
-  { label: '1½"', diameter: 38.1 },
-  { label: '2"',  diameter: 50.8 },
-  { label: '3"',  diameter: 76.2 },
+  { label: '1"',          diameter: 25.4 },
+  { labelKey: "throat.size14", diameter: 35.5 },
+  { label: '2"',          diameter: 50.8 },
 ];
+const THROAT_CUSTOM = "custom";                   // Knopf „Eigene“: Durchmesser frei über den Regler
+const THROAT_RANGE = { min: 10, max: 150 };       // [mm]
 const L_MAX = 1200;   // Obergrenze des L-Reglers ohne Raumecke [mm]
 const SIM_FREQS = logFrequencies(20, 20000, 24);
 const MOUTH_OPTIONS = ["auto", "4pi", "2pi", "pi", "pi/2"];
@@ -45,6 +47,13 @@ export default function App() {
   const t = useMemo(() => (key, params) => translate(lang, key, params), [lang]);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   const [throatDiam,      setThroatDiam]      = usePersistentState("throatDiam", 50.8);
+  // Eigene Halsgröße: gewählt oder ein gespeicherter Durchmesser, den es als Knopf nicht (mehr) gibt (z. B. früher 3")
+  const [throatCustomOn,  setThroatCustomOn]  = usePersistentState("throatCustom", false);
+  const throatCustom = throatCustomOn || !THROAT_SIZES.some(th => th.diameter === throatDiam);
+  const selectThroat = v => {
+    setThroatCustomOn(v === THROAT_CUSTOM);
+    if (v !== THROAT_CUSTOM) setThroatDiam(v);
+  };
   const [openingAngle,    setOpeningAngle]    = usePersistentState("openingAngle", 140);
   const [L,               setL]               = usePersistentState("L", 500);
   const [Lt,              setLt]              = usePersistentState("Lt", 60);
@@ -191,9 +200,10 @@ export default function App() {
 
         <Card title={t("card.throat")} id="throat">
           <SegmentedButtons
-            options={THROAT_SIZES.map(th => th.diameter)}
-            labels={Object.fromEntries(THROAT_SIZES.map(th => [th.diameter, th.label]))}
-            value={throatDiam} onChange={setThroatDiam} />
+            options={[...THROAT_SIZES.map(th => th.diameter), THROAT_CUSTOM]}
+            labels={{ ...Object.fromEntries(THROAT_SIZES.map(th => [th.diameter, th.labelKey ? t(th.labelKey) : th.label])), [THROAT_CUSTOM]: t("throat.custom") }}
+            value={throatCustom ? THROAT_CUSTOM : throatDiam} onChange={selectThroat} />
+          {throatCustom && <Slider label={t("throat.diameter")} value={throatDiam} min={THROAT_RANGE.min} max={THROAT_RANGE.max} step={0.1} unit="mm" onChange={setThroatDiam} />}
         </Card>
 
         <Card title={t("card.geometry")} id="geometrie">

@@ -8,7 +8,7 @@ import {
 import { LANGUAGES, translate } from "../i18n.js";
 import { FONT_CSS_EMBEDDED } from "../fonts.js";
 import { shellPlanOutline, shellProfileOutline, flangeSectionOutline } from "../horn-mesh.js";
-import { linspace, svgPath, clipFromZ } from "../utils.js";
+import { linspace, svgPath, clipFromZ, fmtLength } from "../utils.js";
 import { downloadFile } from "./download.js";
 
 const SCALES = [1, 2, 5, 10, 20, 50];
@@ -164,7 +164,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   const kv = [
     [tr("pdf.openingHoriz"),   s.openingAngle + " °"],
     [tr("pdf.openingVert"),    verticalMouthAngle(s, profile).toFixed(1) + " °"],
-    [tr("pdf.length"),         L + " mm"],
+    [tr("pdf.length"),         fmtLength(L) + " mm"],
     [tr("pdf.tractrixLength"), s.Lt.toFixed(0) + " mm"],
     [tr("pdf.throat"),         (rt * 2).toFixed(1) + " mm"],
     [tr("pdf.mouthWidth"),     mundB + " mm"],

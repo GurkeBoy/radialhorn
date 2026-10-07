@@ -3,7 +3,7 @@ import { memo, useMemo, useRef } from "react";
 import { useT } from "../i18n.js";
 import { hasTraktrix } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash, raumDashCenter } from "../theme.js";
-import { linspace, nestedLayers } from "../utils.js";
+import { linspace, nestedLayers, fmtLength } from "../utils.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker } from "./ui.jsx";
 import { Dim } from "./Dim.jsx";
@@ -135,7 +135,7 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
         </>}
         {/* Unten: Gesamtlänge */}
         <Dim p1={[toX(s.hatTipZ), toY(0)]} p2={[toX(s.zApex), toY(0)]}
-          arrowPos={dimLY} color={COLOR.dim} marker="url(#arrV)" label={`L=${L} mm`} sw="0.8" />
+          arrowPos={dimLY} color={COLOR.dim} marker="url(#arrV)" label={`L=${fmtLength(L)} mm`} sw="0.8" />
         {/* Oben, 1. Lage: Kette Hut-Spitze → Treiberrückseite → Treiberfront */}
         <Dim p1={[toX(s.hatTipZ), toY(dw/2)]} p2={[toX(-dh), toY(dw/2)]} orient="h"
           arrowPos={dimTop1Y} color={COLOR.raum} marker="url(#arrV)" label={`${(dw/2).toFixed(0)} mm`} />

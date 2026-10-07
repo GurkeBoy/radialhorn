@@ -1,11 +1,11 @@
 // Bedienelemente und Rahmen der Seitenleiste und Ansichten.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FONT, UI, COLOR, SIDEBAR_WIDTH } from "../theme.js";
 import { usePersistentState } from "../hooks.js";
 import { useT } from "../i18n.js";
 
 // Raster der Seitenleiste: Zeilen aus Beschriftung | Regler | Zahl | Einheit; Abstände auf 4/8 px
-const ROW_COLUMNS = "116px minmax(0, 1fr) 62px 30px";
+const ROW_COLUMNS = "116px minmax(0, 1fr) 70px 30px";   // Zahl mit ▲▼
 const ROW_GAP = 8;
 const TOGGLE_INDENT = 46;   // Schalterbreite + Abstand: Hinweise unter einem Schalter beginnen beim Text
 
@@ -104,36 +104,88 @@ export function Warn({ children }) {
 }
 
 /**
- * Schieberegler mit Zahlenfeld. Das Zahlenfeld übernimmt erst bei Enter oder Verlassen
- * und begrenzt auf [min, max]; ungültige Eingaben werden verworfen. Solange nicht getippt
- * wird, zeigt es den aktuellen Wert.
+ * Schieberegler mit Zahlenfeld. Getipptes übernimmt das Zahlenfeld erst bei Enter oder Verlassen
+ * (halbe Eingaben rechnen nicht); ungültige Eingaben werden verworfen. Solange nicht getippt wird,
+ * zeigt es den aktuellen Wert mit einer Nachkommastelle (gerechnet wird mit dem genauen).
+ *
+ * Schritte über eigene ▲▼-Knöpfe (immer sichtbar, gedrückt halten wiederholt) und ↑/↓ – nicht über
+ * die Pfeile des Browsers: die zählen ab min (bei gerechnetem min wie einem begrenzten Lₜ landet
+ * „nach oben“ wieder auf demselben Wert) und verhalten sich in WebView2 (Tauri) anders als in Chrome.
+ * Ein Schritt geht vom auf die Schrittweite gerundeten Wert aus (126,341 → 127 → 128) und wird auf
+ * [min, max] begrenzt.
  */
 export function Slider({ label, value, min, max, step, unit, onChange }) {
   const [draft, setDraft] = useState(null);   // Eingabe während des Tippens, sonst null
+  const decimals = (String(step).split(".")[1] ?? "").length;
+  const round = v => Number(v.toFixed(decimals));
+  // Anzeige mit einer Nachkommastelle (feinere Schrittweite wie Le 0,01: deren Stellen), ohne unnötige Null
+  const display = String(Number(value.toFixed(Math.max(1, decimals))));
+  const clampTo = v => Math.max(min, Math.min(max, v));
 
   const commit = () => {
     const v = parseFloat(draft);
-    if (draft !== null && !isNaN(v)) onChange(Math.max(min, Math.min(max, v)));
+    if (draft !== null && !isNaN(v)) onChange(clampTo(v));
     setDraft(null);
   };
 
+  // Schritt ±1 vom aktuellen Wert; während des Haltens neuester Wert über ref (Props ändern sich)
+  const latest = useRef(value);
+  useEffect(() => { latest.current = value; });
+  const stepBy = dir => {
+    setDraft(null);
+    onChange(clampTo(round(Math.round(latest.current / step) * step + dir * step)));
+  };
+
   return (
-    <label style={{ display: "grid", gridTemplateColumns: ROW_COLUMNS, columnGap: ROW_GAP, alignItems: "center", marginBottom: 8 }}>
+    <div style={{ display: "grid", gridTemplateColumns: ROW_COLUMNS, columnGap: ROW_GAP, alignItems: "center", marginBottom: 8 }}>
       <span style={{ fontSize: 11, color: UI.label, fontFamily: FONT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-      <input type="range" min={min} max={max} step={step} value={Math.min(Math.max(value, min), max)}
+      <input type="range" min={min} max={max} step={step} value={Math.min(Math.max(value, min), max)} aria-label={label}
         onChange={e => onChange(parseFloat(e.target.value))}
         style={{ width: "100%", margin: 0, accentColor: UI.accent }} />
-      <input type="number" min={min} max={max} step={step} value={draft ?? String(value)} aria-label={label}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => { if (e.key === "Enter") commit(); }}
-        style={{
-          width: "100%", height: 22, padding: "0 6px", background: UI.input, border: `1px solid ${UI.borderControl}`, borderRadius: 4,
-          color: UI.text, fontSize: 11, fontFamily: FONT, textAlign: "right", fontVariantNumeric: "tabular-nums", boxSizing: "border-box",
-        }} />
+      <div style={{ position: "relative" }}>
+        <input type="number" step={step} value={draft ?? display} aria-label={label}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === "Enter") commit();
+            else if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); stepBy(e.key === "ArrowUp" ? 1 : -1); }
+          }}
+          onWheel={e => e.currentTarget.blur()}   // Mausrad soll die Seite scrollen, nicht den Wert ändern
+          style={{
+            width: "100%", height: 22, padding: "0 17px 0 6px", background: UI.input, border: `1px solid ${UI.borderControl}`, borderRadius: 4,
+            color: UI.text, fontSize: 11, fontFamily: FONT, textAlign: "right", fontVariantNumeric: "tabular-nums", boxSizing: "border-box",
+          }} />
+        <Stepper onStep={stepBy} label={label} />
+      </div>
       <span style={{ fontSize: 10, color: UI.faint, fontFamily: FONT }}>{unit}</span>
-    </label>
+    </div>
   );
+}
+
+/** ▲▼ rechts im Zahlenfeld: Klick = ein Schritt, gedrückt halten = wiederholen. */
+function Stepper({ onStep, label }) {
+  const timer = useRef(null);
+  const stop = () => { clearTimeout(timer.current); timer.current = null; };
+  useEffect(() => stop, []);
+  const start = dir => e => {
+    e.preventDefault();   // Fokus bleibt, wo er war; kein Textmarkieren beim Halten
+    onStep(dir);
+    const repeat = delay => { timer.current = setTimeout(() => { onStep(dir); repeat(60); }, delay); };
+    repeat(400);
+  };
+  const half = (dir, top) => (
+    <button type="button" tabIndex={-1} aria-label={`${label} ${dir > 0 ? "+" : "−"}`}
+      onPointerDown={start(dir)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop}
+      style={{
+        position: "absolute", right: 1, width: 14, height: 10, top: top ? 1 : 11, padding: 0, border: "none",
+        background: "transparent", color: UI.faint, fontSize: 7, lineHeight: "10px", cursor: "pointer",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.color = UI.text; }}
+      onMouseLeave={e => { e.currentTarget.style.color = UI.faint; }}>
+      {dir > 0 ? "▲" : "▼"}
+    </button>
+  );
+  return <>{half(1, true)}{half(-1, false)}</>;
 }
 
 /** Ein/Aus-Schalter; die ganze Zeile ist klickbar und per Tastatur bedienbar. hint erscheint darunter. */

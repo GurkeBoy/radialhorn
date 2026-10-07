@@ -32,7 +32,7 @@ export const UI = {
   scrollThumbHover: "#3c3c3c",
 };
 
-/** Globale Regeln (main.jsx): dunkle, schmale Scrollbars; Zahlenfelder ohne Pfeiltasten. */
+/** Globale Regeln (main.jsx): dunkle, schmale Scrollbars; Zahlenfelder ohne Browser-Pfeile (eigene ▲▼, ui.jsx). */
 export const GLOBAL_CSS = `
   * { scrollbar-width: thin; scrollbar-color: ${UI.scrollThumb} transparent; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }

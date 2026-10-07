@@ -5,6 +5,9 @@ export const linspace = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a +
 
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+/** Länge für Beschriftungen: höchstens eine Nachkommastelle, ohne unnötige Null (575.3, 500). */
+export const fmtLength = v => String(Number(v.toFixed(1)));
+
 /**
  * Maßlage je Wert für verschachtelte Bemaßungen: das kleinste Maß innen (Lage 0), das
  * größte außen; bei gleichen Werten bleibt die gegebene Reihenfolge.

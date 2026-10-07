@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { linspace, clamp, svgPath, niceTicks, clipFromZ, nestedLayers } from "./utils.js";
+import { linspace, clamp, svgPath, niceTicks, clipFromZ, nestedLayers, fmtLength } from "./utils.js";
 
 describe("utils", () => {
   it("nestedLayers: kleinstes Maß innen, größtes außen, Gleichstand in Reihenfolge", () => {
@@ -8,6 +8,12 @@ describe("utils", () => {
     expect(nestedLayers([182, 50.8])).toEqual([1, 0]);
     expect(nestedLayers([100, 100, 10])).toEqual([1, 2, 0]);
     expect(nestedLayers([50.8, 182, Infinity])).toEqual([0, 1, 2]);
+  });
+
+  it("fmtLength: höchstens eine Nachkommastelle", () => {
+    expect(fmtLength(575.2898834303028)).toBe("575.3");
+    expect(fmtLength(500)).toBe("500");
+    expect(fmtLength(126.04)).toBe("126");
   });
 
   it("clipFromZ: ab der Ebene z0, Schnittpunkt interpoliert", () => {
