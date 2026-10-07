@@ -6,6 +6,7 @@ import {
   hasTraktrix, entrancePoints, linearWallPoints, mouthArea, verticalMouthAngle,
 } from "../horn-math.js";
 import { LANGUAGES, translate } from "../i18n.js";
+import { FONT_CSS_EMBEDDED } from "../fonts.js";
 import { shellPlanOutline, shellProfileOutline, flangeSectionOutline } from "../horn-mesh.js";
 import { linspace, svgPath, clipFromZ } from "../utils.js";
 import { downloadFile } from "./download.js";
@@ -48,7 +49,7 @@ function dimensioning(massstab) {
     ${line(x1, y, x2, y)}
     ${line(x1, y - tick, x1, y + tick)}
     ${line(x2, y - tick, x2, y + tick)}
-    <text x="${(x1 + x2) / 2}" y="${y + (below ? ts * 1.1 : -ts * 0.5)}" font-size="${ts}" fill="${C.dimText}" text-anchor="middle" font-family="monospace">${label}</text>`;
+    <text x="${(x1 + x2) / 2}" y="${y + (below ? ts * 1.1 : -ts * 0.5)}" font-size="${ts}" fill="${C.dimText}" text-anchor="middle" font-family="'DM Mono', monospace">${label}</text>`;
 
   const dimV = (y1, y2, x, label, right) => {
     const tx = x + (right ? ts * 0.6 : -ts * 0.6), my = (y1 + y2) / 2;
@@ -56,7 +57,7 @@ function dimensioning(massstab) {
     ${line(x, y1, x, y2)}
     ${line(x - tick, y1, x + tick, y1)}
     ${line(x - tick, y2, x + tick, y2)}
-    <text x="${tx}" y="${my}" font-size="${ts}" fill="${C.dimText}" text-anchor="${right ? "start" : "end"}" dominant-baseline="middle" font-family="monospace" transform="rotate(-90 ${tx} ${my})">${label}</text>`;
+    <text x="${tx}" y="${my}" font-size="${ts}" fill="${C.dimText}" text-anchor="${right ? "start" : "end"}" dominant-baseline="middle" font-family="'DM Mono', monospace" transform="rotate(-90 ${tx} ${my})">${label}</text>`;
   };
 
   // Schräge Bemaßung parallel zur Strecke; offset positiv = links von (x1,y1) → (x2,y2)
@@ -78,7 +79,7 @@ function dimensioning(massstab) {
     ${line(f(d1x), f(d1y), f(d2x), f(d2y))}
     ${line(f(d1x - uy * tick), f(d1y + ux * tick), f(d1x + uy * tick), f(d1y - ux * tick))}
     ${line(f(d2x - uy * tick), f(d2y + ux * tick), f(d2x + uy * tick), f(d2y - ux * tick))}
-    <text x="${f(tx)}" y="${f(ty)}" font-size="${ts}" fill="${C.dimText}" text-anchor="middle" dominant-baseline="central" font-family="monospace" transform="rotate(${angle.toFixed(1)} ${f(tx)} ${f(ty)})">${label}</text>`;
+    <text x="${f(tx)}" y="${f(ty)}" font-size="${ts}" fill="${C.dimText}" text-anchor="middle" dominant-baseline="central" font-family="'DM Mono', monospace" transform="rotate(${angle.toFixed(1)} ${f(tx)} ${f(ty)})">${label}</text>`;
   };
 
   return { dimH, dimV, dimParallel };
@@ -180,22 +181,23 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   return `<!DOCTYPE html>
 <html lang="${lang}"><head><meta charset="utf-8"><title>${tr("pdf.docTitle")}</title>
 <style>
+  ${FONT_CSS_EMBEDDED}
   @page { size: A4 portrait; margin: 0; }
   * { box-sizing: border-box; }
   body { font-family: 'DM Mono', ui-monospace, monospace; color: ${C.line}; margin: 0; background: #fff; }
   .page { padding: 16mm 18mm; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${C.line}; padding-bottom: 5mm; margin-bottom: 7mm; }
-  .title { font-size: 22pt; font-weight: 700; letter-spacing: 0.08em; color: ${C.line}; line-height: 1; }
+  .title { font-size: 22pt; font-weight: 500; letter-spacing: 0.08em; color: ${C.line}; line-height: 1; }
   .subtitle { font-size: 8pt; letter-spacing: 0.25em; color: ${C.dim}; margin-top: 2mm; }
   .docmeta { text-align: right; font-size: 8pt; color: #888; line-height: 1.7; }
   .docmeta b { color: ${C.line}; }
-  .scale-badge { display: inline-block; background: ${C.dim}; color: #fff; font-size: 11pt; font-weight: 700; padding: 1.5mm 4mm; border-radius: 2mm; letter-spacing: 0.05em; }
+  .scale-badge { display: inline-block; background: ${C.dim}; color: #fff; font-size: 11pt; font-weight: 500; padding: 1.5mm 4mm; border-radius: 2mm; letter-spacing: 0.05em; }
   .grid { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8mm; }
   table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
   td { padding: 1.6mm 2mm; border-bottom: 1px solid #ececf2; }
   td:first-child { color: #888; }
-  td:last-child { text-align: right; font-weight: 700; }
-  .section-label { font-size: 8pt; letter-spacing: 0.2em; color: ${C.dim}; margin: 0 0 3mm; font-weight: 700; }
+  td:last-child { text-align: right; font-weight: 500; }
+  .section-label { font-size: 8pt; letter-spacing: 0.2em; color: ${C.dim}; margin: 0 0 3mm; font-weight: 500; }
   .drawing { border: 1px solid #ececf2; border-radius: 3mm; padding: 6mm; background: #fafafb; text-align: center; margin-bottom: 6mm; }
   .footer { margin-top: 8mm; padding-top: 4mm; border-top: 1px solid #ececf2; font-size: 7.5pt; color: #aaa; display: flex; justify-content: space-between; }
   .hint { background: #f0eeff; color: ${C.dimText}; padding: 3mm 4mm; border-radius: 2mm; font-size: 8.5pt; margin-bottom: 6mm; }

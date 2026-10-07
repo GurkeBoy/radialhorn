@@ -14,6 +14,15 @@ const DATE = new Date(2026, 9, 1);
 const row = (html, key) => html.match(new RegExp(`<td>${key}</td><td>([^<]*)</td>`))?.[1];
 
 describe("buildDatasheet", () => {
+  it("DM Mono eingebettet (Normal + Medium als data:-URL), kein Fett über 500", () => {
+    const h = buildDatasheet(design(), ALL, DATE);
+    const faces = [...h.matchAll(/@font-face \{[^}]*font-weight: (\d+)[^}]*src: url\(data:font\/woff2;base64,([A-Za-z0-9+/=]+)\)/g)];
+    expect(faces.map(f => f[1])).toEqual(["400", "500"]);
+    for (const f of faces) expect(f[2].length).toBeGreaterThan(15000);   // ≈ 15 KB Schrift → ≈ 20 KB Base64
+    expect(h).not.toMatch(/font-weight: ?[6-9]00/);
+    expect(h).not.toContain('font-family="monospace"');
+  });
+
   it("Englisch: Kennwerte, Beschriftungen und Datum übersetzt, Zahlen gleich", () => {
     const en = buildDatasheet(design(), ALL, DATE, "en");
     expect(en).toContain('<html lang="en">');

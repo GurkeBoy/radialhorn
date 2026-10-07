@@ -138,7 +138,7 @@ Reihenfolge der Karten: Throat → Horngeometrie → Vertikales Profil → Treib
 - `Note` (grauer Hinweis) und `Warn` (volle Breite, ⚠ wird automatisch vorangestellt – nicht in den Text schreiben).
 - `Button [primary]`: volle Breite; primary nur für die Hauptaktion (DXF).
 - Abstände: Karten 10 px oben/unten innen (letztes Element bringt 8 px mit), 8 px zwischen Karten.
-- **Schrift DM Mono** ist eingebettet (`fonts.js`, `assets/fonts/`: woff2 aus Google Fonts v16, latin + latin-ext, Lizenz `OFL.txt` liegt bei) – offline und auf jedem Rechner gleich. Nur die Schnitte 400 und 500 (DM Mono hat keinen fetteren): Hervorhebungen mit `fontWeight: 500`, nie 700 (sonst künstliches Fett). Zeichen außerhalb der Schrift (π, Ω, ₜ, ⚠ …) kommen aus der Systemschrift. Das PDF-Datenblatt (eigenes Fenster) nutzt die Schrift nicht.
+- **Schrift DM Mono** ist eingebettet (`fonts.js`, `assets/fonts/`: woff2 aus Google Fonts v16, latin + latin-ext, Lizenz `OFL.txt` liegt bei) – offline und auf jedem Rechner gleich. Nur die Schnitte 400 und 500 (DM Mono hat keinen fetteren): Hervorhebungen mit `fontWeight: 500`, nie 700 (sonst künstliches Fett). Zeichen außerhalb der Schrift (π, Ω, ₜ, ⚠ …) kommen aus der Systemschrift. Das PDF-Datenblatt läuft in eigenem Fenster bzw. als gespeicherte HTML-Datei und kommt an die Schriftdateien nicht heran: dort ist DM Mono als data:-URL eingebettet (`FONT_CSS_EMBEDDED`, Vite `?inline`, nur „latin“, ≈ 40 KB; das Datenblatt wächst auf ≈ 80 KB), auch für die Bemaßungstexte der Zeichnungen.
 - Globale Regeln in `theme.js` (`GLOBAL_CSS`, von `main.jsx` eingehängt): dunkle, schmale Scrollbars, Zahlenfelder ohne Pfeiltasten, sichtbarer Tastaturfokus.
 
 ## Sprachen
