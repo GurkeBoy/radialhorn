@@ -10,6 +10,16 @@ Horn in 3D, simuliert den Frequenzgang und exportiert DXF für CAD, STL für den
 
 ![Radialhorn: Eingabespalte, Draufsicht, 3D-Schale, Seitenriss und Frequenzgang](docs/images/app-de.png)
 
+## Download
+
+Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.deb, .rpm, AppImage) hängen an jedem
+[Release](https://github.com/GurkeBoy/radialhorn/releases). Sie sind nicht signiert:
+
+- **Windows:** SmartScreen warnt eventuell – *Weitere Informationen → Trotzdem ausführen*.
+- **macOS:** Meldet macOS die App als beschädigt oder lässt sie sich nicht öffnen, einmal im Terminal
+  `xattr -cr /Applications/Radialhorn.app` ausführen.
+- **Linux:** Das AppImage vor dem Start ausführbar machen.
+
 ## Funktionen
 
 - **Horizontales Profil:** Traktrix-Eingang → gerade Wand unter dem halben Öffnungswinkel → Mundbogen um den
