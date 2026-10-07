@@ -29,6 +29,7 @@ simulates its frequency response, and exports DXF for CAD, STL for 3D printing a
 - **Key figures:** mouth area, vertical opening angle, approximate cutoff frequencies.
 - **Export:** DXF with exact curves (SPLINE/ARC/LINE instead of polylines, so CAD builds smooth solids), STL of the
   shell or air volume, and a PDF datasheet with scaled drawings.
+- **Project files:** save a design as `*.radialhorn.json`, open it again or share it; values are checked on opening.
 - **English and German**, switchable; settings are kept between sessions.
 
 ## Validation

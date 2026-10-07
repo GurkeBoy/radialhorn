@@ -32,7 +32,8 @@ src/
   i18n.js, locales/        — Sprachen der Oberfläche (de.js = Referenz, en.js), useT, translate
   utils.js                 — linspace, clamp, svgPath, niceTicks
   hooks.js                 — useSize, useZoomPan, usePersistentState, useThrottledValue
-  settings.js              — gespeicherte Einstellungen (localStorage, je Wert geprüft gegen den Standard)
+  settings.js              — gespeicherte Einstellungen (localStorage, je Wert geprüft gegen den Standard: checkSetting)
+  project.js               — Projektdateien (*.radialhorn.json): DESIGN_DEFAULTS, buildProject, parseProject
   components/
     ui.jsx                 — Card, Group, Slider, Toggle, SegmentedButtons, Button, Stat, Note, Warn, ZoomControls, FullscreenPanel, ArrowMarker
     Dim.jsx                — Bemaßungen Dim (waagerecht/senkrecht) und DimAligned (schräg)
@@ -47,7 +48,7 @@ src/
     pdf.js                 — PDF-Datenblatt (buildDatasheet) und Export
     stl.js                 — STL-Export (binär) von Luftvolumen bzw. Schale
     csv.js                 — CSV-Export des Frequenzgangs
-    download.js            — Datei-Download
+    download.js            — Speichern: „Speichern unter“-Dialog (showSaveFilePicker, Chromium/WebView2), sonst Download
   *.test.js                — Vitest, neben dem getesteten Modul
 validation/                — Prüfcode und Referenzdaten außerhalb der App (README.md)
   hornresp/                — Abgleich mit Hornresp: faelle.js (Fälle, einzige Quelle), modell.js (Hornresp-Konventionen),
@@ -145,6 +146,15 @@ Reihenfolge der Karten: Throat → Horizontales Profil → Vertikales Profil →
 - **Schrift DM Mono** ist eingebettet (`fonts.js`, `assets/fonts/`: woff2 aus Google Fonts v16, latin + latin-ext, Lizenz `OFL.txt` liegt bei) – offline und auf jedem Rechner gleich. Nur die Schnitte 400 und 500 (DM Mono hat keinen fetteren): Hervorhebungen mit `fontWeight: 500`, nie 700 (sonst künstliches Fett). Zeichen außerhalb der Schrift (π, Ω, ₜ, ⚠ …) kommen aus der Systemschrift. Das PDF-Datenblatt läuft in eigenem Fenster bzw. als gespeicherte HTML-Datei und kommt an die Schriftdateien nicht heran: dort ist DM Mono als data:-URL eingebettet (`FONT_CSS_EMBEDDED`, Vite `?inline`, nur „latin“, ≈ 40 KB; das Datenblatt wächst auf ≈ 80 KB), auch für die Bemaßungstexte der Zeichnungen.
 - Globale Regeln in `theme.js` (`GLOBAL_CSS`, von `main.jsx` eingehängt und beim Hot-Reload erneuert): dunkle, schmale Scrollbars, Zahlenfelder ohne Browser-Pfeile (eigene ▲▼ im `Slider`), sichtbarer Tastaturfokus.
 
+## Projektdateien
+
+Ein Entwurf als JSON-Datei `*.radialhorn.json` (`project.js`), Knöpfe **Öffnen… / Speichern** im Kopf der Seitenleiste; Speichern über `downloadFile`, Öffnen über ein verstecktes `<input type=file>` – beides in Browser und Tauri ohne zusätzliche Abhängigkeit.
+
+- Inhalt: `{ format: "radialhorn-project", version: 1, app, saved, design }`. `design` = alle Schlüssel aus `DESIGN_DEFAULTS` (29: Geometrie, Profil, Treibermaße, Raumecke, Ausführung mit Flansch, Abstrahlung, Lufttemperatur, Treiberdaten), Schlüssel wie die gespeicherten Einstellungen. **Nicht** im Entwurf: Sprache, Kartenzustand, Export-Auswahl, Frequenzgang an/aus, Phase.
+- `DESIGN_DEFAULTS` ist die einzige Quelle der Standardwerte dieser Einstellungen; `App.jsx` nimmt sie für `usePersistentState`. Neuer Entwurfswert: dort eintragen **und** in `designValues`/`designSetters` in `App.jsx`.
+- Öffnen prüft jeden Wert wie `readSetting` (`checkSetting`), zusätzlich feste Auswahlen (`curve`, `abstrahlung`, `driver.massIs`) und `null` nur bei automatischen Werten (`edgeR`, `flangeD`, `holeCircle`) – eine Datei kann von überall kommen. Ungültige oder fehlende Werte → Standard, die Meldung nennt sie; unbekannte Werte werden ignoriert; neuere Formatversion → Hinweis. Kein JSON bzw. keine Projektdatei → Fehlermeldung, der Entwurf bleibt unverändert.
+- Erfolgsmeldung verschwindet nach 5 s, Hinweise und Fehler bleiben bis zur nächsten Aktion.
+
 ## Sprachen
 
 Oberfläche, Ansichten und PDF-Datenblatt in Deutsch und Englisch (`i18n.js`, Wörterbücher `locales/de.js`, `locales/en.js`), ohne Bibliothek. Umschalter DE | EN im Kopf der Seitenleiste; beim ersten Start die Systemsprache (de-* → Deutsch, sonst Englisch), danach gespeichert (Einstellung `sprache`); `<html lang>` folgt.
@@ -208,6 +218,8 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 
 **STL** (`export/stl.js`): bei eingeschalteter Wandstärke die Schale (ggf. mit Flansch), sonst das Luftvolumen (Innenform) – jeweils geschlossen, binär, mm. Achsen X = Breite, Y = Hornachse, Z = Höhe; der Achsentausch ist eine Spiegelung, deshalb wird dabei die Umlaufrichtung getauscht (Normalen nach außen).
 
+**Speichern** (`export/download.js`, für Projektdatei, DXF, STL, CSV und den PDF-Notweg): mit „Speichern unter“-Dialog, wo der Browser ihn kennt (File System Access API – Chromium und WebView2, also auch Tauri; Dateiname als Vorschlag, Typfilter aus der Endung). Abbrechen speichert nichts. Ohne Dialog oder wenn er scheitert: wie früher als Download (landet ohne Nachfrage im Download-Ordner).
+
 **Kurvenauflösung:** Bildschirm/PDF fein (Traktrix 600 bzw. 500 Punkte, Aufweitung 500). Der DXF-Spline-Fit bekommt bewusst weniger Stützpunkte (Traktrix 80, Aufweitung 100) – der Fit ist O(n³), die Splines bleiben schlank.
 
 ## Tests
@@ -223,6 +235,7 @@ Strichpunktlinie `raumDash(scale)`: Strich 75 / Lücke 10 / Punkt 5 / Lücke 10 
 - `mesh-buffers.test.js` – Worker-Puffer: dieselben Dreiecke wie `triangulate` (Profil im Worker nachgebaut, Eingaben geklont), Normalen, Sektionsauswahl
 - `horn-mesh.test.js` – 3D-Körper (auch Fokus weit im Horn: Mittelschnitt = Seitenprofil, Deckel am Throat eben): wasserdicht und einheitlich orientiert, Volumen gegen unabhängige Integration, Mittelschnitt = Seitenprofil, Rotationssymmetrie, Verrundungs-Ringband, STL-Format
 - `export/*.test.js` – B-Spline (Interpolation, Knotenvektor), DXF (Struktur, Entities je Layer, lückenlose Verrundung, Flansch), PDF (Kennwerte, Maßstab, Layer, englisches Datenblatt)
+- `project.test.js` – Projektdateien: Rundlauf, nur Entwurfswerte, ungültige/fehlende Werte → Standard mit Meldung (auch Treiberfelder, feste Auswahlen, null), neuere Version, kein JSON / fremde Datei, Dateiname
 - `settings.test.js` – Einstellungen: Rundlauf, Typprüfung (falscher Typ, kaputtes JSON, NaN → Standard), null = automatisch, Layer-Auswahl zusammengeführt, Zurücksetzen
 - `simulation.test.js` – 1D-Simulation: Transfermatrix (det = 1, Zylinder = ebene Welle, Unterteilen ändert nichts), Zylinder offen/schallhart (Resonanzen c/2L, c/4L) und mit 2π-Abschluss (Mündungskorrektur 8a/3π), unendlicher Konus (exakt), unendliches Exponentialhorn, Energieerhaltung, Konvergenz; J1/H1 gegen Tabellenwerte und unabhängige Integration, Strahlungsimpedanz-Grenzwerte und Raumwinkel; Treiber (Z_el bei fs, Direktstrahler-SPL, Kammer als Rohr = Nachgiebigkeit, Rückkammer); `areaCurve` (ebener Hals, Abtastweite, Mundfläche); CSV
 - `validation/hornresp/hornresp.test.js` – Abgleich mit Hornresp-Referenzdateien (Fall A, B, C: Ra, Xa, Ze, SPL über 533 Frequenzen), App-SPL = Horn-Anteil des Hornresp-Modells

@@ -1,5 +1,5 @@
 // Radialhorn-Konfigurator: Parameter in der Seitenleiste, Draufsicht und Seitenriss rechts.
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   createHornMath, hasTraktrix, CURVES, computeFillet, makeProfile,
   mouthArea, verticalMouthAngle, frequencyEstimates,
@@ -16,6 +16,9 @@ import { Frequenzgang } from "./components/Frequenzgang.jsx";
 import { usePersistentState, useThrottledValue } from "./hooks.js";
 import { LANGUAGES, LanguageContext, detectLanguage, translate } from "./i18n.js";
 import { clearSettings } from "./settings.js";
+import { DESIGN_DEFAULTS as D, ProjectError, buildProject, parseProject, projectFileName } from "./project.js";
+import { downloadFile } from "./export/download.js";
+import { version as APP_VERSION } from "../package.json";
 import { exportDXF } from "./export/dxf.js";
 import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
@@ -46,39 +49,38 @@ export default function App() {
   const lang = langSetting in LANGUAGES ? langSetting : "de";
   const t = useMemo(() => (key, params) => translate(lang, key, params), [lang]);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
-  const [throatDiam,      setThroatDiam]      = usePersistentState("throatDiam", 50.8);
+  const [throatDiam,      setThroatDiam]      = usePersistentState("throatDiam", D.throatDiam);
   // Eigene Halsgröße: gewählt oder ein gespeicherter Durchmesser, den es als Knopf nicht (mehr) gibt (z. B. früher 3")
-  const [throatCustomOn,  setThroatCustomOn]  = usePersistentState("throatCustom", false);
+  const [throatCustomOn,  setThroatCustomOn]  = usePersistentState("throatCustom", D.throatCustom);
   const throatCustom = throatCustomOn || !THROAT_SIZES.some(th => th.diameter === throatDiam);
   const selectThroat = v => {
     setThroatCustomOn(v === THROAT_CUSTOM);
     if (v !== THROAT_CUSTOM) setThroatDiam(v);
   };
-  const [openingAngle,    setOpeningAngle]    = usePersistentState("openingAngle", 140);
-  const [L,               setL]               = usePersistentState("L", 500);
-  const [Lt,              setLt]              = usePersistentState("Lt", 60);
-  const [dw,              setDw]              = usePersistentState("dw", 182);   // BMS 4591: Ø 182 mm
-  const [dh,              setDh]              = usePersistentState("dh", 90);    // BMS 4591: Tiefe 90 mm
-  const [hMouth,          setHMouth]          = usePersistentState("hMouth", 200);
-  const [curve,           setCurve]           = usePersistentState("curve", "exponential");
-  const [hypexT,          setHypexT]          = usePersistentState("hypexT", 0.5);
-  const [showRaumecke,    setShowRaumecke]    = usePersistentState("showRaumecke", true);
-  const [showWandstaerke, setShowWandstaerke] = usePersistentState("showWandstaerke", false);
-  const [wandstaerke,     setWandstaerke]     = usePersistentState("wandstaerke", 20);
-  const [filletOn,        setFilletOn]        = usePersistentState("filletOn", false);
-  const [filletR,         setFilletR]         = usePersistentState("filletR", 100);
-  const [clothoidOn,      setClothoidOn]      = usePersistentState("clothoidOn", false);
-  const [clothoidLength,  setClothoidLength]  = usePersistentState("clothoidLength", 30);
-  const [edgeOn,          setEdgeOn]          = usePersistentState("edgeOn", false);
-  const [edgeR,           setEdgeR]           = usePersistentState("edgeR", null);   // null: Wandstärke
-  const [flangeOn,        setFlangeOn]        = usePersistentState("flangeOn", false);
-  const [flangeD,         setFlangeD]         = usePersistentState("flangeD", null);   // null: Treiberbreite dw, mind. Schale + Bohrungen
-  const [flangeT,         setFlangeT]         = usePersistentState("flangeT", 10);
-  const [holeCount,       setHoleCount]       = usePersistentState("holeCount", 4);
-  // Bohrbild BMS 4591: 4 × M6 im 90°-Raster auf Ø 101,6 mm (4"), Durchgangsbohrung M6 mittel 6,6 mm
-  const [holeCircle,      setHoleCircle]      = usePersistentState("holeCircle", 101.6);   // null: mittig im Flanschring
-  const [holeD,           setHoleD]           = usePersistentState("holeD", 6.6);
-  const [holeAngle,       setHoleAngle]       = usePersistentState("holeAngle", 0);    // 0°: Bohrungen auf 3, 12, 9, 6 Uhr
+  const [openingAngle,    setOpeningAngle]    = usePersistentState("openingAngle", D.openingAngle);
+  const [L,               setL]               = usePersistentState("L", D.L);
+  const [Lt,              setLt]              = usePersistentState("Lt", D.Lt);
+  const [dw,              setDw]              = usePersistentState("dw", D.dw);
+  const [dh,              setDh]              = usePersistentState("dh", D.dh);
+  const [hMouth,          setHMouth]          = usePersistentState("hMouth", D.hMouth);
+  const [curve,           setCurve]           = usePersistentState("curve", D.curve);
+  const [hypexT,          setHypexT]          = usePersistentState("hypexT", D.hypexT);
+  const [showRaumecke,    setShowRaumecke]    = usePersistentState("showRaumecke", D.showRaumecke);
+  const [showWandstaerke, setShowWandstaerke] = usePersistentState("showWandstaerke", D.showWandstaerke);
+  const [wandstaerke,     setWandstaerke]     = usePersistentState("wandstaerke", D.wandstaerke);
+  const [filletOn,        setFilletOn]        = usePersistentState("filletOn", D.filletOn);
+  const [filletR,         setFilletR]         = usePersistentState("filletR", D.filletR);
+  const [clothoidOn,      setClothoidOn]      = usePersistentState("clothoidOn", D.clothoidOn);
+  const [clothoidLength,  setClothoidLength]  = usePersistentState("clothoidLength", D.clothoidLength);
+  const [edgeOn,          setEdgeOn]          = usePersistentState("edgeOn", D.edgeOn);
+  const [edgeR,           setEdgeR]           = usePersistentState("edgeR", D.edgeR);
+  const [flangeOn,        setFlangeOn]        = usePersistentState("flangeOn", D.flangeOn);
+  const [flangeD,         setFlangeD]         = usePersistentState("flangeD", D.flangeD);
+  const [flangeT,         setFlangeT]         = usePersistentState("flangeT", D.flangeT);
+  const [holeCount,       setHoleCount]       = usePersistentState("holeCount", D.holeCount);
+  const [holeCircle,      setHoleCircle]      = usePersistentState("holeCircle", D.holeCircle);
+  const [holeD,           setHoleD]           = usePersistentState("holeD", D.holeD);
+  const [holeAngle,       setHoleAngle]       = usePersistentState("holeAngle", D.holeAngle);
   const [exportLayers,    setExportLayers]    = usePersistentState("exportLayers", {
     draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, uebergang: true, flansch: true, bemassung: true,
   });
@@ -86,12 +88,54 @@ export default function App() {
   const [simOn,           setSimOn]           = usePersistentState("simOn", false);
   // Abstrahlung: "auto" = π in der Raumecke (zwei Wände; Boden/Decke bei Ohrhöhe im Arbeitsbereich
   // zu weit weg), sonst 2π
-  const [simMouth,        setSimMouth]        = usePersistentState("abstrahlung", "auto");
+  const [simMouth,        setSimMouth]        = usePersistentState("abstrahlung", D.abstrahlung);
   const mouth = simMouth === "auto" ? (showRaumecke ? "pi" : "2pi") : simMouth;
-  const [simTemp,         setSimTemp]         = usePersistentState("simTemp", 20);
+  const [simTemp,         setSimTemp]         = usePersistentState("simTemp", D.simTemp);
   const [simPhase,        setSimPhase]        = usePersistentState("simPhase", false);
-  const [driver,          setDriver]          = usePersistentState("driver", PLACEHOLDER_DRIVER);
+  const [driver,          setDriver]          = usePersistentState("driver", D.driver);
   const setDriverValue = key => v => setDriver(d => ({ ...d, [key]: v }));
+
+  // Projektdatei (project.js): der Entwurf als Ganzes, Schlüssel wie die gespeicherten Einstellungen
+  const designValues = {
+    throatDiam, throatCustom: throatCustomOn, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
+    showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
+    flangeT, holeCount, holeCircle, holeD, holeAngle, abstrahlung: simMouth, simTemp, driver,
+  };
+  const designSetters = {
+    throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, openingAngle: setOpeningAngle, L: setL, Lt: setLt,
+    dw: setDw, dh: setDh, hMouth: setHMouth, curve: setCurve, hypexT: setHypexT, showRaumecke: setShowRaumecke,
+    showWandstaerke: setShowWandstaerke, wandstaerke: setWandstaerke, filletOn: setFilletOn, filletR: setFilletR,
+    clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, edgeOn: setEdgeOn, edgeR: setEdgeR,
+    flangeOn: setFlangeOn, flangeD: setFlangeD, flangeT: setFlangeT, holeCount: setHoleCount,
+    holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, abstrahlung: setSimMouth,
+    simTemp: setSimTemp, driver: setDriver,
+  };
+  const [projectStatus, setProjectStatus] = useState(null);   // { kind: "ok" | "warn" | "error", text }
+  useEffect(() => {   // Erfolgsmeldung verschwindet nach ein paar Sekunden, Hinweise und Fehler bleiben
+    if (projectStatus?.kind !== "ok") return;
+    const timer = setTimeout(() => setProjectStatus(null), 5000);
+    return () => clearTimeout(timer);
+  }, [projectStatus]);
+  const saveProject = () => {
+    downloadFile(buildProject(designValues, { appVersion: APP_VERSION }), projectFileName(designValues), "application/json");
+    setProjectStatus(null);
+  };
+  const openProject = async file => {
+    try {
+      const { design, invalid, missing, newer } = parseProject(await file.text());
+      for (const [key, value] of Object.entries(design)) designSetters[key](value);
+      const replaced = [...invalid, ...missing];
+      const notes = [
+        newer && t("project.newer"),
+        replaced.length > 0 && t(replaced.length === 1 ? "project.defaultsOne" : "project.defaults", { n: replaced.length, keys: replaced.join(", ") }),
+      ].filter(Boolean);
+      setProjectStatus(notes.length
+        ? { kind: "warn", text: [t("project.opened", { name: file.name }), ...notes].join(" ") }
+        : { kind: "ok", text: t("project.opened", { name: file.name }) });
+    } catch (e) {
+      setProjectStatus({ kind: "error", text: t(e instanceof ProjectError ? "project.error." + e.code : "project.error.read") });
+    }
+  };
 
   // Regler reagieren sofort; Rechnung und Ansichten folgen gedrosselt (useThrottledValue): beim
   // Ziehen laufend mit dem jeweils neuesten Wert, mit Pausen für die Eingabe dazwischen. Alles
@@ -197,6 +241,7 @@ export default function App() {
           </div>
           <LanguageSwitch value={lang} onChange={setLang} label={t("app.language")} />
         </div>
+        <ProjectButtons onOpen={openProject} onSave={saveProject} status={projectStatus} t={t} />
 
         <Card title={t("card.throat")} id="throat">
           <SegmentedButtons
@@ -420,6 +465,23 @@ function LanguageSwitch({ value, onChange, label }) {
           color: value === code ? UI.accent : UI.faint,
         }}>{code.toUpperCase()}</button>
       ))}
+    </div>
+  );
+}
+
+/** Projekt öffnen und speichern (Kopf der Seitenleiste), darunter die Meldung zum letzten Öffnen. */
+function ProjectButtons({ onOpen, onSave, status, t }) {
+  const input = useRef(null);
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 6 }}>
+        <Button onClick={() => input.current.click()}>{t("project.open")}</Button>
+        <Button onClick={onSave}>{t("project.save")}</Button>
+      </div>
+      <input ref={input} type="file" accept=".json,application/json" hidden aria-label={t("project.open")}
+        onChange={e => { const file = e.target.files[0]; e.target.value = ""; if (file) onOpen(file); }} />
+      {status?.kind === "ok" && <Note>{status.text}</Note>}
+      {status && status.kind !== "ok" && <Warn>{status.text}</Warn>}
     </div>
   );
 }

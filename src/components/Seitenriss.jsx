@@ -37,7 +37,7 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
   // ── Abbildung Geometrie (z, h) → Bildschirm ───────────────────────
   const halfMax = Math.max(dw / 2, hMouth / 2 + wall, flange ? flange.diameter / 2 : 0) * 1.05;
   const zMin = s.hatTipZ - 10, zMax = s.zApex + 10;
-  const mT = Math.min(72, VH * 0.3), mB = Math.min(flange ? 62 : 40, VH * 0.15);   // oben: Titel + zwei Maßlagen
+  const mT = Math.min(80, VH * 0.45), mB = Math.min(flange ? 62 : 40, VH * 0.15);   // oben: Titel + zwei Maßlagen
   const scale0 = Math.min((VW - Math.min(80, VW * 0.12) * 2) / (zMax - zMin), (VH - mT - mB) / (2 * halfMax));
   const contentW = (zMax - zMin) * scale0;
   const cy = mT + (VH - mT - mB) / 2;
