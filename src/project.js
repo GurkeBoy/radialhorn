@@ -18,6 +18,8 @@ export const PROJECT_EXTENSION = ".radialhorn.json";
 export const DESIGN_DEFAULTS = {
   throatDiam: 50.8,
   throatCustom: false,
+  morphOn: false,          // Übergang rund → eckig am Throat
+  morphLength: null,       // Länge entlang der Wand [mm]; null: Throat-Durchmesser
   openingAngle: 140,
   L: 500,
   Lt: 60,
@@ -48,7 +50,7 @@ export const DESIGN_DEFAULTS = {
 };
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
-const NULLABLE = new Set(["edgeR", "flangeD", "holeCircle"]);
+const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);
 
 // Werte, die aus einer festen Auswahl kommen müssen (der Code verzweigt danach)
 const CHOICES = {

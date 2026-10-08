@@ -160,8 +160,9 @@ function frame(camera, controls, object) {
  * @param wall     Wandstärke [mm]; 0 zeigt das Luftvolumen, > 0 die Schale
  * @param edgeR    Radius der gerundeten Längskanten außen [mm], 0 = scharf
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null, nur mit Schale
+ * @param morph    Übergang rund → eckig am Throat (throatMorph) oder null
  */
-export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, edgeR = 0, flange, showRaumecke }) {
+export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, edgeR = 0, flange, morph = null, showRaumecke }) {
   const tr = useT();
   const containerRef = useRef(null);
   const { w, h } = useSize(containerRef);
@@ -171,9 +172,9 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
   const [showCorner, setShowCorner] = useState(true);
 
   const meshInput = useMemo(() => s ? {
-    s, rt, hMouth, curve, hypexT, fillet, wall, edgeR,
+    s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, morph,
     flange: wall > 0 ? flange : null, sections: Object.keys(SECTION_COLOR),
-  } : null, [s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, flange]);
+  } : null, [s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, flange, morph]);
   const sections = useMeshWorker(meshInput);
 
   // Szene, Kamera, Renderer und Steuerung einmalig anlegen

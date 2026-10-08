@@ -24,6 +24,9 @@ export default {
   "throat.custom": "Eigene",
   "throat.size14": "1,4\"",
   "throat.diameter": "Durchmesser Ø",
+  "throat.morph": "Rund → eckig (Übergang)",
+  "throat.morphHint": "Beginnt mit dem Kreis des Treiberausgangs, die Ecken laufen entlang der Wand aus",
+  "throat.morphLength": "Länge (Wand)",
   "card.geometry": "HORIZONTALES PROFIL",
   "card.profile": "VERTIKALES PROFIL",
   "card.driver": "TREIBER",
@@ -57,6 +60,7 @@ export default {
   "profile.filletRadius": "Radius r",
   "warn.filletNeedsTractrix": "Verrundung nur mit Traktrix-Eingang (Lₜ > 0)",
   "warn.filletLimited": "Radius zu groß – begrenzt auf {mm} mm",
+  "warn.morphLimited": "Begrenzt auf {mm} mm – die Länge der Wand bis zum Mund",
 
   // Treiber, Aufstellung, Ausführung
   "driver.width": "Breite dw",

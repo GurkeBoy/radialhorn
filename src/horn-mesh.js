@@ -9,6 +9,9 @@
  *   - Eine Regel für den ganzen Körper: halbe Höhe h(x, z) = Profil(zFocus + Abstand zum
  *     Fokus), hinter dem Fokus Profil(z + |x|) (focusRadius). Im Prisma ergibt das rt; mit
  *     Verrundung steigt der Deckel im Ringband vor dem inneren Teilkreis wie im Seitenriss an.
+ *   - Runder Throat (morph, throatMorph): im Übergang sind die vier Längskanten innen mit dem
+ *     Radius r(s) gerundet, s = Bogenlänge entlang der Wand, in der Zeile selbst (gerader Bereich:
+ *     Wellenfront-Bogen); am Throat der Kreis (roundedRows, roundInnerCorners).
  *
  * Schale (Wandstärke t senkrecht zur Fläche, scharfe Außenkanten, bündige Enden)
  *   - Außenkörper = derselbe Aufbau mit versetzter Kontur (Parallelkurve der Traktrix bzw.
@@ -20,11 +23,12 @@
  * Koordinaten der Gitterpunkte: [X, Y, Z] = [x (Breite), h (Höhe), z (Achse)] in mm.
  * Nachbarflächen teilen sich an den Nähten exakt dieselben Randpunkte (wasserdicht).
  */
-import { hasTraktrix, hasClothoid, entrancePoints, focusRadius } from "./horn-math.js";
+import { hasTraktrix, hasClothoid, entrancePoints, focusRadius, wallArcLength, cornerRadius } from "./horn-math.js";
 import { ShapeUtils, Vector2 } from "three";
 import { linspace } from "./utils.js";
 
 const DEFAULT_RES = { angular: 60, radial: 80, axial: 40 };
+const TRAK_MIN_STEP = 0.25;   // kleinster Zeilenabstand im Traktrix-Abschnitt des Luftvolumens [mm Bogenlänge]
 
 /**
  * Halbe Höhe der senkrecht um t versetzten Profilkurve als Funktion des Abstands r zum
@@ -61,13 +65,20 @@ export function offsetHeight(hAt, rMax, t) {
  * dann gerade Wand bis zum Mund. lineStart = Index des Beginns der Geraden, kloStart = Index
  * des Beginns der Klothoide (oder null).
  */
-function innerWall(s, rt, n = 400) {
-  const entrance = hasTraktrix(s) ? entrancePoints(s, n, Math.max(8, n >> 1)) : [[rt, 0]];
+function innerWall(s, rt, n = 400, minStep = 0) {
+  // Traktrix-Abschnitt höchstens eine Zeile je minStep Bogenlänge: steht Lₜ genau auf dem Minimum
+  // für die Klothoide, ist er praktisch null lang – 40 Zeilen auf einem Punkt kippen numerisch
+  const trakLength = hasTraktrix(s) ? s.r0 * Math.log(Math.cosh(s.tTh) / Math.cosh(s.tEnd)) : 0;
+  const nTrak = minStep > 0 ? Math.max(1, Math.min(n, Math.ceil(trakLength / minStep))) : n;
+  const entrance = hasTraktrix(s) ? entrancePoints(s, nTrak, Math.max(8, n >> 1)) : [[rt, 0]];
   entrance[0] = [rt, 0];
+  // noch kürzer als eine Zeile: Ende genau auf den Throat-Punkt (Abweichung < minStep) – beide
+  // Zeilen haben denselben Wandpunkt, die Nullzelle dazwischen fällt sauber weg
+  if (minStep > 0 && trakLength < minStep && entrance.length > 1) entrance[1] = [rt, 0];
   return {
     points: [...entrance, [s.xMouth, s.zMouth]],
     lineStart: entrance.length - 1,
-    kloStart: hasClothoid(s) ? n : null,
+    kloStart: hasClothoid(s) ? nTrak : null,
   };
 }
 
@@ -113,7 +124,7 @@ function contourRight(s, rt, t, axial, z0 = 0) {
   const wall = innerWall(s, rt, 2000).points;
   if (t === 0) {
     if (!hasTraktrix(s)) return { pts: [[rt, 0]], kloStart: null };
-    const w = innerWall(s, rt, axial);
+    const w = innerWall(s, rt, axial, TRAK_MIN_STEP);
     return { pts: w.points.slice(0, -1), kloStart: w.kloStart };
   }
   // Beginn der Klothoide auf der versetzten Kontur: Wandpunkt + t·Normale (cos θ, −sin θ)
@@ -262,14 +273,24 @@ function coons(B, T, L, R, us, vs) {
  * Eckstreifen über den Seitenwänden (zwischen Wand und Außenkante), der wie die Seitenwand
  * senkrecht zur Wand an der Mundkante endet.
  */
-function body(s, rt, t, height, fillet, { angular, radial, axial }, zStart = 0) {
+function body(s, rt, t, height, fillet, { angular, radial, axial }, zStart = 0, morph = null, outerRound = null) {
   const polar = (r, phi) => [r * Math.sin(phi), s.zFocus + r * Math.cos(phi)];
   const lift = grid => grid.map(row => row.map(([x, z]) => [x, height(x, z), z]));
   const corner = t > 0 ? CORNER_COLUMNS : 0;
 
   // Naht zwischen Traktrix-Grundfläche und Rest: Kreis um den Fokus durch das Konturende
-  const { pts: contour, kloStart } = contourRight(s, rt, t, axial, zStart);
+  let { pts: contour, kloStart } = contourRight(s, rt, t, axial, zStart);
   const end = contour[contour.length - 1];
+  let lensLike = contour.length === 1;
+  // Außen mit rundem Throat: eine sehr kurze Kontur vor der geraden Wand (kurze Traktrix, dicke
+  // Wand) knickt auf wenigen Millimetern von der Traktrix- in die Wandrichtung – praktisch ein
+  // Eckpunkt. Wie eine Linse behandeln: alle Zeilen enden im Beginn der geraden Wand, nur die
+  // Throat-Zeile in der Throat-Ebene auf derselben Breite (Wand dort bis zu ein paar mm dicker)
+  if (outerRound && t > 0 && contour.length > 1 && end[1] - contour[0][1] < MORPH_SHORT * t) {
+    contour = [[end[0], contour[0][1]], end];
+    kloStart = null;
+    lensLike = true;
+  }
   const rSeam = t === 0 && hasTraktrix(s) ? s.rInner : Math.hypot(end[0], end[1] - s.zFocus);
   const phiSeam = s.alpha2 + Math.asin(Math.min(1, t / rSeam));
   const centerPhis = linspace(-s.alpha2, s.alpha2, angular);
@@ -283,12 +304,21 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }, zStart = 0) 
   const side = contour.length > 1 ? [...contour] : [contour[0], contour[0]];
   side[side.length - 1] = arc[nCols];
   if (!hasTraktrix(s)) side[0] = arc[nCols];
+  // Runder Throat (nur Luftvolumen): Ecken je Zeile gerundet (roundedRows). Ohne Traktrix ist der
+  // Eingang nur die Linse zwischen Throat-Ebene und erster Wellenfront – dort läuft die Rundung
+  // vom Kreis in den Bogen, deshalb mit Zwischenzeilen
+  const rounding = morph && t === 0 ? roundedRows(s, morph, polar, centerPhis) : null;
+  // Linse (Kontur nur ein Punkt: innen ohne Traktrix, außen auch bei sehr kurzer Traktrix, wenn
+  // der versetzte Übergangspunkt vor dem Throat liegt): Zwischenzeilen für die Rundung
+  if ((rounding || (outerRound && t > 0)) && lensLike) while (side.length < MORPH_LENS_ROWS + 1) side.splice(1, 0, side[side.length - 1]);
   const x0 = side[0][0];
   const throat = linspace(-x0, x0, nCols).map(x => [x, zStart]);
-  const entranceTop = lift(entranceLoft(throat, arc, side.map(([x, z]) => [-x, z]), side, linspace(0, 1, side.length - 1)));
-  const split = kloStart !== null && kloStart > 0 && kloStart < entranceTop.length - 1;
-  const trakTop = split ? entranceTop.slice(0, kloStart + 1) : entranceTop;
-  const kloTop = split ? entranceTop.slice(kloStart) : null;
+  const entrance = rounding
+    ? rounding.entrance(side, x0, zStart, rSeam)
+    : { plan: entranceLoft(throat, arc, side.map(([x, z]) => [-x, z]), side, linspace(0, 1, side.length - 1)) };
+  // Außenkörper mit rundem Throat: Zeilen um R = r + e eingerückt (outerRows), die Naht folgt unten
+  const outer = outerRound && t > 0 ? outerRows(s, rt, outerRound, side, t, lensLike) : null;
+  let entranceTop = outer ? null : lift(entrance.plan);
 
   // Öffnungssektor: Polargitter um den Fokus, im Verrundungsbereich verdichtet
   let radii = linspace(rSeam, s.arcR, radial);
@@ -296,8 +326,10 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }, zStart = 0) 
     const rT2 = fillet.zT2 - s.zFocus;
     if (rT2 > rSeam) radii = [...new Set([...radii, ...linspace(rSeam, Math.min(rT2, s.arcR), 20)])].sort((a, b) => a - b);
   }
-  const sector = radii.map(r => centerPhis.map(phi => polar(r, phi)));
-  const linTop = lift(sector);
+  if (rounding) radii = rounding.denser(radii, rSeam);
+  const sectorRows = rounding && radii.map(rho => rounding.sectorRow(rho));
+  const sector = rounding ? sectorRows.map(r => r.plan) : radii.map(r => centerPhis.map(phi => polar(r, phi)));
+  let linTop = lift(sector);
 
   // Eckstreifen rechts (außen): unten Naht, oben Endlinie Mundkante → Mundkante + t·Normale,
   // links Strahl φ = α, rechts Parallele der Wand
@@ -315,8 +347,34 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }, zStart = 0) 
       us.map(u => [S[0] + u * (E[0] - S[0]), S[1] + u * (E[1] - S[1])]),
       us, vs);
   }
+  // Außenkörper: Bögen des geraden Bereichs samt Eckstreifen einrücken, Naht = erste Zeile
+  let sectorCorners = rounding ? sectorRows.map(r => r.corner) : null;
+  if (outer) {
+    sectorCorners = radii.map((rho, k) => {
+      const res = outer.insetSector(rho, sector[k], cornerR[k], centerPhis, polar);
+      sector[k] = res.sector; cornerR[k] = res.corner;
+      return res.info;
+    });
+    // Eingang wie die Bögen: zuerst die Eckspalten, erst darüber hinaus der mittlere Teil; die Naht
+    // ist die erste Zeile des geraden Bereichs (gleicher Wandpunkt → gleicher Radius)
+    const last = entrance.plan.length - 1;
+    const seam = [...cornerR[0].map(([x, z]) => [-x, z]).reverse().slice(0, -1), ...sector[0], ...cornerR[0].slice(1)];
+    entrance.corners = entrance.plan.map((row, i) => i === last ? sectorCorners[0] : outer.insetRow(row, side[i], corner, sectorCorners[0], i / last, lensLike));
+    entrance.plan = entrance.plan.map((row, i) => i === last ? seam : entrance.corners[i].row);
+    entranceTop = lift(entrance.plan);
+    // Zeilen am selben Wandpunkt wie die Naht (Linse) oder auf der kurzen Sehne davor: Unterkante der
+    // Rundung wie bei der Naht – sonst stießen an der Wand Punkte senkrecht übereinander (T-Stoß)
+    // bzw. die Unterkante spränge auf wenigen Millimetern in der Höhe
+    const seamH = entranceTop[last][entranceTop[last].length - 1][1], seamP = sectorCorners[0].p;
+    for (const c of entrance.corners) if (c !== sectorCorners[0] && (lensLike || Math.hypot(c.p[0] - seamP[0], c.p[1] - seamP[1]) < 1e-9)) c.wallH = seamH;
+  }
+  const linTopOuter = outer ? lift(sector) : null;
+  const split = kloStart !== null && kloStart > 0 && kloStart < entranceTop.length - 1;
+  const trakTop = split ? entranceTop.slice(0, kloStart + 1) : entranceTop;
+  const kloTop = split ? entranceTop.slice(kloStart) : null;
   const cornerTopR = cornerR && lift(cornerR);
   const cornerTopL = cornerR && lift(cornerR.map(row => row.map(([x, z]) => [-x, z])));
+  if (linTopOuter) linTop = linTopOuter;
 
   const mirrorY = grid => grid && grid.map(row => row.map(([x, y, z]) => [x, -y, z]));
   const column = (grid, j) => grid.map(row => row[j]);
@@ -328,7 +386,7 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }, zStart = 0) 
   const [wallTopL, wallBotL, wallTopR, wallBotR] = corner
     ? [column(cornerTopL, corner), column(cornerBottomL, corner), column(cornerTopR, corner), column(cornerBottomR, corner)]
     : [column(linTop, 0), column(linBottom, 0), column(linTop, angular), column(linBottom, angular)];
-  return {
+  const result = {
     trakTop, trakBottom, kloTop, kloBottom, linTop, linBottom, cornerTopL, cornerTopR, cornerBottomL, cornerBottomR,
     trakWallL: wall(column(trakTop, 0), column(trakBottom, 0)),
     trakWallR: wall(column(trakTop, nCols), column(trakBottom, nCols)),
@@ -343,6 +401,299 @@ function body(s, rt, t, height, fillet, { angular, radial, axial }, zStart = 0) 
              cornerTopL: cornerTopL && last(cornerTopL), cornerTopR: cornerTopR && last(cornerTopR),
              cornerBottomL: cornerBottomL && last(cornerBottomL), cornerBottomR: cornerBottomR && last(cornerBottomR) },
   };
+  if (rounding || outer) roundInnerCorners(result, entrance.corners, sectorCorners, split ? kloStart : null, !!outer);
+  return result;
+}
+
+const MORPH_STEPS = 16;        // Unterteilung des Viertelkreises einer Ecke (Kreis am Throat: 4·16 Segmente)
+const MORPH_SHORT = 0.25;      // Außenkontur kürzer als MORPH_SHORT·t (in z): wie eine Linse behandeln
+const MORPH_LENS_ROWS = 16;    // Zeilen der Linse ohne Traktrix (außen laufen sie fächerförmig in einem Wandpunkt zusammen)
+const MORPH_SECTOR_ROWS = 40;  // zusätzliche Zeilen im geraden Bereich, soweit der Übergang reicht
+const MORPH_SAMPLES = 256;     // Abtastung einer Eingangszeile für die Bogenlänge
+
+/**
+ * Runder Throat: Zeilen des Luftvolumens mit gerundeten Ecken. Die Ecke wird in der Zeile selbst
+ * gerundet: Deckel und Boden enden an der Stelle q, die entlang der Zeile r vor der Wand liegt;
+ * die Rundung (Viertelkreis in der abgewickelten Zeile × Höhe) läuft von dort bis zur Wand.
+ *   - Gerader Bereich: Zeilen sind Wellenfronten (Kreisbogen um den Fokus, Radius ρ), q bei
+ *     φ = α − r/ρ – im abgewickelten Bogen ein exakter Viertelkreis, Flächenabzug genau (4 − π)·r².
+ *   - Eingang: Zeilen laufen von der ebenen Throat-Linie zur Naht (erste Wellenfront des geraden
+ *     Bereichs). Am Throat ist die Zeile die Gerade z = 0 – die Rundung ist dort genau der Kreis
+ *     des Treiberausgangs, in der Treiberebene.
+ * r(s) hängt an der Bogenlänge s des Wandpunkts der Zeile (cornerRadius).
+ * @returns {{ entrance, sectorRow, denser }}
+ */
+function roundedRows(s, morph, polar, centerPhis) {
+  const a = s.alpha2;
+  const rAt = zWall => { const r = cornerRadius(wallArcLength(s, Math.max(0, zWall)), morph); return r < 1e-6 ? 0 : r; };
+
+  /** Zeile des geraden Bereichs (Bogen um den Fokus mit Radius rho). */
+  const sectorRow = rho => {
+    const P = polar(rho, a), r = rAt(P[1]), scale = (a - r / rho) / a;
+    return {
+      plan: centerPhis.map(phi => polar(rho, phi * scale)),
+      corner: { p: P, r, path: l => polar(rho, a - l / rho) },
+    };
+  };
+
+  /** Zusätzliche Bögen im geraden Bereich, soweit der Übergang dort reicht. */
+  const denser = (radii, rSeam) => {
+    const sTrans = wallArcLength(s, s.zTrans);
+    const rhoEnd = Math.min(s.arcR, rSeam + Math.max(0, morph.length - sTrans));
+    if (rhoEnd <= rSeam) return radii;
+    return [...new Set([...radii, ...linspace(rSeam, rhoEnd, MORPH_SECTOR_ROWS)])].sort((x, y) => x - y);
+  };
+
+  /**
+   * Eingang: Zeile i ist (1 − u)·Throat-Linie + u·Naht, in x gestreckt und in z verschoben auf den
+   * Wandpunkt side[i] (wie entranceLoft, aber stetig im Spaltenparameter v ∈ [0, 1]). Die letzte
+   * Zeile ist die Naht selbst – exakt dieselbe wie die erste des geraden Bereichs.
+   */
+  const entrance = (side, x0, zStart, rSeam) => {
+    const nCols = centerPhis.length - 1, last = side.length - 1;
+    const B = v => [-x0 + 2 * x0 * v, zStart];
+    const T = v => polar(rSeam, -a + 2 * a * v);
+    const plan = [], corners = [];
+    side.forEach((P, i) => {
+      if (i === last) { const row = sectorRow(rSeam); plan.push(row.plan); corners.push(row.corner); return; }
+      const u = i / last, b1 = B(1), t1 = T(1);
+      const ex = (1 - u) * b1[0] + u * t1[0], ez = (1 - u) * b1[1] + u * t1[1];
+      const sx = i === 0 ? 1 : P[0] / ex, dz = i === 0 ? 0 : P[1] - ez;
+      const rowAt = v => { const b = B(v), tt = T(v); return [((1 - u) * b[0] + u * tt[0]) * sx, (1 - u) * b[1] + u * tt[1] + dz]; };
+      const r = rAt(P[1]);
+      if (r === 0) {
+        const row = linspace(0, 1, nCols).map(rowAt);
+        row[0] = [-P[0], P[1]]; row[nCols] = [P[0], P[1]];
+        plan.push(row);
+        corners.push({ p: P, r: 0, path: () => P });
+        return;
+      }
+      // Bogenlänge von der Wand (v = 1) zur Mitte (v = ½), daraus q und der Weg der Rundung
+      const vs = linspace(1, 0.5, MORPH_SAMPLES), pts = vs.map(rowAt), cum = [0];
+      pts[0] = [P[0], P[1]];
+      for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
+      const at = l => {
+        let k = 1;
+        while (k < cum.length - 1 && cum[k] < l) k++;
+        const f = Math.min(1, Math.max(0, (l - cum[k - 1]) / (cum[k] - cum[k - 1] || 1)));
+        return { v: vs[k - 1] + f * (vs[k] - vs[k - 1]), p: [pts[k - 1][0] + f * (pts[k][0] - pts[k - 1][0]), pts[k - 1][1] + f * (pts[k][1] - pts[k - 1][1])] };
+      };
+      const vQ = r >= cum[cum.length - 1] - 1e-9 ? 0.5 : at(r).v;
+      const row = linspace(0, 1, nCols).map(w => rowAt((1 - vQ) + (2 * vQ - 1) * w));
+      const q = vQ === 0.5 ? [0, rowAt(0.5)[1]] : rowAt(vQ);
+      row[0] = [-q[0], q[1]]; row[nCols] = q;
+      plan.push(row);
+      corners.push({ p: P, r, path: l => l >= r ? q : at(l).p });
+    });
+    return { plan, corners };
+  };
+
+  return { entrance, sectorRow, denser };
+}
+
+/**
+ * Rundet die vier inneren Längskanten mit den Ecken aus roundedRows (je Zeile Wandpunkt p, Radius r,
+ * Weg path(ℓ) entlang der Zeile ab der Wand). Deckel und Boden enden schon an q = path(r); je
+ * Zeile ein Viertelkreis in der abgewickelten Zeile von q (tangential an den Deckel) bis zur Wand
+ * W = p mit Höhe h(q) − r (tangential an die Wand). Die Seitenwände laufen zwischen den W. Am
+ * Throat ist der Randzug der Kreis (Deckel und Wand dort auf einen Punkt geschrumpft), die Kappe
+ * ein Fächer.
+ */
+function roundInnerCorners(b, entranceCorners, sectorCorners, kloStart, outer = false) {
+  const column = (grid, j) => grid.map(row => row[j]);
+  const mirrorY = grid => grid.map(row => row.map(([x, y, z]) => [x, -y, z]));
+  const arc = (q, c, sign) => {
+    const wh = (c.wallH ?? q[1]) - c.r;
+    return linspace(Math.PI / 2, 0, MORPH_STEPS).map((th, j) => {
+      if (j === 0) return q;
+      if (j === MORPH_STEPS) return [sign * c.p[0], wh, c.p[1]];
+      const [x, z] = c.path(c.r * (1 - Math.cos(th)));
+      // an der Wand wie ein Rohr mit Radius r (alle Zeilen gleich, auch wenn sie in einem Punkt
+      // zusammenlaufen), oben genau bis zur Deckelkante q – ein Höhenunterschied zum Deckel
+      // (Linse ohne Traktrix: Deckel nicht eben) wird nach oben hin verteilt
+      return [sign * x, wh + c.r * Math.sin(th) + (q[1] - wh - c.r) * (1 - Math.cos(th)), z];
+    });
+  };
+  const ends = grid => ({ right: column(grid, grid[0].length - 1), left: column(grid, 0) });
+  const parts = [{ key: "trak", section: "traktrix", ...ends(b.trakTop), corners: entranceCorners.slice(0, b.trakTop.length) }];
+  if (b.kloTop) parts.push({ key: "klo", section: "klothoide", ...ends(b.kloTop), corners: entranceCorners.slice(kloStart) });
+  // gerader Bereich: innen endet die Zeile am Bogen, außen am Eckstreifen
+  parts.push(outer
+    ? { key: "lin", section: "linear", right: column(b.cornerTopR, b.cornerTopR[0].length - 1), left: column(b.cornerTopL, b.cornerTopL[0].length - 1), corners: sectorCorners }
+    : { key: "lin", section: "linear", ...ends(b.linTop), corners: sectorCorners });
+  const rounded = {};
+  b.edges = [];
+  for (const part of parts) {
+    const topR = part.right.map((q, k) => arc(q, part.corners[k], 1));
+    const topL = part.left.map((q, k) => arc(q, part.corners[k], -1));
+    const botR = mirrorY(topR), botL = mirrorY(topL);
+    const W = grid => grid.map(row => row[MORPH_STEPS]);
+    const wall = (top, bottom) => top.map((p, k) => [bottom[k], p]);
+    b[`${part.key}WallR`] = wall(W(topR), W(botR));
+    b[`${part.key}WallL`] = wall(W(topL), W(botL));
+    rounded[part.key] = { topR, topL, botR, botL };
+    const radii = part.corners.map(c => c.r);
+    if (radii.every(r => r === 0)) continue;
+    const name = part.key[0].toUpperCase() + part.key.slice(1);
+    const strip = (label, grid) => ({ name: `round${name}${label}`, section: part.section, grid, triangles: edgeTriangles(grid, radii), oriented: true });
+    b.edges.push(strip("TopR", topR), strip("TopL", topL), strip("BottomR", botR), strip("BottomL", botL));
+  }
+  // Throat: Randzug um die gerundeten Ecken (wie roundEdges), doppelte Punkte entfernt
+  const t0 = rounded.trak, top = b.trakTop[0], bottom = b.trakBottom[0];
+  const same = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) <= 1e-9;
+  const loop = [
+    ...top, ...t0.topR[0].slice(1), ...[...t0.botR[0]].reverse(),
+    ...[...bottom].reverse().slice(1), ...t0.botL[0].slice(1), ...[...t0.topL[0]].reverse().slice(0, -1),
+  ].filter((p, i, all) => i === 0 || !same(p, all[i - 1]));
+  if (same(loop[0], loop[loop.length - 1])) loop.pop();
+  b.throatLoop = [...loop, loop[0]];
+  if (outer) {
+    // Mund: Eckzeilen um die Rundung bis zur Seitenwand verlängert (Stirnflächen der Seitenwände)
+    const lin = rounded.lin, endRow = grid => grid[grid.length - 1].slice(1);
+    b.mouth.cornerTopR = [...b.mouth.cornerTopR, ...endRow(lin.topR)];
+    b.mouth.cornerTopL = [...b.mouth.cornerTopL, ...endRow(lin.topL)];
+    b.mouth.cornerBottomR = [...b.mouth.cornerBottomR, ...endRow(lin.botR)];
+    b.mouth.cornerBottomL = [...b.mouth.cornerBottomL, ...endRow(lin.botL)];
+  } else b.capThroatFan = fan(loop);
+}
+
+/**
+ * Außenkörper der Schale mit rundem Throat: Kanten außen mit R(s) = r(s) + e gerundet – r der
+ * Innenradius am zugehörigen Wandpunkt, e der Kantenradius (0 = scharf). Mit e = t ist die Wand
+ * an den Ecken überall genau t (konzentrisch zur inneren Rundung, am Throat ein Kreis); am Ende
+ * des Übergangs geht R mit waagerechter Tangente in e über. Wie innen wird in der Zeile gerundet:
+ * die Zeile endet R vor der Außenwand, der Viertelkreis läuft entlang der Zeile bis zur Wand – R
+ * aber senkrecht zur Außenwand gemessen (Schnitt der Zeile durch das Rohr entlang der Kante).
+ * Zugehöriger Wandpunkt: im geraden Bereich der auf dem Strahl φ = α im selben Abstand zum
+ * Fokus, im Eingang der nächste Punkt der Innenwand.
+ * @param round  { morph, e }
+ */
+function outerRows(s, rt, { morph, e }, side, t, lensLike = false) {
+  const wall = innerWall(s, rt, 2000).points;
+  const R = sWall => { const r = cornerRadius(sWall, morph); return (r < 1e-6 ? 0 : r) + e; };
+  const sOf = zWall => wallArcLength(s, Math.max(0, zWall));
+  // Wellenfront-Regel: Wandpunkt auf dem Strahl φ = α im selben Abstand zum Fokus
+  const sRay = ([px, pz]) => sOf(s.zFocus + Math.hypot(px, pz - s.zFocus) * Math.cos(s.alpha2));
+  const footZ = ([px, pz]) => {
+    let best = Infinity, bz = 0;
+    for (let i = 1; i < wall.length; i++) {
+      const [ax, az] = wall[i - 1], abx = wall[i][0] - ax, abz = wall[i][1] - az;
+      const f = Math.max(0, Math.min(1, ((px - ax) * abx + (pz - az) * abz) / (abx * abx + abz * abz || 1)));
+      const d = Math.hypot(px - ax - f * abx, pz - az - f * abz);
+      if (d < best) { best = d; bz = az + f * abz; }
+    }
+    return bz;
+  };
+  // Abstand zur Außenwand: im Eingang zur versetzten Kontur (side, dahinter die Parallele der
+  // geraden Wand), im geraden Bereich zur Parallelen selbst
+  const ca = Math.cos(s.alpha2), sa = Math.sin(s.alpha2);
+  const dLine = ([x, z]) => t - (x * ca - (z - s.zFocus) * sa);
+  // Linse: als Wand für das Maß die gerade Wand ab ihrem Beginn (dahinter der Abstand zu diesem
+  // Punkt), bei kurzer Kontur davor das kleine Wandstück von der Throat-Zeile bis dorthin
+  const end = side[side.length - 1];
+  const outerWall = [...(lensLike ? (Math.hypot(side[0][0] - end[0], side[0][1] - end[1]) > 1e-9 ? [side[0]] : []) : side.slice(0, -1)), end, [end[0] + 2 * s.arcR * sa, end[1] + 2 * s.arcR * ca]];
+  const dWall = ([px, pz]) => {
+    let best = Infinity;
+    for (let i = 1; i < outerWall.length; i++) {
+      const [ax, az] = outerWall[i - 1], abx = outerWall[i][0] - ax, abz = outerWall[i][1] - az;
+      const f = Math.max(0, Math.min(1, ((px - ax) * abx + (pz - az) * abz) / (abx * abx + abz * abz || 1)));
+      best = Math.min(best, Math.hypot(px - ax - f * abx, pz - az - f * abz));
+    }
+    return best;
+  };
+
+  /**
+   * Weg entlang eines Polygonzugs ab der Wand (pts[0] = Wandpunkt), gemessen mit measure(Punkt,
+   * Bogenlänge) – fein abgetastet, monoton gemacht; at(m) = Punkt und Spaltenindex beim Maß m.
+   */
+  const walker = (pts, measure = (pt, l) => l) => {
+    const SUB = 8, samples = [];
+    let l = 0, mMax = -Infinity;
+    const add = (pt, idx) => {
+      if (samples.length) { const q = samples[samples.length - 1].p; l += Math.hypot(pt[0] - q[0], pt[1] - q[1]); }
+      mMax = Math.max(mMax, samples.length ? measure(pt, l) : 0);
+      samples.push({ p: pt, idx, m: mMax });
+    };
+    for (let k = 0; k < pts.length - 1; k++) for (let j = 0; j < SUB; j++) {
+      const f = j / SUB;
+      add([pts[k][0] + f * (pts[k + 1][0] - pts[k][0]), pts[k][1] + f * (pts[k + 1][1] - pts[k][1])], k + f);
+    }
+    add(pts[pts.length - 1], pts.length - 1);
+    const at = m => {
+      let k = 1;
+      while (k < samples.length - 1 && samples[k].m < m) k++;
+      const a = samples[k - 1], b = samples[k], f = Math.min(1, Math.max(0, (m - a.m) / (b.m - a.m || 1)));
+      return { idx: a.idx + f * (b.idx - a.idx), p: [a.p[0] + f * (b.p[0] - a.p[0]), a.p[1] + f * (b.p[1] - a.p[1])] };
+    };
+    return { length: samples[samples.length - 1].m, at, valueAt: idx => samples[Math.round(idx * SUB)].m };
+  };
+  const lerpAt = (pts, x) => {
+    const i = Math.min(Math.floor(x), pts.length - 2), f = x - i;
+    return [pts[i][0] + f * (pts[i + 1][0] - pts[i][0]), pts[i][1] + f * (pts[i + 1][1] - pts[i][1])];
+  };
+
+  /**
+   * Eingangszeile (symmetrisch, Enden auf der Außenwand, je c Eckspalten außen) um R einrücken –
+   * wie insetSector: reicht der Eckteil, wird nur er gestaucht, sonst fällt er auf q zusammen und
+   * der mittlere Teil wird gestaucht. So passen die Spalten zur Naht (keine Faltung).
+   */
+  const insetRow = (row, P, c, seam, u, lens = false) => {
+    const n = row.length - 1;
+    // Wandpunkt: am Throat der nächste Punkt der Innenwand, zur Naht hin die Wellenfront-Regel
+    // des geraden Bereichs (sonst springt der Radius an der Naht); gleicher Punkt → gleicher Radius
+    // Linse bzw. Eckpunkt (alle Zeilen enden praktisch im selben Wandpunkt, an dem die Außenkante
+    // erst beginnt): ein Radius für alle, der der Naht
+    const r = lens || Math.hypot(P[0] - seam.p[0], P[1] - seam.p[1]) < 1e-9 ? seam.r : R((1 - u) * sOf(footZ(P)) + u * sRay(P));
+    // Maß für R: zur Naht hin (u → 1) und in der Linse senkrecht zur Außenwand – die Rundung ist
+    // dort ein Rohr entlang der Kante, das die Zeilen schräg schneiden; in der Throat-Zeile (u = 0)
+    // entlang der Zeile (der nächste Punkt der Außenwand wäre dort ihr Anfang – das Maß knickte)
+    const half = row.slice(Math.floor(n / 2)).reverse();               // Wand → Mitte: half[k] = row[n − k]
+    const d0 = dWall(half[0]);                                         // Maß ab dem eigenen Wandpunkt (Sehne: ≠ 0)
+    const k = lens ? 1 : u;
+    const w = walker(half, (pt, l) => (1 - k) * l + k * (dWall(pt) - d0));
+    const out = row.map(pt => [...pt]);
+    let q;
+    if (c > 0 && r <= w.valueAt(c)) {
+      const hit = w.at(r), jQ = n - hit.idx;                            // in [n − c, n]
+      for (let k = 0; k <= c; k++) out[n - c + k] = lerpAt(row, (n - c) + (jQ - (n - c)) * k / c);
+      q = hit.p;
+    } else {
+      const center = r >= w.length - 1e-9;
+      q = center ? [0, lerpAt(row, n / 2)[1]] : w.at(r).p;
+      const jQ = center ? n / 2 : n - w.at(r).idx;                     // in [n/2, n − c]
+      const m = n - 2 * c;
+      for (let k = 0; k <= m; k++) out[c + k] = lerpAt(row, (n - jQ) + (2 * jQ - n) * k / m);
+      for (let k = 0; k <= c; k++) out[n - c + k] = q;
+    }
+    for (let k = 0; k <= c; k++) out[k] = [-out[n - k][0], out[n - k][1]];
+    out[n] = q; out[0] = [-q[0], q[1]];
+    return { row: out, p: row[n], r, path: m => m >= r ? q : w.at(m).p };
+  };
+
+  /**
+   * Bogen des geraden Bereichs + rechter Eckstreifen, R als senkrechter Abstand zur Außenwand
+   * (der Bogen trifft sie um asin(t/ρ) schräg – entlang der Zeile gemessen wäre die Rundung
+   * senkrecht zur Wand zu klein, die Ecke zu dünn): zuerst im Eckstreifen, darüber auf dem Bogen.
+   */
+  const insetSector = (rho, sectorRow, cornerRow, centerPhis, polar) => {
+    const a = s.alpha2, r = R(sOf(polar(rho, a)[1])), m = cornerRow.length - 1;
+    const strip = walker([...cornerRow].reverse(), pt => dLine(pt));    // Wand (0) → Strahl α (t)
+    const P = cornerRow[m];
+    if (r <= strip.length) {
+      const hit = strip.at(r), jQ = m - hit.idx;
+      const corner = linspace(0, 1, m).map(f => lerpAt(cornerRow, jQ * f));
+      corner[0] = cornerRow[0]; corner[m] = hit.p;
+      return { sector: sectorRow, corner, info: { p: P, r, path: v => v >= r ? hit.p : strip.at(v).p } };
+    }
+    const phiAt = v => a + Math.asin(Math.max(-1, Math.min(1, (strip.length - v) / rho)));
+    const phiQ = Math.max(0, phiAt(r)), q = polar(rho, phiQ), scale = phiQ / a;
+    const sector = centerPhis.map(phi => polar(rho, phi * scale));
+    sector[sector.length - 1] = q;
+    const path = v => v >= r ? q : v <= strip.length ? strip.at(v).p : polar(rho, phiAt(v));
+    return { sector, corner: cornerRow.map(() => q), info: { p: P, r, path } };
+  };
+
+  return { insetRow, insetSector };
 }
 
 /** Geschlossener Randzug aus oberer und (rückwärts) unterer Randzeile. */
@@ -409,8 +760,8 @@ function surfacesOf(b, invert = false) {
       { name: "cornerBottomR", section: "linear", grid: b.cornerBottomR, outward: o(down) },
     );
   }
-  // gerundete Längskanten: Dreiecke schon nach außen orientiert (edgeTriangles)
-  list.push(...(b.edges ?? []));
+  // gerundete Längskanten: Dreiecke schon nach außen orientiert (edgeTriangles), innen umgedreht
+  list.push(...(b.edges ?? []).map(e => invert ? { ...e, triangles: e.triangles.map(([p, q, r]) => [p, r, q]) } : e));
   return list;
 }
 
@@ -420,23 +771,26 @@ function surfacesOf(b, invert = false) {
  * @param rt       Throat-Radius (halbe Throat-Breite und -Höhe)
  * @param profile  z ↦ halbe Höhe (makeProfile, inkl. Verrundung)
  * @param fillet   Verrundung oder null – verdichtet das Gitter im Verrundungsbereich
+ * @param morph    Übergang rund → eckig am Throat (throatMorph) oder null
  * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[] }}
  *   grid: Zeilen × Spalten von Punkten oder triangles: fertige Dreiecke;
  *   section: "traktrix" | "klothoide" | "linear" | "cap"; outward: Punkt ↦ ungefähre Außenrichtung
  */
-export function buildHornGeometry(s, rt, profile, fillet = null, res = DEFAULT_RES) {
-  const air = body(s, rt, 0, (x, z) => profile(s.zFocus + focusRadius(s, x, z)), fillet, res);
+export function buildHornGeometry(s, rt, profile, fillet = null, morph = null, res = DEFAULT_RES) {
+  const air = body(s, rt, 0, (x, z) => profile(s.zFocus + focusRadius(s, x, z)), fillet, res, 0, morph);
   const radialOut = ([x, , z]) => [x, 0, z - s.zFocus];
+  const capThroat = air.capThroatFan ? { triangles: air.capThroatFan } : { grid: air.capThroat };
   return {
     surfaces: [
       ...surfacesOf(air),
-      { name: "capThroat", section: "cap", grid: air.capThroat, outward: () => [0, 0, -1] },
+      { name: "capThroat", section: "cap", ...capThroat, outward: () => [0, 0, -1] },
       { name: "capMouth",  section: "cap", grid: air.capMouth,  outward: radialOut },
     ],
   };
 }
 
 const FLANGE_SEGMENTS = 96, HOLE_SEGMENTS = 24;
+const FLANGE_MIN_RIM = 1;   // kleinster Flanschrand außerhalb der Schale [mm]
 
 /** Mittelpunkte der Flanschbohrungen [x, h]; erste Bohrung unter angle (Grad) gegen die Breitenachse. */
 export function boltHoleCenters({ count, circle, angle }) {
@@ -471,10 +825,13 @@ function polygonDistance([px, py], poly) {
  *   centers: gebohrte Löcher; conflicts: Bohrbild-Positionen, die nicht gebohrt werden können
  *   (in der Schale oder über den Rand) – nur zur Anzeige
  */
-export function flangeLayout(s, rt, profile, fillet, t, flange, edgeR = 0, res = DEFAULT_RES) {
-  const outer = outerBody(s, rt, profile, fillet, t, res, flange.thickness, edgeR);
+export function flangeLayout(s, rt, profile, fillet, t, flange, edgeR = 0, morph = null, res = DEFAULT_RES) {
+  const outer = outerBody(s, rt, profile, fillet, t, res, flange.thickness, edgeR, morph);
   const loop = outer.throatLoop.slice(0, -1);
-  const minDiameter = 2 * Math.max(...loop.map(([x, h]) => Math.hypot(x, h)));
+  // Der Flanschrand ist ein Vieleck (FLANGE_SEGMENTS): seine Kanten liegen innerhalb des Kreises.
+  // Damit die Schale den Rand nicht berührt (sonst reicht das Loch der Vorderseite über den Rand,
+  // die Fläche wird falsch trianguliert), mindestens FLANGE_MIN_RIM Rand außen herum
+  const minDiameter = 2 * (Math.max(...loop.map(([x, h]) => Math.hypot(x, h))) + FLANGE_MIN_RIM) / Math.cos(Math.PI / FLANGE_SEGMENTS);
   const holeRing = flange.holes.count > 0 ? 4 * flange.holes.diameter + 4 : 0;   // Bohrung + Stege
   const holeFit = flange.holes.count > 0 && flange.holes.circle ? flange.holes.circle + 2 * flange.holes.diameter + 2 : 0;
   const wanted = flange.diameter ?? Math.max(flange.fallback ?? 0, minDiameter + holeRing, holeFit);
@@ -500,8 +857,8 @@ export function flangeLayout(s, rt, profile, fillet, t, flange, edgeR = 0, res =
  * denselben Körper (gleiche Objekte s, profile, fillet, res).
  */
 const outerCache = [];
-function outerBody(s, rt, profile, fillet, t, res, zStart = 0, edgeR = 0) {
-  const key = [s, rt, profile, fillet, t, res, zStart, edgeR];
+function outerBody(s, rt, profile, fillet, t, res, zStart = 0, edgeR = 0, morph = null) {
+  const key = [s, rt, profile, fillet, t, res, zStart, edgeR, morph];
   const hit = outerCache.find(e => e.key.every((v, i) => v === key[i]));
   if (hit) return hit.body;
   const hAt = r => profile(s.zFocus + r);
@@ -510,6 +867,13 @@ function outerBody(s, rt, profile, fillet, t, res, zStart = 0, edgeR = 0) {
   const height = (x, z) => Math.min(field(x, z), capHeight);
   // Gerundete Längskanten: Deckel und Boden enden um den Radius vor der Außenkante (Kontur im
   // Abstand t − r, Höhe weiter die der vollen Wandstärke); Rundung und Seitenwand ergänzt roundEdges
+  // Mit rundem Throat: Kanten in den Zeilen mit R = r + e gerundet (outerRows) statt roundEdges
+  if (morph) {
+    const result = body(s, rt, t, height, fillet, res, zStart, null, { morph, e: Math.min(edgeR, t) });
+    outerCache.unshift({ key, body: result });
+    outerCache.length = Math.min(outerCache.length, 4);
+    return result;
+  }
   const tPlan = edgeR > 0 ? Math.max(t - Math.min(edgeR, t), EDGE_MIN_INSET) : t;
   const result = body(s, rt, tPlan, height, fillet, res, zStart);
   if (edgeR > 0) roundEdges(result, s, t - tPlan, wallEnvelope(s, innerWall(s, rt, 2000).points, t));
@@ -522,15 +886,17 @@ const EDGE_MIN_INSET = 0.05;   // Deckel endet mindestens so weit vor der Wandli
 
 /**
  * Dreiecke eines Rundungsstreifens (Zeile = Viertelkreis ab der Deckelkante Q), nach außen
- * orientiert über den Kreismittelpunkt der Zeile (Q − r senkrecht zur Deckelseite). Ein fester
+ * orientiert über den Kreismittelpunkt der Zeile (Q − r senkrecht zur Deckelseite); r fest oder
+ * als Liste je Zeile. Ein fester
  * Richtungshinweis reicht hier nicht: wo der Deckel steil ansteigt, kippt die Flächennormale weit
  * in Längsrichtung.
  */
 function edgeTriangles(grid, r) {
-  const center = ([x, y, z]) => [x, y - Math.sign(y) * r, z];
+  const rAt = i => Array.isArray(r) ? r[i] : r;
+  const center = ([x, y, z], rr) => [x, y - Math.sign(y) * rr, z];
   const tris = [];
   for (let i = 0; i < grid.length - 1; i++) {
-    const c = center(grid[i][0]).map((v, k) => (v + center(grid[i + 1][0])[k]) / 2);
+    const c = center(grid[i][0], rAt(i)).map((v, k) => (v + center(grid[i + 1][0], rAt(i + 1))[k]) / 2);
     for (let j = 0; j < grid[i].length - 1; j++) {
       const p = grid[i][j], q = grid[i][j + 1], u = grid[i + 1][j + 1], v = grid[i + 1][j];
       for (const [a, b, d] of [[p, q, u], [p, u, v]]) {
@@ -769,16 +1135,22 @@ export function flangeSectionOutline(inner, R, d) {
  * – mit flange { diameter, thickness, holes: { count, circle, diameter, angle } } – runder
  * Flansch von z = 0 bis zur Dicke; der Außenkörper beginnt dann erst dahinter. Ein bereits
  * aufgelöster Flansch (flangeLayout) wird direkt verwendet. edgeR > 0 rundet die vier äußeren
- * Längskanten (Seitenwand ↔ Deckel/Boden) mit diesem Radius, höchstens t.
+ * Längskanten (Seitenwand ↔ Deckel/Boden) mit diesem Radius, höchstens t. morph (throatMorph)
+ * rundet den Luftkanal (innen r) und die Außenkanten mit r + edgeR (outerRows).
  * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[] }}  section: "traktrix" | "klothoide" | "linear" | "rim" | "flansch"
  */
-export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edgeR = 0, res = DEFAULT_RES) {
+export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edgeR = 0, morph = null, res = DEFAULT_RES) {
   const hAt = r => profile(s.zFocus + r);
-  const air = body(s, rt, 0, (x, z) => hAt(focusRadius(s, x, z)), fillet, res);
-  const outer = outerBody(s, rt, profile, fillet, t, res, flange ? flange.thickness : 0, edgeR);
+  const air = body(s, rt, 0, (x, z) => hAt(focusRadius(s, x, z)), fillet, res, 0, morph);
+  const outer = outerBody(s, rt, profile, fillet, t, res, flange ? flange.thickness : 0, edgeR, morph);
+  const open = loop => loop.slice(0, -1);
+  // Throat-Ring: mit rundem Throat (Kreis innen, Rechteck außen) über earcut, sonst Reißverschluss
+  const rimThroat = air.capThroatFan
+    ? { name: "rimThroat", section: "rim", oriented: true, triangles: planarFace(open(outer.throatLoop), [open(air.throatLoop)], -1) }
+    : { name: "rimThroat", section: "rim", triangles: zipper(air.throatLoop, outer.throatLoop), outward: () => [0, 0, -1] };
   const throatEnd = flange
-    ? flangeSurfaces(flange.centers ? flange : flangeLayout(s, rt, profile, fillet, t, flange, edgeR, res), air.throatLoop, outer.throatLoop)
-    : [{ name: "rimThroat", section: "rim", triangles: zipper(air.throatLoop, outer.throatLoop), outward: () => [0, 0, -1] }];
+    ? flangeSurfaces(flange.centers ? flange : flangeLayout(s, rt, profile, fillet, t, flange, edgeR, morph, res), air.throatLoop, outer.throatLoop)
+    : [rimThroat];
 
   const radialOut = ([x, , z]) => [x, 0, z - s.zFocus];
   const am = air.mouth, om = outer.mouth;

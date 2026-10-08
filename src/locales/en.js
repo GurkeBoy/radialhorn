@@ -24,6 +24,9 @@ export default {
   "throat.custom": "Custom",
   "throat.size14": "1.4\"",
   "throat.diameter": "Diameter Ø",
+  "throat.morph": "Round → square (transition)",
+  "throat.morphHint": "Starts with the circle of the driver exit, the corners fade out along the wall",
+  "throat.morphLength": "Length (wall)",
   "card.geometry": "HORIZONTAL PROFILE",
   "card.profile": "VERTICAL PROFILE",
   "card.driver": "DRIVER",
@@ -57,6 +60,7 @@ export default {
   "profile.filletRadius": "Radius r",
   "warn.filletNeedsTractrix": "Fillet requires a tractrix entrance (Lₜ > 0)",
   "warn.filletLimited": "Radius too large – limited to {mm} mm",
+  "warn.morphLimited": "Limited to {mm} mm – the length of the wall up to the mouth",
 
   // Driver, placement, construction
   "driver.width": "Width dw",

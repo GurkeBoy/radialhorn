@@ -481,11 +481,14 @@ const wavefrontThrough = (x, z, theta) => {
  * Bereich ist das der Fokus (wachsender Radius, fester Halbwinkel α); auf der Traktrix ein
  * mitwandernder Fußpunkt mit konstantem Radius r0 (definierende Traktrix-Eigenschaft) und
  * wachsendem Halbwinkel; auf der Klothoide wandern Mittelpunkt und Radius.
+ * Dazu der Wandpunkt selbst: xWall und die Bogenlänge sWall entlang der Wand ab dem Throat
+ * (Traktrix geschlossen: ds = r0·tanh t dt, also s = r0·ln(cosh tTh / cosh t)).
  * @param clothoid  dichte Tabelle der Klothoide (clothoidTable) oder null
- * @returns {{ zCenter, radius, halfAngle, zAxis, part }}
+ * @returns {{ zCenter, radius, halfAngle, zAxis, part, xWall, sWall }}
  */
 function wavefrontAt(s, zWall, clothoid) {
   const zTrakEnd = clothoid ? clothoid[0].z : s.zTrans;
+  const sTrakEnd = hasTraktrix(s) ? s.r0 * Math.log(Math.cosh(s.tTh) / Math.cosh(s.tEnd)) : 0;
   if (hasTraktrix(s) && zWall <= zTrakEnd) {
     let lo = s.tTh, hi = s.tEnd;
     for (let i = 0; i < 60; i++) {
@@ -494,19 +497,99 @@ function wavefrontAt(s, zWall, clothoid) {
     }
     const t = (lo + hi) / 2;
     const zAxis = s.r0 * (zN(s.tTh) - t + 1);
-    return { zCenter: zAxis - s.r0, radius: s.r0, halfAngle: Math.atan(1 / Math.sinh(t)), zAxis, part: "traktrix" };
+    return {
+      zCenter: zAxis - s.r0, radius: s.r0, halfAngle: Math.atan(1 / Math.sinh(t)), zAxis, part: "traktrix",
+      xWall: s.r0 * xN(t), sWall: s.r0 * Math.log(Math.cosh(s.tTh) / Math.cosh(t)),
+    };
   }
   if (clothoid && zWall <= s.zTrans) {
     let k = 1;
     while (k < clothoid.length - 1 && clothoid[k].z < zWall) k++;
     const p = clothoid[k - 1], q = clothoid[k], f = (zWall - p.z) / (q.z - p.z);
     const lerp = key => p[key] + f * (q[key] - p[key]);
-    return { ...wavefrontThrough(lerp("x"), zWall, lerp("theta")), part: "klothoide" };
+    const ds = s.clothoid.length / (clothoid.length - 1);   // Tabelle in gleichen Bogenschritten
+    return {
+      ...wavefrontThrough(lerp("x"), zWall, lerp("theta")), part: "klothoide",
+      xWall: lerp("x"), sWall: sTrakEnd + (k - 1 + f) * ds,
+    };
   }
   const frac  = (zWall - s.zTrans) / (s.Ls || 1);
   const xWall = s.xTrans + frac * s.Ls * Math.tan(s.alpha2);
   const R = Math.sqrt((zWall - s.zFocus) ** 2 + xWall ** 2);
-  return { zCenter: s.zFocus, radius: R, halfAngle: s.alpha2, zAxis: s.zFocus + R, part: "linear" };
+  const sEntranceEnd = sTrakEnd + (clothoid ? s.clothoid.length : 0);
+  return {
+    zCenter: s.zFocus, radius: R, halfAngle: s.alpha2, zAxis: s.zFocus + R, part: "linear",
+    xWall, sWall: sEntranceEnd + (zWall - s.zTrans) / Math.cos(s.alpha2),
+  };
+}
+
+/** Bogenlänge der Wand vom Throat bis zum Wandpunkt bei zWall [mm]. */
+export function wallArcLength(s, zWall) {
+  return wavefrontAt(s, zWall, hasClothoid(s) ? clothoidTable(s.clothoid, 400) : null).sWall;
+}
+
+/**
+ * Wandpunkt bei zWall (0 … zMouth): Lage xWall, Bogenlänge sWall ab dem Throat und halbe Höhe
+ * hWall an der Wand nach der Höhenregel des 3D-Körpers.
+ */
+export function wallPoint(s, profile, zWall) {
+  const clothoid = hasClothoid(s) ? clothoidTable(s.clothoid, 400) : null;
+  const { xWall, sWall } = wavefrontAt(s, zWall, clothoid);
+  return { xWall, sWall, hWall: profile(s.zFocus + focusRadius(s, xWall, zWall)) };
+}
+
+// ──────────────────────────────────────────────────────────────────
+// RUNDER THROAT (Übergang rund → eckig)
+// ──────────────────────────────────────────────────────────────────
+//
+// Der Treiber hat einen runden Ausgang (Ø 2·rt), das Horn einen rechteckigen Querschnitt.
+// Im Übergang sind die vier inneren Längskanten (Seitenwand ↔ Deckel/Boden) mit einem Radius
+// gerundet, der entlang der Wand von rt auf 0 fällt. Am Throat ist halbe Breite = halbe Höhe =
+// Radius = rt: genau der Kreis des Treiberausgangs. Parameter ist die Bogenlänge entlang der Wand,
+// nicht z auf der Achse – die Ecke liegt an der Wand, und jede Wellenfront (Kreisbogen, senkrecht
+// auf der Wand) endet an ihrem eigenen Wandpunkt, der hinter ihrer Lage auf der Achse liegt.
+
+/**
+ * Eckradius [mm] an der Bogenlänge sWall: rt·(1 + cos(π·s/Länge))/2 – an beiden Enden ohne Knick
+ * (am Throat läuft die Ecke rund aus dem Treiber heraus, am Ende tangential ins scharfe Rechteck).
+ * @param morph  { r, length } (r = rt) oder null
+ */
+export function cornerRadius(sWall, morph) {
+  if (!morph || !(sWall < morph.length)) return 0;
+  return morph.r * (1 + Math.cos(Math.PI * Math.max(0, sWall) / morph.length)) / 2;
+}
+
+/** Wandpunkt z, an dem der Übergang endet (Bogenlänge = morph.length; Bisektion). */
+function morphEndZ(s, morph, clothoid) {
+  let lo = 0, hi = s.zMouth;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    wavefrontAt(s, mid, clothoid).sWall < morph.length ? (lo = mid) : (hi = mid);
+  }
+  return (lo + hi) / 2;
+}
+
+/** Flächenabzug [mm²] der vier gerundeten Ecken eines Querschnitts: 4·(1 − π/4)·r². */
+export const cornerDeficit = r => (4 - Math.PI) * r * r;
+
+/**
+ * Größte Länge des Übergangs entlang der Wand [mm]: die ganze Wand bis zum Mund – dort ist der
+ * Radius dann gerade 0, der Mund bleibt rechteckig. Die Ecke wird in der Querschnittsfläche
+ * gerundet (im geraden Bereich der Wellenfront-Bogen, auf dem die Höhe konstant ist), ein
+ * ansteigender Deckel stört deshalb nicht.
+ */
+export const maxMorphLength = s => wallArcLength(s, s.zMouth);
+
+/**
+ * Übergang rund → eckig aus den Einstellungen: Länge (null = Throat-Durchmesser) auf das
+ * Machbare begrenzt. null, wenn aus oder kürzer als 1 mm.
+ * @returns {{ r, length, limited, max } | null}
+ */
+export function throatMorph(s, rt, length) {
+  const max = maxMorphLength(s);
+  const want = length ?? 2 * rt;
+  const used = Math.min(want, max);
+  return used >= 1 ? { r: rt, length: used, limited: want > max, max } : null;
 }
 
 const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
@@ -524,17 +607,23 @@ const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
  * Wandkrümmung springt dort, und die Wellenfrontbreite hängt vom Tangentenwinkel der Wand
  * ab. Mit Klothoide ist die Krümmung stetig und A glatt.
  *
+ * Mit rundem Throat (morph) fehlen jeder Wellenfront die vier Ecken mit dem Radius ihres
+ * Wandpunkts: A − (4 − π)·r². Die Ecke liegt in der Wellenfrontfläche; im geraden Bereich ist
+ * die Höhe auf dem Bogen konstant und der Abzug exakt, im Eingang mit Verrundung genähert.
+ *
  * @param profile  z ↦ halbe Höhe (makeProfile)
  * @param zWallList  statt der gleichmäßigen Abtastung diese Wandpunkte (z, 0 … zMouth); die
  *                   Sektionsgrenzen kommen in jedem Fall dazu (Simulation: gezielt dichter)
- * @returns {{z: number, A: number, part: "traktrix" | "klothoide" | "linear", zWall: number}[]}
- *   aufsteigend in z; zWall = zugehöriger Wandpunkt
+ * @param morph    Übergang rund → eckig (throatMorph) oder null
+ * @returns {{z: number, A: number, part: "traktrix" | "klothoide" | "linear", zWall: number, cornerR: number}[]}
+ *   aufsteigend in z; zWall = zugehöriger Wandpunkt, cornerR = Eckradius dort
  */
-export function crossSection(s, profile, n = 100, zWallList = null) {
+export function crossSection(s, profile, n = 100, zWallList = null, morph = null) {
   const clothoid = hasClothoid(s) ? clothoidTable(s.clothoid, 400) : null;
   const zWalls = zWallList ? [...zWallList] : Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
   if (hasTraktrix(s)) zWalls.push(s.zTrans);
   if (clothoid) zWalls.push(clothoid[0].z);
+  if (morph) zWalls.push(morphEndZ(s, morph, clothoid));
   zWalls.sort((a, b) => a - b);
 
   const areaOf = ({ zCenter, radius, halfAngle, zAxis }) => {
@@ -552,7 +641,8 @@ export function crossSection(s, profile, n = 100, zWallList = null) {
 
   const pts = zWalls.map(zWall => {
     const wf = wavefrontAt(s, zWall, clothoid);
-    return { z: wf.zAxis, A: areaOf(wf), part: wf.part, zWall };
+    const cornerR = cornerRadius(wf.sWall, morph);
+    return { z: wf.zAxis, A: areaOf(wf) - cornerDeficit(cornerR), part: wf.part, zWall, cornerR };
   });
   return [{ ...pts[0], z: 0 }, ...pts];
 }
@@ -575,13 +665,15 @@ export function verticalMouthAngle(s, profile) {
  * Grobe akustische Grenzfrequenzen [Hz] (Näherungen nach Olson/Beranek):
  *   fcLow  – Umfang des flächengleichen Kreismunds ≈ Wellenlänge (λ = 2π·√(A_Mund/π))
  *   fcCut  – Horn-Cutoff aus der mittleren Flare-Konstante m = ln(A_Mund / A_Throat) / L,
- *            A_Throat = (2·rt)² (quadratischer Throat), A_Mund = Bogenlänge × Mundhöhe
+ *            A_Throat = (2·rt)² (quadratischer Throat) bzw. π·rt² (runder Throat),
+ *            A_Mund = Bogenlänge × Mundhöhe
  *   fcHigh – Throat-Durchmesser ≈ halbe Wellenlänge (λ = 2·rt)
  */
-export function frequencyEstimates(s, rt, hMouth) {
+export function frequencyEstimates(s, rt, hMouth, roundThroat = false) {
   const c = SPEED_OF_SOUND;
   const A = mouthArea(s, hMouth);
-  const m = Math.log(A / (2 * rt) ** 2) / (s.zApex - s.hatTipZ);
+  const throatArea = roundThroat ? Math.PI * rt * rt : (2 * rt) ** 2;
+  const m = Math.log(A / throatArea) / (s.zApex - s.hatTipZ);
   return {
     fcLow:  c / (2 * Math.PI * Math.sqrt(A / Math.PI)),
     fcCut:  c * m / (4 * Math.PI),

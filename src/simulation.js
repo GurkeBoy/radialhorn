@@ -25,7 +25,7 @@
  *     gekrümmten Mund eines Radialhorns bis 20 dB zu hoch läge. Gegen Hornresp geprüft.
  *   - Verlustfrei (Wandverluste: spätere Erweiterung).
  */
-import { crossSection } from "./horn-math.js";
+import { crossSection, cornerRadius, cornerDeficit } from "./horn-math.js";
 
 // ──────────────────────────────────────────────────────────────────
 // LUFT, FREQUENZEN
@@ -377,7 +377,8 @@ export function phaseWithoutDelay(f, phase, tau) {
 /**
  * Flächenkurve des Horns in SI aus der Geometrie (crossSection, mm/mm²).
  * x = Lage der Wellenfront auf der Achse ab der Treiberfront (z), S = Wellenfrontfläche.
- * Am Hals (x = 0) steht die ebene Halsfläche 2·rt × 2·h(0); von dort geht es konisch zur
+ * Am Hals (x = 0) steht die ebene Halsfläche 2·rt × 2·h(0), mit rundem Throat (morph,
+ * throatMorph) der Kreis π·rt² des Treiberausgangs; von dort geht es konisch zur
  * ersten Wellenfront (Modellannahme, siehe CLAUDE.md – Hals und erste Wellenfront passen
  * geometrisch nicht genau zusammen). Ab der ersten Wellenfront so fein abgetastet, dass kein
  * Abstand größer als stepMm ist; der Übergang Hals → erste Wellenfront ist ein einzelner
@@ -387,9 +388,10 @@ export function phaseWithoutDelay(f, phase, tau) {
  * verteilen, dass die Wellenfronten auf der Achse etwa gleichmäßig liegen; Lücken, die danach
  * noch zu groß sind, werden halbiert.
  * @param stepMm  größte Abtastweite [mm]
+ * @param morph   Übergang rund → eckig (throatMorph) oder null
  */
-export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM) {
-  const probe = crossSection(s, profile, 64).slice(1);   // ohne die bis z = 0 verlängerte Kopie
+export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM, morph = null) {
+  const probe = crossSection(s, profile, 64, null, morph).slice(1);   // ohne die bis z = 0 verlängerte Kopie
   let walls = [probe[0].zWall];
   for (let i = 1; i < probe.length; i++) {
     const a = probe[i - 1], b = probe[i];
@@ -398,7 +400,7 @@ export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM) {
   }
   let pts;
   for (let pass = 0; pass < 6; pass++) {
-    pts = crossSection(s, profile, 0, walls).slice(1);
+    pts = crossSection(s, profile, 0, walls, morph).slice(1);
     const refined = [pts[0].zWall];
     let tooWide = false;
     for (let i = 1; i < pts.length; i++) {
@@ -408,7 +410,7 @@ export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM) {
     if (!tooWide) break;
     walls = refined;
   }
-  const x = [0], S = [2 * rt * 2 * profile(0) * 1e-6];
+  const x = [0], S = [(2 * rt * 2 * profile(0) - cornerDeficit(cornerRadius(0, morph))) * 1e-6];
   for (const { z, A } of pts) {
     if (z - x.at(-1) * 1e3 <= 1e-9) continue;   // doppelte Stützstellen (Sektionsgrenzen)
     x.push(z * 1e-3);

@@ -101,6 +101,14 @@ describe("buildDXF", () => {
     expect(count(parse(buildDXF(design(), { flansch: true })), "CIRCLE", "Flansch")).toBe(0);   // ohne Flansch
   });
 
+  it("Flansch mit rundem Throat: Öffnung als Kreis Ø 2·rt statt Quadrat", () => {
+    const flange = { diameter: 180, thickness: 10, holes: { count: 0, circle: 150, diameter: 6.5, angle: 0 }, centers: [], conflicts: [] };
+    const e = parse(buildDXF(design({ flange, morph: { r: RT, length: 50 } }), { flansch: true }));
+    expect(count(e, "LINE", "Flansch")).toBe(0);
+    const circles = e.filter(x => x.type === "CIRCLE" && layerOf(x) === "Flansch");
+    expect(circles.map(c => get(c, "40")[0])).toEqual([90, 90, RT]);
+  });
+
   it("ohne ausgewählte Layer nur der leere Rahmen", () => {
     expect(parse(buildDXF(design(), {})).map(e => e.type)).toEqual(["SECTION", "ENDSEC", "EOF"]);
   });

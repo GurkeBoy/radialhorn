@@ -14,14 +14,14 @@ const HEADROOM = 1.08;                           // Luft über dem Maximum
 const PART_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn };
 
 /** @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile) */
-export const Querschnitt = memo(function Querschnitt({ s, profile }) {
+export const Querschnitt = memo(function Querschnitt({ s, profile, morph }) {
   const tr = useT();
   const svgRef = useRef(null);
   const zoom = useZoomPan(svgRef, {
     minZoom: 1,
     unitsPerPx: () => VW / (svgRef.current?.clientWidth || VW),
   });
-  const pts = useMemo(() => crossSection(s, profile), [s, profile]);
+  const pts = useMemo(() => crossSection(s, profile, 100, null, morph), [s, profile, morph]);
 
   const zStart = pts[0].z, zMouth = pts[pts.length - 1].z;
   const peak = Math.max(...pts.map(p => p.A));

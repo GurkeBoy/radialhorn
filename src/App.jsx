@@ -1,7 +1,7 @@
 // Radialhorn-Konfigurator: Parameter in der Seitenleiste, Draufsicht und Seitenriss rechts.
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
-  createHornMath, hasTraktrix, CURVES, computeFillet, makeProfile,
+  createHornMath, hasTraktrix, CURVES, computeFillet, makeProfile, throatMorph,
   mouthArea, verticalMouthAngle, frequencyEstimates,
 } from "./horn-math.js";
 import { FONT, SIDEBAR_WIDTH, UI } from "./theme.js";
@@ -25,7 +25,7 @@ import { exportSTL } from "./export/stl.js";
 import { exportCSV } from "./export/csv.js";
 import { flangeLayout } from "./horn-mesh.js";
 import {
-  airAt, logFrequencies, transverseLimit, areaCurve, simulate, driverSI, PLACEHOLDER_DRIVER, hornDelay, phaseWithoutDelay,
+  airAt, logFrequencies, transverseLimit, areaCurve, GEOMETRY_STEP_MM, simulate, driverSI, PLACEHOLDER_DRIVER, hornDelay, phaseWithoutDelay,
 } from "./simulation.js";
 
 // Gängige Austrittsdurchmesser von Kompressionstreibern; 1,4" wird mit 35,5 mm angegeben (Herstellerangabe)
@@ -57,6 +57,8 @@ export default function App() {
     setThroatCustomOn(v === THROAT_CUSTOM);
     if (v !== THROAT_CUSTOM) setThroatDiam(v);
   };
+  const [morphOn,         setMorphOn]         = usePersistentState("morphOn", D.morphOn);
+  const [morphLength,     setMorphLength]     = usePersistentState("morphLength", D.morphLength);
   const [openingAngle,    setOpeningAngle]    = usePersistentState("openingAngle", D.openingAngle);
   const [L,               setL]               = usePersistentState("L", D.L);
   const [Lt,              setLt]              = usePersistentState("Lt", D.Lt);
@@ -98,12 +100,13 @@ export default function App() {
 
   // Projektdatei (project.js): der Entwurf als Ganzes, Schlüssel wie die gespeicherten Einstellungen
   const designValues = {
-    throatDiam, throatCustom: throatCustomOn, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
+    throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
     flangeT, holeCount, holeCircle, holeD, holeAngle, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
-    throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, openingAngle: setOpeningAngle, L: setL, Lt: setLt,
+    throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength,
+    openingAngle: setOpeningAngle, L: setL, Lt: setLt,
     dw: setDw, dh: setDh, hMouth: setHMouth, curve: setCurve, hypexT: setHypexT, showRaumecke: setShowRaumecke,
     showWandstaerke: setShowWandstaerke, wandstaerke: setWandstaerke, filletOn: setFilletOn, filletR: setFilletR,
     clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, edgeOn: setEdgeOn, edgeR: setEdgeR,
@@ -147,10 +150,10 @@ export default function App() {
   // Abgeleitete hängt deshalb an p, nicht am Live-Zustand; die Ansichten sind memo und rendern
   // nur, wenn sich p auswirkt.
   const live = useMemo(() => ({
-    throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+    throatDiam, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
     edgeOn, edgeR, simOn, mouth, simTemp, driver,
-  }), [throatDiam, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+  }), [throatDiam, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
     edgeOn, edgeR, simOn, mouth, simTemp, driver]);
   const p = useThrottledValue(live);
@@ -200,6 +203,11 @@ export default function App() {
     () => s && makeProfile(s, rt, p.hMouth, p.curve, p.hypexT, fillet),
     [s, rt, p.hMouth, p.curve, p.hypexT, fillet],
   );
+  // Übergang rund → eckig am Throat (Eckradius entlang der Wand), auf das Machbare begrenzt
+  const morph = useMemo(
+    () => p.morphOn && s ? throatMorph(s, rt, p.morphLength) : null,
+    [p.morphOn, p.morphLength, s, rt],
+  );
 
   const wall = p.showWandstaerke ? p.wandstaerke : 0;
   // gerundete Längskanten außen: Radius höchstens die Wandstärke (sonst würde die Wand an der Ecke dünner)
@@ -209,12 +217,12 @@ export default function App() {
     () => s && wall > 0 && p.flangeOn ? flangeLayout(s, rt, profile, fillet, wall, {
       diameter: p.flangeD, fallback: p.dw, thickness: p.flangeT,
       holes: { count: p.holeCount, circle: p.holeCircle, diameter: p.holeD, angle: p.holeAngle },
-    }, edge) : null,
-    [s, rt, profile, fillet, wall, p.flangeOn, p.flangeD, p.dw, p.flangeT, p.holeCount, p.holeCircle, p.holeD, p.holeAngle, edge],
+    }, edge, morph) : null,
+    [s, rt, profile, fillet, wall, p.flangeOn, p.flangeD, p.dw, p.flangeT, p.holeCount, p.holeCircle, p.holeD, p.holeAngle, edge, morph],
   );
   // 1D-Simulation (Webster, Transfermatrizen) – nur bei eingeschaltetem Frequenzgang. S(x) hängt
   // nur an der Geometrie: Treiber, Abstrahlung und Temperatur rechnen nur die Kette neu.
-  const areaCurveSI = useMemo(() => s && p.simOn ? areaCurve(s, rt, profile) : null, [s, rt, profile, p.simOn]);
+  const areaCurveSI = useMemo(() => s && p.simOn ? areaCurve(s, rt, profile, GEOMETRY_STEP_MM, morph) : null, [s, rt, profile, morph, p.simOn]);
   const sim = useMemo(() => {
     if (!areaCurveSI) return null;
     const air = airAt(p.simTemp), driverSi = driverSI(p.driver, air.rho);
@@ -233,7 +241,7 @@ export default function App() {
   const flangeOverRaumecke = flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
   const design = {
     s, rt, L: LClamped, hMouth: p.hMouth, curve: p.curve, hypexT: p.hypexT, fillet, profile, wall, flange,
-    showRaumecke: p.showRaumecke, showWandstaerke: p.showWandstaerke, wandstaerke: p.wandstaerke, edgeR: edge,
+    showRaumecke: p.showRaumecke, showWandstaerke: p.showWandstaerke, wandstaerke: p.wandstaerke, edgeR: edge, morph,
   };
   // Während eines Zugs zeigt der Regler den Live-Wert, sonst den (ggf. begrenzten) gerechneten
   const shown = (key, computed) => live[key] !== p[key] ? live[key] : computed;
@@ -260,6 +268,9 @@ export default function App() {
             labels={{ ...Object.fromEntries(THROAT_SIZES.map(th => [th.diameter, th.labelKey ? t(th.labelKey) : th.label])), [THROAT_CUSTOM]: t("throat.custom") }}
             value={throatCustom ? THROAT_CUSTOM : throatDiam} onChange={selectThroat} />
           {throatCustom && <Slider label={t("throat.diameter")} value={throatDiam} min={THROAT_RANGE.min} max={THROAT_RANGE.max} step={0.1} unit="mm" onChange={setThroatDiam} />}
+          <Toggle label={t("throat.morph")} checked={morphOn} onChange={setMorphOn} hint={morphOn ? t("throat.morphHint") : null} />
+          {morphOn && morph && <Slider label={t("throat.morphLength")} value={shown("morphLength", morph.length)} min={1} max={Math.max(1, Math.floor(morph.max))} step={1} unit="mm" onChange={setMorphLength} />}
+          {morphOn && morph?.limited && <Warn>{t("warn.morphLimited", { mm: morph.length.toFixed(0) })}</Warn>}
         </Card>
 
         <Card title={t("card.geometry")} id="geometrie">
@@ -361,9 +372,9 @@ export default function App() {
         </Card>
 
         {s && <>
-          <KeyFigures s={s} rt={rt} hMouth={p.hMouth} profile={profile} t={t} />
+          <KeyFigures s={s} rt={rt} hMouth={p.hMouth} profile={profile} roundThroat={!!morph} t={t} />
           <Card title={t("card.crossSection")} id="querschnitt">
-            <Querschnitt s={s} profile={profile} />
+            <Querschnitt s={s} profile={profile} morph={morph} />
           </Card>
           <Card title={t("card.export")} id="export">
             <Group title={t("export.dxfCurves")} first>
@@ -396,7 +407,7 @@ export default function App() {
               showRaumecke={p.showRaumecke} showWandstaerke={p.showWandstaerke} wandstaerke={p.wandstaerke} flange={flange} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={p.dw} dh={p.dh} hMouth={p.hMouth} curve={p.curve} hypexT={p.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} showRaumecke={p.showRaumecke} />
+            <Ansicht3D s={s} rt={rt} dw={p.dw} dh={p.dh} hMouth={p.hMouth} curve={p.curve} hypexT={p.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={p.showRaumecke} />
           </ViewPanel>
         </div>
         <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
@@ -422,8 +433,8 @@ function ViewPanel({ flex, children }) {
 }
 
 /** Kennwerte des Horns und grobe Grenzfrequenzen in einer Karte. */
-const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, t }) {
-  const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt, hMouth);
+const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroat, t }) {
+  const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt, hMouth, roundThroat);
   return (
     <Card title={t("card.keyFigures")} id="kennwerte">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 12 }}>

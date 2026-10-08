@@ -79,10 +79,10 @@ export const dxfDocument = entities => `0\nSECTION\n2\nENTITIES\n${entities.join
 
 /**
  * Erzeugt den DXF-Text.
- * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange }
+ * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange, morph }
  * @param opts    Layer-Auswahl { draufsicht, mundbogen, fokus, seitenprofil, uebergang, flansch }
  */
-export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null }, opts) {
+export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, morph = null }, opts) {
   const out = [];
   const mirrored = fn => [1, -1].forEach(fn);
 
@@ -134,13 +134,16 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null }
     // jeweils beide Seiten: Draufsicht spiegelt y, Seitenprofil spiegelt z
     for (const [x, y, z] of points) mirrored(sign => out.push(dxfPoint(x, sign * y, sign * z, "Uebergang")));
   }
-  // Flansch: Rückseite (X = 0) mit quadratischer Throat-Öffnung und Bohrungen, Vorderseite
+  // Flansch: Rückseite (X = 0) mit Throat-Öffnung (Quadrat, mit rundem Throat Kreis) und Bohrungen, Vorderseite
   // (X = Dicke) als Außenkreis – in der Ebene quer zur Achse (Y = Breite, Z = Höhe)
   if (opts.flansch && flange) {
     const X = [1, 0, 0], r = flange.diameter / 2;
     out.push(dxfCircle(0, 0, r, "Flansch", X, 0), dxfCircle(0, 0, r, "Flansch", X, flange.thickness));
-    const sq = [[rt, rt], [-rt, rt], [-rt, -rt], [rt, -rt]];
-    sq.forEach(([y, z], i) => out.push(dxfLine([0, y, z], [0, ...sq[(i + 1) % 4]], "Flansch")));
+    if (morph) out.push(dxfCircle(0, 0, rt, "Flansch", X, 0));   // runder Throat: Kreis des Treiberausgangs
+    else {
+      const sq = [[rt, rt], [-rt, rt], [-rt, -rt], [rt, -rt]];
+      sq.forEach(([y, z], i) => out.push(dxfLine([0, y, z], [0, ...sq[(i + 1) % 4]], "Flansch")));
+    }
     for (const [y, z] of flange.centers) out.push(dxfCircle(y, z, flange.holes.diameter / 2, "Flansch", X, 0));
     // Bohrungen im Konflikt mit der Schale: gleiches Bohrbild, eigener Layer
     for (const [y, z] of flange.conflicts ?? []) out.push(dxfCircle(y, z, flange.holes.diameter / 2, "Flansch_Konflikt", X, 0));
