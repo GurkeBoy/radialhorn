@@ -81,8 +81,6 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
 
         {/* Treiber */}
         <rect x={toX(-dh)} y={toY(dw/2)} width={dh*scale} height={dw*scale} fill={COLOR.drivFill} stroke={COLOR.driv} strokeWidth="1.3" rx="2" />
-        <line x1={toX(-dh)} y1={toY(dw/2)} x2={toX(0)} y2={toY(-dw/2)} stroke={COLOR.driv} strokeWidth="0.5" opacity="0.4" />
-        <line x1={toX(0)} y1={toY(dw/2)} x2={toX(-dh)} y2={toY(-dw/2)} stroke={COLOR.driv} strokeWidth="0.5" opacity="0.4" />
         <text x={toX(-dh/2)} y={toY(0)} {...S.label} textAnchor="middle" dominantBaseline="central" fill={COLOR.text}>{tr("view.driver")}</text>
 
         {/* Raumecke: von der Achse aus nach oben und unten, Strichmuster symmetrisch zur Achse */}

@@ -63,7 +63,6 @@ export const COLOR = {
   driv:         "#888898",               // Treiber (Seitenriss)
   drivFill:     "rgba(26,26,26,0.55)",
   drivPlan:     "#363650",               // Treiber (Draufsicht)
-  drivPlanDiag: "#303048",
   drivPlanFill: "rgba(26,26,26,0.6)",
   fillTrak:     "rgba(249,168,212,0.09)",
   fillHorn:     "rgba(134,239,172,0.08)",

@@ -254,11 +254,9 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
 
 function Treiber({ toX, toY, dw, dh, scale, cx }) {
   const tr = useT();
-  const x0 = toX(-dw / 2), x1 = toX(dw / 2), y0 = toY(-dh), y1 = toY(0);
+  const x0 = toX(-dw / 2), y0 = toY(-dh);
   return <>
     <rect x={x0} y={y0} width={dw * scale} height={dh * scale} fill={COLOR.drivPlanFill} stroke={COLOR.drivPlan} strokeWidth="1.3" rx="2" />
-    <line x1={x0} y1={y0} x2={x1} y2={y1} stroke={COLOR.drivPlanDiag} strokeWidth="0.5" opacity="0.5" />
-    <line x1={x1} y1={y0} x2={x0} y2={y1} stroke={COLOR.drivPlanDiag} strokeWidth="0.5" opacity="0.5" />
     <text x={cx} y={toY(-dh / 2)} textAnchor="middle" dominantBaseline="central" fontSize="10" fill={COLOR.text} fontFamily={FONT}>{tr("view.driver")}</text>
   </>;
 }

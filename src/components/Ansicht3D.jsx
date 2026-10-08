@@ -78,17 +78,24 @@ function useMeshWorker(input) {
   return input ? sections : null;
 }
 
-/** Treiber (Zylinder Ø dw, Länge dh, Achse = Hornachse z) und Raumecken-Wände als halbtransparenter Bezug. */
-function referenceGroup(s, dw, dh, hMouth, showRaumecke) {
+/**
+ * Treiber (Zylinder Ø dw, Länge dh, Achse = Hornachse z, deckend) und Raumecken-Wände
+ * (halbtransparent) als Bezug, einzeln ein- und ausblendbar (userData.kind "driver" / "corner"). Die Wände reichen
+ * doppelt so weit nach oben und unten wie das höchste Teil (Treiber, Mund samt Wandstärke,
+ * Flansch) – sie sollen als Wand lesbar sein, nicht als Rahmen ums Horn.
+ * @param top  halbe Höhe des höchsten Teils über der Achse [mm]
+ */
+function referenceGroup(s, dw, dh, top, showRaumecke) {
   const group = new THREE.Group();
   const cylinder = new THREE.CylinderGeometry(dw / 2, dw / 2, dh, 64);
   cylinder.rotateX(Math.PI / 2);                 // three.js-Zylinder liegen auf Y, die Hornachse ist Z
   const driver = new THREE.Mesh(cylinder,
-    new THREE.MeshStandardMaterial({ color: COLOR.driv, transparent: true, opacity: 0.35 }));
+    new THREE.MeshStandardMaterial({ color: COLOR.driv }));
   driver.position.set(0, 0, -dh / 2);
+  driver.userData.kind = "driver";
   group.add(driver);
   if (showRaumecke) {
-    const halfMax = Math.max(dw / 2, hMouth / 2) * 1.05;
+    const halfMax = 2 * top;
     const endX = dw / 2 + (s.zApex + dh);
     for (const sign of [1, -1]) {
       const wall = bufferGeometry([
@@ -96,9 +103,11 @@ function referenceGroup(s, dw, dh, hMouth, showRaumecke) {
         [[0, -halfMax, s.hatTipZ], [sign * endX, halfMax, s.zApex], [0, halfMax, s.hatTipZ]],
       ]);
       wall.computeVertexNormals();
-      group.add(new THREE.Mesh(wall, new THREE.MeshStandardMaterial({
+      const mesh = new THREE.Mesh(wall, new THREE.MeshStandardMaterial({
         color: COLOR.raum, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false,
-      })));
+      }));
+      mesh.userData.kind = "corner";
+      group.add(mesh);
     }
   }
   return group;
@@ -158,7 +167,8 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
   const { w, h } = useSize(containerRef);
   const three = useRef(null);
   const [wireframe, setWireframe] = useState(false);
-  const [showReference, setShowReference] = useState(true);
+  const [showDriver, setShowDriver] = useState(true);
+  const [showCorner, setShowCorner] = useState(true);
 
   const meshInput = useMemo(() => s ? {
     s, rt, hMouth, curve, hypexT, fillet, wall, edgeR,
@@ -225,12 +235,13 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
 
   // Bezug (Treiber, Raumecke) und Konflikt-Bohrungen: sofort, aber nur neu, wenn sich ihre
   // Werte ändern (nicht bei jedem neuen s- oder Flansch-Objekt mit gleichen Maßen)
-  const referenceKey = s ? JSON.stringify([s.zApex, s.hatTipZ, dw, dh, hMouth, showRaumecke]) : "";
+  const top = Math.max(dw / 2, hMouth / 2 + wall, wall > 0 && flange ? flange.diameter / 2 : 0);
+  const referenceKey = s ? JSON.stringify([s.zApex, s.hatTipZ, dw, dh, top, showRaumecke]) : "";
   const conflictKey = wall > 0 && flange ? JSON.stringify([flange.conflicts, flange.holes.diameter, flange.thickness]) : "";
   useEffect(() => {
     const t = three.current;
     if (!t) return;
-    replace(t, "reference", referenceKey && referenceGroup(s, dw, dh, hMouth, showRaumecke));
+    replace(t, "reference", referenceKey && referenceGroup(s, dw, dh, top, showRaumecke));
     t.render();
   }, [referenceKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- referenceKey fasst die Werte zusammen
   useEffect(() => {
@@ -248,9 +259,9 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
       if (o.userData.kind === "faces") o.visible = !wireframe;
       if (o.userData.kind === "grid") o.visible = wireframe;
     });
-    if (t.reference) t.reference.visible = showReference;
+    t.reference?.children.forEach(o => { o.visible = o.userData.kind === "driver" ? showDriver : showCorner; });
     t.render();
-  }, [sections, referenceKey, wireframe, showReference]);
+  }, [sections, referenceKey, wireframe, showDriver, showCorner]);
 
   const resetView = () => {
     const t = three.current;
@@ -266,7 +277,8 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
         </span>
         <div style={{ display: "flex", gap: 4, flexShrink: 0, pointerEvents: "auto" }}>
           <ViewButton active={wireframe} onClick={() => setWireframe(v => !v)} title={tr("view.gridTitle")}>{tr("view.grid")}</ViewButton>
-          <ViewButton active={showReference} onClick={() => setShowReference(v => !v)} title={tr("view.referenceTitle")}>{tr("view.reference")}</ViewButton>
+          <ViewButton active={showDriver} onClick={() => setShowDriver(v => !v)} title={tr("view.showDriverTitle")}>{tr("view.showDriver")}</ViewButton>
+          {showRaumecke && <ViewButton active={showCorner} onClick={() => setShowCorner(v => !v)} title={tr("view.showCornerTitle")}>{tr("view.showCorner")}</ViewButton>}
           <ViewButton onClick={resetView} title={tr("view.resetView")}>{tr("view.reset")}</ViewButton>
         </div>
       </div>
