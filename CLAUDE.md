@@ -137,9 +137,9 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 
 ## Seitenleiste
 
-**Kopf:** Öffnen | Speichern, darunter Rückgängig | Wiederherstellen (`useUndo` über `designValues` – dieselben Werte wie die Projektdatei, keine Ansichten/Anzeige-Schalter; Öffnen einer Datei ist ein Schritt). Ein Schritt wird erst nach 500 ms Ruhe festgehalten: ein Reglerzug oder eine getippte Zahl ist ein Schritt. Strg+Z, Strg+Y, Strg+Umschalt+Z (Mac ⌘), nicht in Textfeldern (dort gehört Strg+Z dem Feld). Verlauf nur im Speicher, höchstens 200 Schritte; „Alle Einstellungen zurücksetzen“ lädt neu und leert ihn.
+**Kopf:** Öffnen | Speichern, darunter Rückgängig | Wiederherstellen, darunter „Alle Einstellungen zurücksetzen“ über die volle Breite (`useUndo` über `designValues` – dieselben Werte wie die Projektdatei, keine Ansichten/Anzeige-Schalter; Öffnen einer Datei ist ein Schritt). Ein Schritt wird erst nach 500 ms Ruhe festgehalten: ein Reglerzug oder eine getippte Zahl ist ein Schritt. Strg+Z, Strg+Y, Strg+Umschalt+Z (Mac ⌘), nicht in Textfeldern (dort gehört Strg+Z dem Feld). Verlauf nur im Speicher, höchstens 200 Schritte; „Alle Einstellungen zurücksetzen“ lädt neu und leert ihn.
 
-Reihenfolge der Karten: Throat → Horizontales Profil → Vertikales Profil → Treiber → Aufstellung (Raumecke) → Ausführung (Wandstärke, Kanten, Flansch) → Simulation → Kennwerte (Kacheln + Grenzfrequenzen) → Querschnitt → Export, darunter „Alle Einstellungen zurücksetzen“. Bausteine nur aus `ui.jsx`, keine Ad-hoc-Stile in `App.jsx`:
+Reihenfolge der Karten: Throat → Horizontales Profil → Vertikales Profil → Treiber → Aufstellung (Raumecke) → Ausführung (Wandstärke, Kanten, Flansch) → Simulation → Kennwerte (Kacheln + Grenzfrequenzen) → Querschnitt → Export. Bausteine nur aus `ui.jsx`, keine Ad-hoc-Stile in `App.jsx`:
 
 - **Throat:** Knöpfe 1" | 1,4" (35,5 mm, Herstellerangabe; Beschriftung je Sprache mit Dezimalkomma bzw. -punkt) | 2" | Eigene (`THROAT_SIZES`, `THROAT_CUSTOM`); „Eigene“ zeigt den Regler Durchmesser Ø (10–150 mm). Eigene gilt, wenn gewählt (Einstellung `throatCustom`) oder wenn der gespeicherte `throatDiam` keiner Knopfgröße entspricht – so werden früher gespeicherte 1½" (38,1 mm) und 3" (76,2 mm) zu „Eigene“.
 - `Card title id`: mit `id` über die Überschrift einklappbar, Zustand gespeichert (Einstellung `open.<id>`). Jede Karte hat einen Titel.

@@ -386,7 +386,6 @@ export default function App() {
             </div>
           </Card>
         </>}
-        <ResetSettingsButton t={t} />
       </div>
 
       {/* Ansichten: oben Draufsicht und 3D, unten Seitenriss über die volle Breite */}
@@ -486,8 +485,8 @@ function LanguageSwitch({ value, onChange, label }) {
 }
 
 /**
- * Projekt öffnen und speichern, Rückgängig und Wiederherstellen (Kopf der Seitenleiste), darunter
- * die Meldung zum letzten Öffnen.
+ * Projekt öffnen und speichern, Rückgängig und Wiederherstellen, alle Einstellungen zurücksetzen
+ * (Kopf der Seitenleiste), darunter die Meldung zum letzten Öffnen.
  */
 function ProjectButtons({ onOpen, onSave, status, history, t }) {
   const input = useRef(null);
@@ -499,6 +498,7 @@ function ProjectButtons({ onOpen, onSave, status, history, t }) {
         <Button onClick={history.undo} disabled={!history.canUndo} title={t("history.undoKey")}>{t("history.undo")}</Button>
         <Button onClick={history.redo} disabled={!history.canRedo} title={t("history.redoKey")}>{t("history.redo")}</Button>
       </div>
+      <ResetSettingsButton t={t} />
       <input ref={input} type="file" accept=".json,application/json" hidden aria-label={t("project.open")}
         onChange={e => { const file = e.target.files[0]; e.target.value = ""; if (file) onOpen(file); }} />
       {status?.kind === "ok" && <Note>{status.text}</Note>}
