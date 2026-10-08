@@ -35,7 +35,7 @@ src/
   utils.js                 — linspace, clamp, svgPath, niceTicks
   hooks.js                 — useSize, useZoomPan, usePersistentState, useThrottledValue, useUndo
   settings.js              — gespeicherte Einstellungen (localStorage, je Wert geprüft gegen den Standard: checkSetting)
-  project.js               — Projektdateien (*.radialhorn.json): DESIGN_DEFAULTS, buildProject, parseProject
+  project.js               — Projektdateien (*.radialhorn.json): DESIGN_DEFAULTS, buildProject, parseProject; neue Entwurfswerte mit Standard = bisheriges Verhalten in ADDED_LATER eintragen (fehlen in älteren Dateien still)
   history.js               — Verlauf für Rückgängig/Wiederherstellen (rein funktional, Schnappschüsse als JSON-String)
   components/
     ui.jsx                 — Card, Group, Slider, Toggle, SegmentedButtons, Button, Stat, Note, Warn, ZoomControls, FullscreenPanel, ArrowMarker

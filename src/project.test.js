@@ -52,8 +52,18 @@ describe("Projektdateien", () => {
     const { design, missing, invalid } = parseProject(fileWith(partial));
     expect(design.openingAngle).toBe(100);
     expect(design).not.toHaveProperty("unbekannt");
-    expect(missing.length).toBe(Object.keys(DESIGN_DEFAULTS).length - 1);
+    expect(missing.length).toBe(Object.keys(DESIGN_DEFAULTS).length - 1 - 2);   // ohne die später dazugekommenen
     expect(invalid).toEqual([]);
+  });
+
+  it("Datei von vor dem runden Throat: still ergänzt (Übergang aus), keine Meldung", () => {
+    const old = { ...sample };
+    delete old.morphOn;
+    delete old.morphLength;
+    const { design, missing, invalid } = parseProject(fileWith(old));
+    expect([missing, invalid]).toEqual([[], []]);
+    expect(design.morphOn).toBe(false);
+    expect(design.morphLength).toBeNull();
   });
 
   it("null nur bei automatischen Werten (Kantenradius, Flansch-Ø, Lochkreis), sonst ungültig", () => {

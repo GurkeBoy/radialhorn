@@ -49,6 +49,12 @@ export const DESIGN_DEFAULTS = {
   driver: PLACEHOLDER_DRIVER,
 };
 
+// Werte, die nach der ersten Fassung des Formats dazugekommen sind und deren Standard genau das
+// frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
+// Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
+// Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
+const ADDED_LATER = new Set(["morphOn", "morphLength"]);
+
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);
 
@@ -81,7 +87,8 @@ export class ProjectError extends Error {
  * Projektdatei lesen und prüfen.
  * @returns {{ design, invalid: string[], missing: string[], newer: boolean }}
  *   design vollständig (jeder Schlüssel aus DESIGN_DEFAULTS); invalid/missing: Schlüssel, für die
- *   der Standard eingesetzt wurde; newer: Datei aus einer neueren Formatversion
+ *   der Standard eingesetzt wurde (später dazugekommene Werte fehlen still, ADDED_LATER); newer:
+ *   Datei aus einer neueren Formatversion
  * @throws {ProjectError}
  */
 export function parseProject(text) {
@@ -93,7 +100,7 @@ export function parseProject(text) {
   const design = {}, invalid = [], missing = [];
   for (const [key, initial] of Object.entries(DESIGN_DEFAULTS)) {
     const value = data.design[key];
-    if (value === undefined) { design[key] = initial; missing.push(key); continue; }
+    if (value === undefined) { design[key] = initial; if (!ADDED_LATER.has(key)) missing.push(key); continue; }
     let checked = value === null && NULLABLE.has(key) ? null : checkSetting(value, initial);
     if (value === null && !NULLABLE.has(key)) {
       // eine Datei kann von überall kommen: null nur bei automatischen Werten
