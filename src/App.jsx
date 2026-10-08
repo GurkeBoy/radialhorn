@@ -13,7 +13,7 @@ import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
 import { Ansicht3D } from "./components/Ansicht3D.jsx";
 import { Frequenzgang } from "./components/Frequenzgang.jsx";
-import { usePersistentState, useThrottledValue } from "./hooks.js";
+import { usePersistentState, useThrottledValue, useUndo } from "./hooks.js";
 import { LANGUAGES, LanguageContext, detectLanguage, translate } from "./i18n.js";
 import { clearSettings } from "./settings.js";
 import { DESIGN_DEFAULTS as D, ProjectError, buildProject, parseProject, projectFileName } from "./project.js";
@@ -111,6 +111,10 @@ export default function App() {
     holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, abstrahlung: setSimMouth,
     simTemp: setSimTemp, driver: setDriver,
   };
+  const applyDesign = design => { for (const [key, value] of Object.entries(design)) designSetters[key](value); };
+  // Rückgängig/Wiederherstellen über alle Entwurfswerte (wie die Projektdatei; Ansichten und
+  // Anzeige-Schalter nicht). Öffnen einer Projektdatei ist ein Schritt.
+  const history = useUndo(designValues, applyDesign);
   const [projectStatus, setProjectStatus] = useState(null);   // { kind: "ok" | "warn" | "error", text }
   useEffect(() => {   // Erfolgsmeldung verschwindet nach ein paar Sekunden, Hinweise und Fehler bleiben
     if (projectStatus?.kind !== "ok") return;
@@ -124,7 +128,7 @@ export default function App() {
   const openProject = async file => {
     try {
       const { design, invalid, missing, newer } = parseProject(await file.text());
-      for (const [key, value] of Object.entries(design)) designSetters[key](value);
+      applyDesign(design);
       const replaced = [...invalid, ...missing];
       const notes = [
         newer && t("project.newer"),
@@ -248,7 +252,7 @@ export default function App() {
           </div>
           <LanguageSwitch value={lang} onChange={setLang} label={t("app.language")} />
         </div>
-        <ProjectButtons onOpen={openProject} onSave={saveProject} status={projectStatus} t={t} />
+        <ProjectButtons onOpen={openProject} onSave={saveProject} status={projectStatus} history={history} t={t} />
 
         <Card title={t("card.throat")} id="throat">
           <SegmentedButtons
@@ -481,14 +485,19 @@ function LanguageSwitch({ value, onChange, label }) {
   );
 }
 
-/** Projekt öffnen und speichern (Kopf der Seitenleiste), darunter die Meldung zum letzten Öffnen. */
-function ProjectButtons({ onOpen, onSave, status, t }) {
+/**
+ * Projekt öffnen und speichern, Rückgängig und Wiederherstellen (Kopf der Seitenleiste), darunter
+ * die Meldung zum letzten Öffnen.
+ */
+function ProjectButtons({ onOpen, onSave, status, history, t }) {
   const input = useRef(null);
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 6 }}>
         <Button onClick={() => input.current.click()}>{t("project.open")}</Button>
         <Button onClick={onSave}>{t("project.save")}</Button>
+        <Button onClick={history.undo} disabled={!history.canUndo} title={t("history.undoKey")}>{t("history.undo")}</Button>
+        <Button onClick={history.redo} disabled={!history.canRedo} title={t("history.redoKey")}>{t("history.redo")}</Button>
       </div>
       <input ref={input} type="file" accept=".json,application/json" hidden aria-label={t("project.open")}
         onChange={e => { const file = e.target.files[0]; e.target.value = ""; if (file) onOpen(file); }} />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { readSetting, writeSetting } from "./settings.js";
+import * as H from "./history.js";
 
 /** Größe eines DOM-Elements, laufend per ResizeObserver gemessen. */
 export function useSize(ref) {
@@ -99,4 +100,49 @@ export function usePersistentState(key, initial) {
   const [value, setValue] = useState(() => readSetting(key, initial));
   useEffect(() => writeSetting(key, value), [key, value]);
   return [value, setValue];
+}
+
+/** Tastenfokus in einem Textfeld? Dort gehören Strg+Z/Y dem Feld selbst. */
+const isTextEntry = el =>
+  el?.isContentEditable || el?.tagName === "TEXTAREA" ||
+  (el?.tagName === "INPUT" && !["range", "checkbox", "radio", "button", "file"].includes(el.type));
+
+/**
+ * Rückgängig/Wiederherstellen für einen Satz von Werten (history.js). Eine Änderung wird erst
+ * festgehalten, wenn die Werte settle ms ruhig sind – ein Zug am Regler oder eine getippte Zahl
+ * ist ein Schritt, nicht hundert. apply(werte) setzt einen früheren Stand. Tastenkürzel:
+ * Strg+Z, Strg+Y und Strg+Umschalt+Z (Mac: ⌘), nicht in Textfeldern.
+ */
+export function useUndo(values, apply, settle = 500) {
+  const current = JSON.stringify(values);
+  const [history, setHistory] = useState(() => H.createHistory(current));
+  useEffect(() => {
+    if (current === history.present) return;
+    const timer = setTimeout(() => setHistory(h => H.record(h, current)), settle);
+    return () => clearTimeout(timer);
+  }, [current, history.present, settle]);
+
+  const step = fn => {
+    const { history: next, target } = fn(history, current);
+    if (target === null) return;
+    setHistory(next);
+    apply(JSON.parse(target));
+  };
+  const actions = { undo: () => step(H.undo), redo: () => step(H.redo) };
+  const latest = useRef(actions);
+  useEffect(() => { latest.current = actions; });
+  useEffect(() => {
+    const onKey = e => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || isTextEntry(e.target)) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) latest.current.undo();
+      else if (key === "y" || (key === "z" && e.shiftKey)) latest.current.redo();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return { ...actions, canUndo: H.canUndo(history, current), canRedo: H.canRedo(history, current) };
 }

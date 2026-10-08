@@ -233,11 +233,12 @@ export function SegmentedButtons({ options, value, onChange, labels = {} }) {
   );
 }
 
-/** Schaltfläche über die volle Breite; primary hebt die Hauptaktion hervor. */
-export function Button({ primary, onClick, children }) {
+/** Schaltfläche über die volle Breite; primary hebt die Hauptaktion hervor, title ist der Tooltip. */
+export function Button({ primary, onClick, disabled, title, children }) {
   return (
-    <button type="button" onClick={onClick} style={{
-      width: "100%", height: 30, marginBottom: 6, borderRadius: 5, cursor: "pointer",
+    <button type="button" onClick={onClick} disabled={disabled} title={title} style={{
+      width: "100%", height: 30, marginBottom: 6, borderRadius: 5, cursor: disabled ? "default" : "pointer",
+      opacity: disabled ? 0.4 : 1,
       border: `1px solid ${primary ? UI.accent : UI.borderControl}`,
       background: primary ? UI.accentSoft : UI.button,
       color: primary ? UI.accent : UI.label,

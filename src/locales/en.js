@@ -7,6 +7,10 @@ export default {
   // Project files
   "project.open": "↑ Open…",
   "project.save": "↓ Save",
+  "history.undo": "↶ Undo",
+  "history.redo": "↷ Redo",
+  "history.undoKey": "Ctrl+Z",
+  "history.redoKey": "Ctrl+Y",
   "project.opened": "Opened: {name}.",
   "project.defaultsOne": "1 value invalid or missing, default used: {keys}.",
   "project.defaults": "{n} values invalid or missing, defaults used: {keys}.",

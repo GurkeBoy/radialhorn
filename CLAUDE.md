@@ -33,9 +33,10 @@ src/
   fonts.js                 — eingebettete Schrift DM Mono (@font-face aus assets/fonts/, OFL 1.1)
   i18n.js, locales/        — Sprachen der Oberfläche (de.js = Referenz, en.js), useT, translate
   utils.js                 — linspace, clamp, svgPath, niceTicks
-  hooks.js                 — useSize, useZoomPan, usePersistentState, useThrottledValue
+  hooks.js                 — useSize, useZoomPan, usePersistentState, useThrottledValue, useUndo
   settings.js              — gespeicherte Einstellungen (localStorage, je Wert geprüft gegen den Standard: checkSetting)
   project.js               — Projektdateien (*.radialhorn.json): DESIGN_DEFAULTS, buildProject, parseProject
+  history.js               — Verlauf für Rückgängig/Wiederherstellen (rein funktional, Schnappschüsse als JSON-String)
   components/
     ui.jsx                 — Card, Group, Slider, Toggle, SegmentedButtons, Button, Stat, Note, Warn, ZoomControls, FullscreenPanel, ArrowMarker
     Dim.jsx                — Bemaßungen Dim (waagerecht/senkrecht) und DimAligned (schräg)
@@ -135,6 +136,8 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 - **DXF:** Draufsicht `[x, z] → (X = z, Y = x)`, Seitenprofil `[z, h] → (X = z, Y = 0, Z = h)`.
 
 ## Seitenleiste
+
+**Kopf:** Öffnen | Speichern, darunter Rückgängig | Wiederherstellen (`useUndo` über `designValues` – dieselben Werte wie die Projektdatei, keine Ansichten/Anzeige-Schalter; Öffnen einer Datei ist ein Schritt). Ein Schritt wird erst nach 500 ms Ruhe festgehalten: ein Reglerzug oder eine getippte Zahl ist ein Schritt. Strg+Z, Strg+Y, Strg+Umschalt+Z (Mac ⌘), nicht in Textfeldern (dort gehört Strg+Z dem Feld). Verlauf nur im Speicher, höchstens 200 Schritte; „Alle Einstellungen zurücksetzen“ lädt neu und leert ihn.
 
 Reihenfolge der Karten: Throat → Horizontales Profil → Vertikales Profil → Treiber → Aufstellung (Raumecke) → Ausführung (Wandstärke, Kanten, Flansch) → Simulation → Kennwerte (Kacheln + Grenzfrequenzen) → Querschnitt → Export, darunter „Alle Einstellungen zurücksetzen“. Bausteine nur aus `ui.jsx`, keine Ad-hoc-Stile in `App.jsx`:
 
