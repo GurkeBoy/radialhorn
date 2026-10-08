@@ -323,7 +323,8 @@ export function driverResponse(dr, air, f, zThroat, uRatio, e) {
  *                 ≤ MAX_SEGMENT statt immer der vollen Kurve
  * @returns {{ f, spl, phase, zel, zThroat }}
  *   spl [dB] in distance (Standard 1 m) bei voltage (Standard 2,83 V eff), aus der Leistung
- *   (siehe oben), phase [°] des Drucks (Monopol, ohne Laufzeit über distance), zel [Ω] komplex, zThroat komplex normiert auf ρc/S_Hals
+ *   (siehe oben), phase [°] des Drucks (Monopol, ohne Laufzeit über distance, aber mit der
+ *   Laufzeit durch Kammer und Horn – herausrechnen: hornDelay, phaseWithoutDelay), zel [Ω] komplex, zThroat komplex normiert auf ρc/S_Hals
  */
 export function simulate({ curve, air, driver, mouth = "2pi", freqs, voltage = 2.83, distance = 1, adaptive = true }) {
   const rhoC = air.rho * air.c, omega = SOLID_ANGLE[mouth];
@@ -347,6 +348,26 @@ export function simulate({ curve, air, driver, mouth = "2pi", freqs, voltage = 2
     out.zThroat.push(cx(zThroat.re * S0 / rhoC, zThroat.im * S0 / rhoC));
   }
   return out;
+}
+
+/**
+ * Laufzeit [s] von der Membran zum Mund: Weg durch die Kammer (als Rohr der Länge Vtc/Atc,
+ * nur mit Atc > 0 – sonst ist die Kammer eine reine Nachgiebigkeit ohne Weg) und durch das
+ * Horn (Länge der Flächenkurve), geteilt durch c. Im Hochton, wo das Horn die Welle ohne
+ * Dispersion führt, ist das die reine Laufzeit im Phasengang.
+ * @param driver Treiber in SI (driverSI)
+ */
+export function hornDelay(curve, air, driver) {
+  const chamber = driver.Vtc > 0 && driver.Atc > 0 ? driver.Vtc / driver.Atc : 0;
+  return (chamber + curve.x.at(-1) - curve.x[0]) / air.c;
+}
+
+/** Phase [°] ohne die Laufzeit tau [s] (Faktor e^{+jωτ}), wieder auf −180° … 180° gefaltet. */
+export function phaseWithoutDelay(f, phase, tau) {
+  return phase.map((ph, i) => {
+    const v = ph + 360 * f[i] * tau;
+    return ((v + 180) % 360 + 360) % 360 - 180;
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────

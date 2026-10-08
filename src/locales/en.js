@@ -87,6 +87,8 @@ export default {
   "sim.approximation": "Approximation – only 2π (piston in a baffle) is exact.",
   "sim.temperature": "Air temperature",
   "sim.showPhase": "Show phase",
+  "sim.removeDelay": "Remove time delay",
+  "sim.delayHint": "τ = {ms} ms ({mm} mm through chamber and horn ÷ c)",
   "sim.driverData": "Driver (Thiele-Small)",
   "sim.placeholder": "Placeholder – not real driver data",
   "sim.massIsMmd": "Mass = Mmd",

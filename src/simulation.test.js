@@ -3,7 +3,7 @@ import {
   airAt, logFrequencies, sampleStep, transverseLimit, cx, abs,
   coneMatrix, propagate, inputImpedance, besselJ1, struveH1, radiationImpedance,
   mmdFromMms, driverSI, driverResponse, PLACEHOLDER_DRIVER, simulate, areaCurve, sampleArea,
-  curveLevels, GEOMETRY_STEP_MM, MAX_SEGMENT,
+  curveLevels, GEOMETRY_STEP_MM, MAX_SEGMENT, hornDelay, phaseWithoutDelay,
 } from "./simulation.js";
 import { createHornMath, makeProfile, computeFillet, mouthArea, crossSection } from "./horn-math.js";
 import { buildCSV } from "./export/csv.js";
@@ -404,5 +404,46 @@ describe("simulate", () => {
     expect(cols).toHaveLength(9);
     expect(cols.every(Number.isFinite)).toBe(true);
     expect(cols[0]).toBeCloseTo(20, 3);
+  });
+});
+
+describe("Laufzeit (hornDelay, phaseWithoutDelay)", () => {
+  const s = createHornMath(140).solveHorn(500, 60, 25.4, 182, 90);
+  const profile = makeProfile(s, 25.4, 200, "exponential", 0.5);
+  const freqs = logFrequencies(20, 20000, 24);
+  const curve = areaCurve(s, 25.4, profile);
+  const driver = driverSI(PLACEHOLDER_DRIVER, AIR.rho);
+  const r = simulate({ curve, air: AIR, driver, freqs });
+  const tau = hornDelay(curve, AIR, driver);
+  // Gruppenlaufzeit −dφ/dω aus der entfalteten Phase (Mittelwert über ein Band)
+  const groupDelay = (phase, f1, f2) => {
+    const i1 = freqs.findIndex(v => v >= f1), i2 = freqs.findIndex(v => v >= f2);
+    let un = 0;
+    for (let i = i1 + 1; i <= i2; i++) { const d = phase[i] - phase[i - 1]; un += d - 360 * Math.round(d / 360); }
+    return -un / 360 / (freqs[i2] - freqs[i1]);
+  };
+
+  it("Weg = Kammer (Vtc/Atc) + Länge der Flächenkurve, ohne Atc nur das Horn", () => {
+    const horn = curve.x.at(-1) - curve.x[0];
+    expect(tau * AIR.c).toBeCloseTo(horn + driver.Vtc / driver.Atc, 12);
+    expect(hornDelay(curve, AIR, { ...driver, Atc: 0 }) * AIR.c).toBeCloseTo(horn, 12);
+    expect(hornDelay(curve, AIR, { ...driver, Vtc: 0 }) * AIR.c).toBeCloseTo(horn, 12);
+  });
+
+  it("im Hochton entspricht die Gruppenlaufzeit der Simulation der Laufzeit (±5 %)", () => {
+    expect(groupDelay(r.phase, 5000, 15000) / tau).toBeGreaterThan(0.95);
+    expect(groupDelay(r.phase, 5000, 15000) / tau).toBeLessThan(1.05);
+  });
+
+  it("ohne Laufzeit: Gruppenlaufzeit im Hochton klein, Phase in −180° … 180°", () => {
+    const ph = phaseWithoutDelay(freqs, r.phase, tau);
+    expect(Math.abs(groupDelay(ph, 5000, 15000))).toBeLessThan(0.05 * tau);
+    expect(ph.every(v => v >= -180 && v < 180)).toBe(true);
+  });
+
+  it("phaseWithoutDelay dreht um 360°·f·τ und faltet", () => {
+    expect(phaseWithoutDelay([1000], [-170], 0.5e-3)).toEqual([10]);     // −170 + 180
+    expect(phaseWithoutDelay([1000], [90], 0.5e-3)).toEqual([-90]);      // 270 → −90
+    expect(phaseWithoutDelay([1000], [30], 0)).toEqual([30]);
   });
 });

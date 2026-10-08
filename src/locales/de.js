@@ -87,6 +87,8 @@ export default {
   "sim.approximation": "Näherung – exakt ist nur 2π (Kolben in Schallwand).",
   "sim.temperature": "Lufttemperatur",
   "sim.showPhase": "Phase anzeigen",
+  "sim.removeDelay": "Laufzeit herausrechnen",
+  "sim.delayHint": "τ = {ms} ms ({mm} mm durch Kammer und Horn ÷ c)",
   "sim.driverData": "Treiber (Thiele-Small)",
   "sim.placeholder": "Platzhalter – keine echten Treiberdaten",
   "sim.massIsMmd": "Masse = Mmd",

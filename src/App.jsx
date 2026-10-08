@@ -25,7 +25,7 @@ import { exportSTL } from "./export/stl.js";
 import { exportCSV } from "./export/csv.js";
 import { flangeLayout } from "./horn-mesh.js";
 import {
-  airAt, logFrequencies, transverseLimit, areaCurve, simulate, driverSI, PLACEHOLDER_DRIVER,
+  airAt, logFrequencies, transverseLimit, areaCurve, simulate, driverSI, PLACEHOLDER_DRIVER, hornDelay, phaseWithoutDelay,
 } from "./simulation.js";
 
 // Gängige Austrittsdurchmesser von Kompressionstreibern; 1,4" wird mit 35,5 mm angegeben (Herstellerangabe)
@@ -92,6 +92,7 @@ export default function App() {
   const mouth = simMouth === "auto" ? (showRaumecke ? "pi" : "2pi") : simMouth;
   const [simTemp,         setSimTemp]         = usePersistentState("simTemp", D.simTemp);
   const [simPhase,        setSimPhase]        = usePersistentState("simPhase", false);
+  const [simNoDelay,      setSimNoDelay]      = usePersistentState("simNoDelay", false);
   const [driver,          setDriver]          = usePersistentState("driver", D.driver);
   const setDriverValue = key => v => setDriver(d => ({ ...d, [key]: v }));
 
@@ -212,12 +213,18 @@ export default function App() {
   const areaCurveSI = useMemo(() => s && p.simOn ? areaCurve(s, rt, profile) : null, [s, rt, profile, p.simOn]);
   const sim = useMemo(() => {
     if (!areaCurveSI) return null;
-    const air = airAt(p.simTemp);
+    const air = airAt(p.simTemp), driverSi = driverSI(p.driver, air.rho);
+    const delay = hornDelay(areaCurveSI, air, driverSi);
     return {
-      result: simulate({ curve: areaCurveSI, air, driver: driverSI(p.driver, air.rho), mouth: p.mouth, freqs: SIM_FREQS }),
+      result: simulate({ curve: areaCurveSI, air, driver: driverSi, mouth: p.mouth, freqs: SIM_FREQS }),
       fLimit: transverseLimit(2 * rt / 1000, air.c),
+      delay, delayPath: delay * air.c,
     };
   }, [areaCurveSI, rt, p.simTemp, p.mouth, p.driver]);
+  // Angezeigtes (und als CSV exportiertes) Ergebnis: Phase wahlweise ohne die Laufzeit durch Kammer und Horn
+  const simResult = useMemo(() => sim && (simNoDelay
+    ? { ...sim.result, phase: phaseWithoutDelay(sim.result.f, sim.result.phase, sim.delay) }
+    : sim.result), [sim, simNoDelay]);
 
   const flangeOverRaumecke = flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
   const design = {
@@ -323,6 +330,11 @@ export default function App() {
             </Group>
             <Slider label={t("sim.temperature")} value={simTemp} min={-10} max={40} step={1} unit="°C" onChange={setSimTemp} />
             <Toggle label={t("sim.showPhase")} checked={simPhase} onChange={setSimPhase} />
+            {simPhase && <Toggle label={t("sim.removeDelay")} checked={simNoDelay} onChange={setSimNoDelay}
+              hint={sim && t("sim.delayHint", {
+                ms: (sim.delay * 1e3).toLocaleString(LANGUAGES[lang].locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                mm: (sim.delayPath * 1e3).toLocaleString(LANGUAGES[lang].locale, { maximumFractionDigits: 1 }),
+              })} />}
             <Group title={t("sim.driverData")} id="simulation.treiber">
               {isPlaceholder(driver) && <Warn>{t("sim.placeholder")}</Warn>}
               <Slider label="Re"  value={driver.Re}  min={1}    max={16}   step={0.1}  unit="Ω"    onChange={setDriverValue("Re")} />
@@ -340,7 +352,7 @@ export default function App() {
               <Note>{t("sim.chamberNote")}{driver.Vtc > 0 && driver.Atc === 0 ? t("sim.atcNote") : ""}</Note>
               {!isPlaceholder(driver) && <Button onClick={() => setDriver(PLACEHOLDER_DRIVER)}>{t("sim.resetDriver")}</Button>}
             </Group>
-            {sim && <Button onClick={() => exportCSV(sim.result)}>{t("sim.csv")}</Button>}
+            {sim && <Button onClick={() => exportCSV(simResult)}>{t("sim.csv")}</Button>}
           </>}
         </Card>
 
@@ -389,7 +401,7 @@ export default function App() {
             <Seitenriss s={s} rt={rt} dw={p.dw} dh={p.dh} L={LClamped} hMouth={p.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} />
           </ViewPanel>
           {sim && <ViewPanel flex={1}>
-            <Frequenzgang result={sim.result} fLimit={sim.fLimit} mouth={p.mouth} showPhase={simPhase} placeholder={isPlaceholder(p.driver)} />
+            <Frequenzgang result={simResult} fLimit={sim.fLimit} mouth={p.mouth} showPhase={simPhase} placeholder={isPlaceholder(p.driver)} />
           </ViewPanel>}
         </div>
       </div>
