@@ -36,8 +36,9 @@ describe("buildDXF", () => {
 
   it("exakte Entities je Layer, keine Polylinien", () => {
     const e = parse(buildDXF(design(), ALL));
-    expect(count(e, "SPLINE", "Draufsicht_Wand")).toBe(2);       // Traktrix links/rechts
-    expect(count(e, "LINE", "Draufsicht_Wand")).toBe(2);         // gerade Wand
+    expect(count(e, "SPLINE", "Draufsicht_Traktrix")).toBe(2);   // Traktrix links/rechts
+    expect(count(e, "LINE", "Draufsicht_Gerade")).toBe(2);       // gerade Wand
+    expect(count(e, "SPLINE", "Draufsicht_Klothoide")).toBe(0);  // ohne Klothoide
     expect(count(e, "ARC", "Mundbogen")).toBe(1);
     expect(count(e, "POINT", "Fokus")).toBe(1);
     expect(count(e, "LINE", "Seitenprofil_Throat")).toBe(2);
@@ -80,7 +81,7 @@ describe("buildDXF", () => {
   it("ohne Traktrix: keine Throat-Linie, keine Traktrix-Splines", () => {
     const s0 = solveHorn(500, 0, RT, 120, 100);
     const e = parse(buildDXF(design({ s: s0 }), ALL));
-    expect(count(e, "SPLINE", "Draufsicht_Wand")).toBe(0);
+    expect(count(e, "SPLINE", "Draufsicht_Traktrix")).toBe(0);
     expect(count(e, "LINE", "Seitenprofil_Throat")).toBe(0);
   });
 

@@ -83,6 +83,23 @@ function CollapsibleGroup({ title, id, defaultOpen, children }) {
 }
 
 /** Hinweiszeile (grau). Unter einem Schalter mit underToggle auf dessen Text eingerückt. */
+/**
+ * Kurze Meldung unten in der Mitte des Fensters (z. B. „Gespeichert: …“); Klick schließt sie.
+ * @param notice  { kind: "ok" | "info" | "error", text } oder null
+ */
+export function Toast({ notice, onClose }) {
+  if (!notice) return null;
+  const color = notice.kind === "error" ? UI.error : notice.kind === "info" ? UI.label : UI.accent;
+  return (
+    <div role="status" aria-live="polite" onClick={onClose} style={{
+      position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
+      maxWidth: "min(560px, calc(100vw - 32px))", padding: "10px 16px", borderRadius: 6, cursor: "pointer",
+      background: UI.card, border: `1px solid ${color}`, color, boxShadow: "0 4px 18px rgba(0,0,0,0.5)",
+      fontFamily: FONT, fontSize: 12, lineHeight: 1.45, overflowWrap: "anywhere",
+    }}>{notice.kind === "ok" ? "✓ " : notice.kind === "error" ? "⚠ " : ""}{notice.text}</div>
+  );
+}
+
 export function Note({ children, underToggle, style }) {
   return (
     <div style={{ fontSize: 10, lineHeight: 1.45, color: UI.faint, fontFamily: FONT, margin: "-2px 0 8px", paddingLeft: underToggle ? TOGGLE_INDENT : 0, ...style }}>

@@ -6,28 +6,36 @@
  * Abbrechen speichert nichts. Ohne Dialog (z. B. Firefox) oder wenn er scheitert: als Download –
  * Blob-URL, für Text zusätzlich data-URL als Fallback.
  *
- * @returns {Promise<"saved" | "cancelled" | "downloaded">}
+ * content darf auch eine Funktion sein, die den Inhalt erst liefert: Dann geht der Dialog sofort
+ * auf (der Klick gilt nur kurz als Nutzeraktion) und gerechnet wird danach (STL, 3D-DXF).
+ *
+ * @returns {Promise<{ status: "saved" | "cancelled" | "downloaded", name: string }>}
+ *   name: gewählter Dateiname (Dialog) bzw. der vorgeschlagene (Download)
  */
 export async function downloadFile(content, filename, mime) {
+  const make = async () => (typeof content === "function" ? await content() : content);
   const picker = globalThis.showSaveFilePicker;
   if (typeof picker === "function") {
+    let handle = null;
     try {
       const ext = fileExtension(filename);
-      const handle = await picker({
+      handle = await picker({
         suggestedName: filename,
         types: ext ? [{ description: ext.slice(1).toUpperCase(), accept: { [mime]: [ext] } }] : undefined,
       });
-      const writable = await handle.createWritable();
-      await writable.write(new Blob([content], { type: mime }));
-      await writable.close();
-      return "saved";
     } catch (err) {
-      if (err?.name === "AbortError") return "cancelled";   // Dialog abgebrochen
-      // sonst (Dialog nicht erlaubt, Schreiben gescheitert …) wie bisher als Download
+      if (err?.name === "AbortError") return { status: "cancelled", name: filename };   // Dialog abgebrochen
+      // sonst (Dialog nicht erlaubt …) wie bisher als Download
+    }
+    if (handle) {
+      const writable = await handle.createWritable();
+      await writable.write(new Blob([await make()], { type: mime }));
+      await writable.close();
+      return { status: "saved", name: handle.name ?? filename };
     }
   }
-  triggerDownload(content, filename, mime);
-  return "downloaded";
+  triggerDownload(await make(), filename, mime);
+  return { status: "downloaded", name: filename };
 }
 
 /** Letzte Endung samt Punkt, z. B. ".json" für „x.radialhorn.json“; "" ohne Endung. */

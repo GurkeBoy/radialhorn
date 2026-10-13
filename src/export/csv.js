@@ -19,5 +19,5 @@ export function buildCSV(r) {
 }
 
 export function exportCSV(result) {
-  downloadFile(buildCSV(result), "radialhorn-frequenzgang.csv", "text/csv");
+  return downloadFile(() => buildCSV(result), "radialhorn-frequenzgang.csv", "text/csv");
 }

@@ -6,7 +6,7 @@ import {
 } from "./horn-math.js";
 import { FONT, SIDEBAR_WIDTH, UI } from "./theme.js";
 import {
-  Button, Card, Group, Note, Slider, Toggle, SegmentedButtons, Stat, Warn, FullscreenPanel,
+  Button, Card, Group, Note, Slider, Toggle, SegmentedButtons, Stat, Warn, FullscreenPanel, Toast,
 } from "./components/ui.jsx";
 import { Draufsicht } from "./components/Draufsicht.jsx";
 import { Seitenriss } from "./components/Seitenriss.jsx";
@@ -19,7 +19,7 @@ import { clearSettings } from "./settings.js";
 import { DESIGN_DEFAULTS as D, ProjectError, buildProject, parseProject, projectFileName } from "./project.js";
 import { downloadFile } from "./export/download.js";
 import { version as APP_VERSION } from "../package.json";
-import { exportDXF } from "./export/dxf.js";
+import { exportDXF, ALL_LAYERS } from "./export/dxf.js";
 import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
 import { exportCSV } from "./export/csv.js";
@@ -83,10 +83,7 @@ export default function App() {
   const [holeCircle,      setHoleCircle]      = usePersistentState("holeCircle", D.holeCircle);
   const [holeD,           setHoleD]           = usePersistentState("holeD", D.holeD);
   const [holeAngle,       setHoleAngle]       = usePersistentState("holeAngle", D.holeAngle);
-  const [exportLayers,    setExportLayers]    = usePersistentState("exportLayers", {
-    draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, uebergang: true, flansch: true, bemassung: true,
-  });
-  const setLayer = key => on => setExportLayers(layers => ({ ...layers, [key]: on }));
+  const [pdfDimensions,   setPdfDimensions]   = usePersistentState("pdfBemassung", true);
   const [simOn,           setSimOn]           = usePersistentState("simOn", false);
   // Abstrahlung: "auto" = π in der Raumecke (zwei Wände; Boden/Decke bei Ohrhöhe im Arbeitsbereich
   // zu weit weg), sonst 2π
@@ -124,9 +121,27 @@ export default function App() {
     const timer = setTimeout(() => setProjectStatus(null), 5000);
     return () => clearTimeout(timer);
   }, [projectStatus]);
+  // Rückmeldung nach jedem Speichern/Export (sonst merkt man nicht, ob es geklappt hat)
+  const [notice, setNotice] = useState(null);   // { kind: "ok" | "info" | "error", text }
+  useEffect(() => {
+    if (!notice || notice.kind === "error") return;
+    const timer = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const reportSave = async run => {
+    try {
+      const r = await run();
+      setNotice(
+        r.status === "cancelled" ? { kind: "info", text: t("save.cancelled") }
+        : r.status === "opened" ? { kind: "ok", text: t("save.printOpened") }
+        : { kind: "ok", text: t(r.status === "downloaded" ? "save.downloaded" : r.html ? "save.savedHtml" : "save.saved", { name: r.name }) });
+    } catch (err) {
+      setNotice({ kind: "error", text: t("save.error", { msg: err?.message ?? String(err) }) });
+    }
+  };
   const saveProject = () => {
-    downloadFile(buildProject(designValues, { appVersion: APP_VERSION }), projectFileName(designValues), "application/json");
     setProjectStatus(null);
+    reportSave(() => downloadFile(buildProject(designValues, { appVersion: APP_VERSION }), projectFileName(designValues), "application/json"));
   };
   const openProject = async file => {
     try {
@@ -367,7 +382,7 @@ export default function App() {
               <Note>{t("sim.chamberNote")}{driver.Vtc > 0 && driver.Atc === 0 ? t("sim.atcNote") : ""}</Note>
               {!isPlaceholder(driver) && <Button onClick={() => setDriver(PLACEHOLDER_DRIVER)}>{t("sim.resetDriver")}</Button>}
             </Group>
-            {sim && <Button onClick={() => exportCSV(simResult)}>{t("sim.csv")}</Button>}
+            {sim && <Button onClick={() => reportSave(() => exportCSV(simResult))}>{t("sim.csv")}</Button>}
           </>}
         </Card>
 
@@ -377,23 +392,12 @@ export default function App() {
             <Querschnitt s={s} profile={profile} morph={morph} />
           </Card>
           <Card title={t("card.export")} id="export">
-            <Group title={t("export.dxfCurves")} first>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 8 }}>
-                <Toggle label={t("export.layerTopView")}    checked={exportLayers.draufsicht}   onChange={setLayer("draufsicht")} />
-                <Toggle label={t("export.layerMouthArc")}   checked={exportLayers.mundbogen}    onChange={setLayer("mundbogen")} />
-                <Toggle label={t("export.layerFocus")}      checked={exportLayers.fokus}        onChange={setLayer("fokus")} />
-                <Toggle label={t("export.layerProfile")}    checked={exportLayers.seitenprofil} onChange={setLayer("seitenprofil")} />
-                <Toggle label={t("export.layerTransition")} checked={exportLayers.uebergang}    onChange={setLayer("uebergang")} />
-                {flange && <Toggle label={t("export.layerFlange")} checked={exportLayers.flansch} onChange={setLayer("flansch")} />}
-              </div>
-            </Group>
-            <Group title={t("export.pdfExtra")}>
-              <Toggle label={t("export.dimensions")} checked={exportLayers.bemassung} onChange={setLayer("bemassung")} />
-            </Group>
+            <Note>{t("export.dxfHint")}</Note>
+            <Toggle label={t("export.dimensions")} checked={pdfDimensions} onChange={setPdfDimensions} hint={t("export.dimensionsHint")} />
             <div style={{ marginTop: 4 }}>
-              <Button primary onClick={() => exportDXF(design, exportLayers)}>{t("export.dxf")}</Button>
-              <Button onClick={() => exportPDF(design, exportLayers, lang)}>{t("export.pdf")}</Button>
-              <Button onClick={() => exportSTL(design)}>{wall > 0 ? t(flange ? "export.stlShellFlange" : "export.stlShell", { mm: wall }) : t("export.stlAir")}</Button>
+              <Button primary onClick={() => reportSave(() => exportDXF(design))}>{t("export.dxf")}</Button>
+              <Button onClick={() => reportSave(() => exportPDF(design, { ...ALL_LAYERS, bemassung: pdfDimensions }, lang))}>{t("export.pdf")}</Button>
+              <Button onClick={() => reportSave(() => exportSTL(design))}>{wall > 0 ? t(flange ? "export.stlShellFlange" : "export.stlShell", { mm: wall }) : t("export.stlAir")}</Button>
             </div>
           </Card>
         </>}
@@ -419,6 +423,7 @@ export default function App() {
           </ViewPanel>}
         </div>
       </div>
+      <Toast notice={notice} onClose={() => setNotice(null)} />
     </div>
     </LanguageContext.Provider>
   );

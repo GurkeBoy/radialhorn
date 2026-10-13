@@ -189,11 +189,12 @@ describe("Klothoide – Grenzen", () => {
 });
 
 describe("DXF mit Klothoide", () => {
-  it("Klothoide als eigener SPLINE je Seite auf der Draufsicht-Wand, kein POLYLINE", () => {
+  it("Klothoide als eigener SPLINE je Seite auf eigenem Layer, kein POLYLINE", () => {
     const dxf = buildDXF({ s, rt: RT, hMouth: 200, curve: "exponential", hypexT: 0.5, fillet: null },
       { draufsicht: true, uebergang: true });
-    const splines = dxf.split("\n0\n").filter(e => e.startsWith("SPLINE") && e.includes("\n8\nDraufsicht_Wand\n"));
-    expect(splines).toHaveLength(4);   // Traktrix + Klothoide, je links/rechts
+    const splines = layer => dxf.split("\n0\n").filter(e => e.startsWith("SPLINE") && e.includes(`\n8\n${layer}\n`));
+    expect(splines("Draufsicht_Traktrix")).toHaveLength(2);    // je links/rechts
+    expect(splines("Draufsicht_Klothoide")).toHaveLength(2);
     expect(dxf).not.toMatch(/POLYLINE/);
   });
 });

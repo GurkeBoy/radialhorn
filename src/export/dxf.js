@@ -1,4 +1,4 @@
-// DXF-Export der Konstruktionskurven (Einheit mm, nur ENTITIES-Sektion).
+// DXF-Export der Konstruktionskurven (Einheit mm, nur ENTITIES-Sektion), immer alle Layer.
 //
 // Koordinaten: Draufsicht in der XY-Ebene (X = Achse z, Y = Breite x), Seitenprofil in
 // der XZ-Ebene (X = Achse z, Z = Höhe h). Kurven werden als exakte Entities geschrieben –
@@ -90,9 +90,9 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
     const trak = traktrixPoints(s, TRAKTRIX_FIT_POINTS);
     const klo = clothoidPoints(s, CLOTHOID_FIT_POINTS);
     mirrored(sign => {
-      if (trak.length > 1) out.push(dxfSpline(trak.map(([x, z]) => [z, sign * x]), "Draufsicht_Wand"));
-      if (klo.length > 1) out.push(dxfSpline(klo.map(([x, z]) => [z, sign * x]), "Draufsicht_Wand"));
-      out.push(dxfLine([s.zTrans, sign * s.xTrans], [s.zMouth, sign * s.xMouth], "Draufsicht_Wand"));
+      if (trak.length > 1) out.push(dxfSpline(trak.map(([x, z]) => [z, sign * x]), "Draufsicht_Traktrix"));
+      if (klo.length > 1) out.push(dxfSpline(klo.map(([x, z]) => [z, sign * x]), "Draufsicht_Klothoide"));
+      out.push(dxfLine([s.zTrans, sign * s.xTrans], [s.zMouth, sign * s.xMouth], "Draufsicht_Gerade"));
     });
   }
   if (opts.mundbogen) {
@@ -151,8 +151,11 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
   return dxfDocument(out);
 }
 
-export function exportDXF(design, opts) {
+/** Alle Kurven und Punkte (Layer); der Export schreibt immer alles, die Layer bleiben zum Ein-/Ausblenden im CAD. */
+export const ALL_LAYERS = { draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, uebergang: true, flansch: true };
+
+export function exportDXF(design) {
   const { s, rt } = design;
   const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(s.zApex - s.hatTipZ)}_T${(rt * 2).toFixed(0)}mm.dxf`;
-  downloadFile(buildDXF(design, opts), fname, "application/dxf");
+  return downloadFile(() => buildDXF(design, ALL_LAYERS), fname, "application/dxf");
 }

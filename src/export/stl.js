@@ -27,17 +27,19 @@ export function stlBinary(triangles, header = "Radialhorn") {
   return buf;
 }
 
-/** Alle Dreiecke des geschlossenen Körpers: Schale bei wall > 0 (ggf. mit Flansch), sonst Luftvolumen. */
-export function hornTriangles({ s, rt, profile, fillet, wall = 0, flange = null, edgeR = 0, morph = null }) {
-  const geometry = wall > 0
+/** Flächen des geschlossenen Körpers: Schale bei wall > 0 (ggf. mit Flansch), sonst Luftvolumen. */
+export function hornGeometry({ s, rt, profile, fillet, wall = 0, flange = null, edgeR = 0, morph = null }) {
+  return wall > 0
     ? buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR, morph)
     : buildHornGeometry(s, rt, profile, fillet, morph);
-  return geometry.surfaces.flatMap(triangulate);
 }
+
+/** Alle Dreiecke des geschlossenen Körpers (hornGeometry). */
+export const hornTriangles = design => hornGeometry(design).surfaces.flatMap(triangulate);
 
 export function exportSTL(design) {
   const { s, rt, wall = 0 } = design;
   const kind = wall > 0 ? `schale_${wall}mm${design.flange ? "_flansch" : ""}` : "luftvolumen";
   const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(s.zApex - s.hatTipZ)}_T${(rt * 2).toFixed(0)}mm_${kind}.stl`;
-  downloadFile(stlBinary(hornTriangles(design)), fname, "model/stl");
+  return downloadFile(() => stlBinary(hornTriangles(design)), fname, "model/stl");
 }

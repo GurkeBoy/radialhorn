@@ -237,15 +237,44 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
 </body></html>`;
 }
 
-/** Öffnet das Datenblatt zum Drucken; ohne Pop-up-Erlaubnis als HTML-Datei. */
-export function exportPDF(design, opts, lang = "de") {
+/**
+ * Öffnet das Datenblatt zum Drucken (im Druckdialog „Als PDF speichern“). Im Browser in einem
+ * eigenen Fenster; wo keins aufgeht – in der Desktop-App liefert window.open null – aus einem
+ * unsichtbaren Rahmen in der Seite selbst. Scheitert auch das: als HTML-Datei.
+ * @returns Ergebnis wie downloadFile, beim Druckdialog status "opened"
+ */
+export async function exportPDF(design, opts, lang = "de") {
   const html = buildDatasheet(design, opts, new Date(), lang);
   const win = window.open("", "_blank");
   if (win) {
     win.document.write(html);
     win.document.close();
     setTimeout(() => win.print(), 400);
-  } else {
-    downloadFile(html, `radialhorn_${design.s.openingAngle}deg_L${design.L}_${translate(lang, "pdf.fileName")}.html`, "text/html");
+    return { status: "opened", name: "" };
   }
+  if (await printInFrame(html)) return { status: "opened", name: "" };
+  const result = await downloadFile(html, `radialhorn_${design.s.openingAngle}deg_L${design.L}_${translate(lang, "pdf.fileName")}.html`, "text/html");
+  return { ...result, html: true };
+}
+
+/** Druckt html aus einem unsichtbaren Rahmen; false, wenn das nicht geht. */
+function printInFrame(html) {
+  return new Promise(resolve => {
+    try {
+      const frame = document.createElement("iframe");
+      frame.setAttribute("aria-hidden", "true");
+      // nicht display:none – sonst rendert und druckt der Rahmen nichts
+      Object.assign(frame.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0", opacity: "0" });
+      frame.onload = () => {
+        const w = frame.contentWindow;
+        if (!w) { frame.remove(); resolve(false); return; }
+        w.addEventListener("afterprint", () => setTimeout(() => frame.remove(), 0));
+        setTimeout(() => {   // Schriften und Bilder des Datenblatts kurz laden lassen
+          try { w.focus(); w.print(); resolve(true); } catch { frame.remove(); resolve(false); }
+        }, 400);
+      };
+      frame.srcdoc = html;
+      document.body.appendChild(frame);
+    } catch { resolve(false); }
+  });
 }
