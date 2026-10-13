@@ -2,6 +2,13 @@
 
 Prüfcode und Referenzdaten, die nicht Teil der App sind. Die Tests hier laufen mit `npm test` mit.
 
+## Wellenfront-Empfindlichkeit (`wellenfront/`)
+
+`npm run wellenfront` rechnet den Frequenzgang mehrerer Entwürfe mit verschieden stark gewölbter
+Wellenfront: Voigt-Bogen wie in der App, halb gewölbt und eben – jeweils im ganzen Horn und nur im Eingang
+(Traktrix/Klothoide). Es zeigt, wie stark das Ergebnis von dieser Annahme des Flächenmodells abhängt, die
+weder die App noch Hornresp prüfen können. Ergebnis und Einordnung: CLAUDE.md, „Wellenfront – Modellgrenzen“.
+
 ## Hornresp-Abgleich (`hornresp/`)
 
 [Hornresp](http://www.hornresp.net/) ist ein verbreitetes Simulationsprogramm für Horn- und

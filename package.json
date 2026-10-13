@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "hornresp": "node validation/hornresp/referenz.js",
-    "hornresp:import": "node validation/hornresp/import.js"
+    "hornresp:import": "node validation/hornresp/import.js",
+    "wellenfront": "node validation/wellenfront/empfindlichkeit.js"
   },
   "dependencies": {
     "react": "^19.1.0",
