@@ -137,6 +137,9 @@ export default {
   "export.stlShell": "↓ STL (3D, shell {mm} mm)",
   "export.stlShellFlange": "↓ STL (3D, shell {mm} mm + flange)",
   "export.stlAir": "↓ STL (3D, air volume)",
+  "export.stepAir": "↓ STEP (3D, air volume)",
+  "export.stepShell": "↓ STEP (3D, shell {mm} mm)",
+  "export.stepShellFlange": "↓ STEP (3D, shell {mm} mm + flange)",
   "reset.button": "⟲ Reset all settings",
   "reset.confirm": "Really reset? Click again",
 

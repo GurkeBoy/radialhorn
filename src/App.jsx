@@ -22,6 +22,7 @@ import { version as APP_VERSION } from "../package.json";
 import { exportDXF, ALL_LAYERS } from "./export/dxf.js";
 import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
+import { exportSTEP } from "./export/step.js";
 import { exportCSV } from "./export/csv.js";
 import { flangeLayout } from "./horn-mesh.js";
 import {
@@ -398,6 +399,7 @@ export default function App() {
               <Button primary onClick={() => reportSave(() => exportDXF(design))}>{t("export.dxf")}</Button>
               <Button onClick={() => reportSave(() => exportPDF(design, { ...ALL_LAYERS, bemassung: pdfDimensions }, lang))}>{t("export.pdf")}</Button>
               <Button onClick={() => reportSave(() => exportSTL(design))}>{wall > 0 ? t(flange ? "export.stlShellFlange" : "export.stlShell", { mm: wall }) : t("export.stlAir")}</Button>
+              <Button onClick={() => reportSave(() => exportSTEP(design))}>{wall > 0 ? t(flange ? "export.stepShellFlange" : "export.stepShell", { mm: wall }) : t("export.stepAir")}</Button>
             </div>
           </Card>
         </>}
