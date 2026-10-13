@@ -81,6 +81,24 @@ describe("gerundete Längskanten", () => {
     expect(min).toBeGreaterThan(T * 0.99);
   });
 
+  it("Radius = t: kein Eckstreifen, Rundung beginnt über der Innenwand und hat genau den Radius t", () => {
+    for (const flange of [null, flangeLayout(s, RT, profile, null, T, FLANGE, T)]) {
+      const geo = buildShellGeometry(s, RT, profile, null, T, flange, T);
+      expect(geo.surfaces.some(f => f.name.includes("corner"))).toBe(false);
+      const inner = grid(geo, "inner.linTop"), strip = grid(geo, "outer.edgeLinTopR");
+      const n = [Math.cos(s.alpha2), -Math.sin(s.alpha2)];
+      strip.forEach((row, k) => {
+        const [qx, qh, qz] = row[0], [wx, wh, wz] = row[row.length - 1];
+        // Deckelkante Q senkrecht über der Innenwand-Linie (gleicher Grundrisspunkt wie innen)
+        const wallPoint = inner[k].reduce((best, p) => Math.abs(p[0]) > Math.abs(best[0]) ? p : best);
+        expect(Math.hypot(qx - Math.abs(wallPoint[0]), qz - wallPoint[2])).toBeLessThan(1e-9);
+        // W = Q + t·n − t·oben: Radius genau t
+        expect(Math.hypot(wx - qx - T * n[0], wz - qz - T * n[1])).toBeLessThan(1e-9);
+        expect(qh - wh).toBeCloseTo(T, 9);
+      });
+    }
+  });
+
   it("Throat-Randzug bleibt in seiner Ebene, Stirnflächen am Mund bleiben eben", () => {
     const r = 12, flange = flangeLayout(s, RT, profile, null, T, FLANGE, r);
     for (const [fl, z] of [[null, 0], [flange, 10]]) {

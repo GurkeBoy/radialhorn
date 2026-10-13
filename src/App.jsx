@@ -13,7 +13,7 @@ import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
 import { Ansicht3D } from "./components/Ansicht3D.jsx";
 import { Frequenzgang } from "./components/Frequenzgang.jsx";
-import { usePersistentState, useThrottledValue, useUndo } from "./hooks.js";
+import { usePersistentState, useSettledValue, useThrottledValue, useUndo } from "./hooks.js";
 import { LANGUAGES, LanguageContext, detectLanguage, translate } from "./i18n.js";
 import { clearSettings } from "./settings.js";
 import { DESIGN_DEFAULTS as D, ProjectError, buildProject, parseProject, projectFileName } from "./project.js";
@@ -175,41 +175,41 @@ export default function App() {
   const p = useThrottledValue(live);
   const rt = p.throatDiam / 2;
 
-  // Grenzen und Lösung der Draufsicht. Die Grenzsuchen sind teuer (verschachtelte
-  // Bisektionen) und hängen nur von diesen Parametern ab.
-  const geometry = useMemo(() => {
-    const { openingAngle, L, Lt, dw, dh, showRaumecke, showWandstaerke, wandstaerke, clothoidOn, clothoidLength } = p;
-    const math = createHornMath(openingAngle, { clothoid: clothoidOn ? clothoidLength : 0 });
-    // Wandstärke vergrößert die Außenkante senkrecht zur Wand; ihre Projektion auf die
-    // 45°-Raumecke verkleinert den verfügbaren Platz
-    const extraBreite = showRaumecke && showWandstaerke
-      ? (Math.cos(math.ALPHA2) + Math.sin(math.ALPHA2)) * wandstaerke
-      : 0;
-
-    const LtMax         = math.maxLt(L, rt, dw, dh);
-    const LtMinRaumecke = showRaumecke ? math.minLtForRaumecke(L, rt, dw, dh, extraBreite) : null;
-    const LtMinClothoid = math.minLtForClothoid(rt);
-    const LtMin         = Math.max(LtMinRaumecke ?? 0, LtMinClothoid);
-    const LtClamped     = Math.min(Math.max(Lt, LtMin), LtMax);
-    const LMaxRaumecke  = showRaumecke ? math.maxLforRaumecke(LtClamped, rt, dw, dh, extraBreite) : null;
-    const LClamped      = LMaxRaumecke !== null && L > LMaxRaumecke ? LMaxRaumecke : L;
-
-    return {
-      s: math.solveHorn(LClamped, LtClamped, rt, dw, dh),
-      LtMin, LtMax, LtClamped, LClamped, LMaxRaumecke,
-      Lmin: math.minL(LtClamped, rt, dw, dh),
-      Lmax: LMaxRaumecke ?? L_MAX,
-      warnings: {
-        raumecke: showRaumecke && LMaxRaumecke !== null && L >= LMaxRaumecke - 1,
-        ltMax:    Lt > LtMax,
-        ltMin:    showRaumecke && LtMinRaumecke !== null && Lt <= LtMin + 0.5,
-        clothoid: LtMinClothoid > LtMax ? "zu lang" : Lt < LtMinClothoid ? "Lt" : null,
-      },
-      LtMinClothoid,
-    };
-  }, [p, rt]);
-
-  const { s, LtMin, LtMax, LtClamped, LClamped, LMaxRaumecke, Lmin, Lmax, warnings, LtMinClothoid } = geometry;
+  // Grenzen und Lösung der Draufsicht. Die Grenzsuchen sind teuer (verschachtelte Bisektionen);
+  // jede Stufe hängt nur an ihren eigenen Eingaben, damit ein Regler nur neu rechnen lässt, was er
+  // betrifft: Mundhöhe, Flansch, Simulation … lassen s unverändert (gleiches Objekt), und damit
+  // alles Nachgelagerte samt 3D-Netz. Die Winkel-Instanz bleibt erhalten – ihr Zwischenspeicher
+  // für den Übergang (mit Klothoide teuer) überlebt so die Reglerschritte.
+  const { openingAngle: pAngle, L: pL, Lt: pLt, dw: pDw, dh: pDh, showRaumecke: pRaum, showWandstaerke: pWand,
+    wandstaerke: pT, clothoidOn: pKlo, clothoidLength: pKloLen } = p;
+  const math = useMemo(() => createHornMath(pAngle, { clothoid: pKlo ? pKloLen : 0 }), [pAngle, pKlo, pKloLen]);
+  // Wandstärke vergrößert die Außenkante senkrecht zur Wand; ihre Projektion auf die
+  // 45°-Raumecke verkleinert den verfügbaren Platz
+  const extraBreite = pRaum && pWand ? (Math.cos(math.ALPHA2) + Math.sin(math.ALPHA2)) * pT : 0;
+  // Grenzen für Lₜ: hängen an L, nicht an Lₜ
+  const ltLimits = useMemo(() => ({
+    LtMax:         math.maxLt(pL, rt, pDw, pDh),
+    LtMinRaumecke: pRaum ? math.minLtForRaumecke(pL, rt, pDw, pDh, extraBreite) : null,
+  }), [math, pL, rt, pDw, pDh, pRaum, extraBreite]);
+  const { LtMax, LtMinRaumecke } = ltLimits;
+  const LtMinClothoid = useMemo(() => math.minLtForClothoid(rt), [math, rt]);   // nur Throat und Klothoide
+  const LtMin     = Math.max(LtMinRaumecke ?? 0, LtMinClothoid);
+  const LtClamped = Math.min(Math.max(pLt, LtMin), LtMax);
+  // Grenzen für L: hängen am begrenzten Lₜ, nicht an L
+  const lLimits = useMemo(() => ({
+    LMaxRaumecke: pRaum ? math.maxLforRaumecke(LtClamped, rt, pDw, pDh, extraBreite) : null,
+    Lmin:         math.minL(LtClamped, rt, pDw, pDh),
+  }), [math, LtClamped, rt, pDw, pDh, pRaum, extraBreite]);
+  const { LMaxRaumecke, Lmin } = lLimits;
+  const LClamped = LMaxRaumecke !== null && pL > LMaxRaumecke ? LMaxRaumecke : pL;
+  const Lmax = LMaxRaumecke ?? L_MAX;
+  const s = useMemo(() => math.solveHorn(LClamped, LtClamped, rt, pDw, pDh), [math, LClamped, LtClamped, rt, pDw, pDh]);
+  const warnings = {
+    raumecke: pRaum && LMaxRaumecke !== null && pL >= LMaxRaumecke - 1,
+    ltMax:    pLt > LtMax,
+    ltMin:    pRaum && LtMinRaumecke !== null && pLt <= LtMin + 0.5,
+    clothoid: LtMinClothoid > LtMax ? "zu lang" : pLt < LtMinClothoid ? "Lt" : null,
+  };
 
   const fillet = useMemo(
     () => p.filletOn ? computeFillet(s, rt, p.hMouth, p.curve, p.hypexT, p.filletR) : null,
@@ -238,17 +238,24 @@ export default function App() {
   );
   // 1D-Simulation (Webster, Transfermatrizen) – nur bei eingeschaltetem Frequenzgang. S(x) hängt
   // nur an der Geometrie: Treiber, Abstrahlung und Temperatur rechnen nur die Kette neu.
-  const areaCurveSI = useMemo(() => s && p.simOn ? areaCurve(s, rt, profile, GEOMETRY_STEP_MM, morph) : null, [s, rt, profile, morph, p.simOn]);
+  // Rechnet mit der beruhigten Geometrie (useSettledValue): beim Ziehen bleibt die Kurve stehen und
+  // folgt 300 ms nach dem Loslassen – spart je Reglerschritt ≈ 11 ms im Haupt-Thread (doppelt im
+  // Entwicklungsmodus)
+  const simGeometry = useSettledValue(useMemo(() => ({ s, rt, profile, morph }), [s, rt, profile, morph]));
+  const areaCurveSI = useMemo(() => {
+    const { s, rt, profile, morph } = simGeometry;
+    return s && p.simOn ? areaCurve(s, rt, profile, GEOMETRY_STEP_MM, morph) : null;
+  }, [simGeometry, p.simOn]);
   const sim = useMemo(() => {
     if (!areaCurveSI) return null;
     const air = airAt(p.simTemp), driverSi = driverSI(p.driver, air.rho);
     const delay = hornDelay(areaCurveSI, air, driverSi);
     return {
       result: simulate({ curve: areaCurveSI, air, driver: driverSi, mouth: p.mouth, freqs: SIM_FREQS }),
-      fLimit: transverseLimit(2 * rt / 1000, air.c),
+      fLimit: transverseLimit(2 * simGeometry.rt / 1000, air.c),
       delay, delayPath: delay * air.c,
     };
-  }, [areaCurveSI, rt, p.simTemp, p.mouth, p.driver]);
+  }, [areaCurveSI, simGeometry.rt, p.simTemp, p.mouth, p.driver]);
   // Angezeigtes (und als CSV exportiertes) Ergebnis: Phase wahlweise ohne die Laufzeit durch Kammer und Horn
   const simResult = useMemo(() => sim && (simNoDelay
     ? { ...sim.result, phase: phaseWithoutDelay(sim.result.f, sim.result.phase, sim.delay) }

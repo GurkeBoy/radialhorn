@@ -2,7 +2,7 @@
  * Flansch am Throat: geschlossen mit der Schale, Bohrungen, Gültigkeit.
  */
 import { describe, it, expect } from "vitest";
-import { solveHorn, makeProfile, createHornMath } from "./horn-math.js";
+import { solveHorn, makeProfile, createHornMath, throatMorph } from "./horn-math.js";
 import { buildShellGeometry, flangeLayout, boltHoleCenters, triangulate } from "./horn-mesh.js";
 
 const RT = 25.4, T = 15;
@@ -46,7 +46,7 @@ describe("Flansch", () => {
     for (const f of [flange(), flange({ holes: { count: 0, circle: 150, diameter: 6.5, angle: 0 } }), flange({ thickness: 25 })]) {
       expect(edgeCheck(tris(buildShellGeometry(s, RT, profile, null, T, f)))).toEqual({ open: 0, flipped: 0 });
     }
-  });
+  }, 30000);   // 3 vollständige Schalen – im Gesamtlauf unter Last über 5 s
 
   it("auch mit Klothoide und ohne Traktrix geschlossen", () => {
     const sk = createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 120, 100);
@@ -103,4 +103,18 @@ describe("Flansch", () => {
     expect(auto(250).diameter).toBe(250);
     expect(auto(10, 0).diameter).toBe(auto(10, 0).minDiameter);
   });
+
+  it("Mindest-Ø aus grob gerechnetem Außenkörper = Umkreis des fein gerechneten Randzugs am Throat", () => {
+    // flangeLayout rechnet den Außenkörper in Längsrichtung grob (nur Zeile 0 wird gebraucht)
+    for (const [t, edgeR, round] of [[T, 0, false], [12, 12, false], [12, 6, false], [12, 12, true], [12, 0, true]]) {
+      const morph = round ? throatMorph(s, RT) : null;
+      const layout = flangeLayout(s, RT, profile, null, t, flange({ diameter: null, fallback: 120 }), edgeR, morph);
+      const geo = buildShellGeometry(s, RT, profile, null, t, layout, edgeR, morph);
+      let max = 0;
+      for (const f of geo.surfaces.filter(x => x.name.startsWith("outer.") && x.grid)) {
+        for (const row of f.grid) for (const [x, h, z] of row) if (Math.abs(z - layout.thickness) < 1e-9) max = Math.max(max, Math.hypot(x, h));
+      }
+      expect(layout.minDiameter).toBeCloseTo(2 * (max + 1) / Math.cos(Math.PI / 96), 9);
+    }
+  }, 30000);
 });

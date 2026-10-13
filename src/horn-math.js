@@ -106,6 +106,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
   const T_TRANS   = Math.asinh(1 / Math.tan(ALPHA2));    // Traktrix-Parameter, bei dem die Tangente ALPHA2 erreicht
   const PHI_TOTAL = openingAngle * Math.PI / 180;
   const TAN       = Math.tan(ALPHA2);
+  const ZN_TRANS  = zN(T_TRANS);                         // fest je Winkel; solveR0 läuft in den Grenzsuchen hundertfach
 
   /** Traktrix-Radius r0, für den der Eingang von rt bis zum Übergang genau Lt lang ist (Bisektion). */
   function solveR0(Lt, rt) {
@@ -113,7 +114,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
       if (r0 <= rt) return -Lt;
       const tTh = Math.acosh(r0 / rt);
       if (tTh <= T_TRANS) return -Lt;
-      return r0 * (zN(tTh) - zN(T_TRANS)) - Lt;
+      return r0 * (zN(tTh) - ZN_TRANS) - Lt;
     };
     let hi = rt * 2;
     for (let i = 0; i < 80 && f(hi) < 0; i++) hi *= 2;
@@ -229,6 +230,11 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     };
   }
 
+  // Grenzsuchen (Reglergrenzen) halbieren bis auf LIMIT_TOL statt bis zur Fließkomma-Auflösung:
+  // ≈ 30 statt ≈ 52 Schritte, verschachtelt (minLtForRaumecke → maxLforRaumecke) ≈ ⅓ der Zeit.
+  // Die Seite bleibt erhalten (maxLt lösbar, minLtForRaumecke passend); solveHorn bleibt exakt.
+  const LIMIT_TOL = 1e-6;   // [mm]
+
   /** Kleinste Gesamtlänge, bei der der Mundbogen gerade hinter dem Übergang liegt (+10 mm Reserve). */
   function minL(Lt, rt, dw, dh) {
     const tr = transition(Lt, rt);
@@ -245,7 +251,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     if (!solveHorn(L, 0, rt, dw, dh)) return 0;
     const ok = lt => transition(lt, rt) === null ? clothoid > 0 : !!solveHorn(L, lt, rt, dw, dh);
     let lo = 0, hi = L;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 60 && hi - lo > LIMIT_TOL; i++) {
       const mid = (lo + hi) / 2;
       ok(mid) ? (lo = mid) : (hi = mid);
     }
@@ -257,7 +263,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     if (!(clothoid > 0)) return 0;
     let lo = LT_MIN, hi = clothoid;
     while (transition(hi, rt) === null && hi < 1e5) hi *= 2;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 60 && hi - lo > LIMIT_TOL; i++) {
       const mid = (lo + hi) / 2;
       transition(mid, rt) ? (hi = mid) : (lo = mid);
     }
@@ -282,7 +288,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
       if (sv && sv.Ls >= LsMax) break;
       hi *= 2;
     }
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 80 && hi - lo > LIMIT_TOL; i++) {
       const mid = (lo + hi) / 2;
       if (mid <= lo || mid >= hi) break;
       const sv  = solveHorn(mid, Lt, rt, dw, dh);
@@ -300,7 +306,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     if (fits(0)) return 0;
     let lo = 0, hi = L;
     if (!fits(hi)) return null;
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 80 && hi - lo > LIMIT_TOL; i++) {
       const m = (lo + hi) / 2;
       if (m <= lo || m >= hi) break;
       fits(m) ? (hi = m) : (lo = m);
@@ -490,13 +496,17 @@ function wavefrontAt(s, zWall, clothoid) {
   const zTrakEnd = clothoid ? clothoid[0].z : s.zTrans;
   const sTrakEnd = hasTraktrix(s) ? s.r0 * Math.log(Math.cosh(s.tTh) / Math.cosh(s.tEnd)) : 0;
   if (hasTraktrix(s) && zWall <= zTrakEnd) {
+    // Bisektion (t fällt vom Throat zum Traktrix-Ende: lo > hi); zN(tTh) einmal vorab, Abbruch bei
+    // erreichter Fließkomma-Auflösung (ergebnisgleich, wird für den runden Throat sehr oft aufgerufen)
+    const z0 = zN(s.tTh);
     let lo = s.tTh, hi = s.tEnd;
     for (let i = 0; i < 60; i++) {
       const tm = (lo + hi) / 2;
-      s.r0 * (zN(s.tTh) - zN(tm)) < zWall ? (lo = tm) : (hi = tm);
+      if (tm === lo || tm === hi) break;
+      s.r0 * (z0 - zN(tm)) < zWall ? (lo = tm) : (hi = tm);
     }
     const t = (lo + hi) / 2;
-    const zAxis = s.r0 * (zN(s.tTh) - t + 1);
+    const zAxis = s.r0 * (z0 - t + 1);
     return {
       zCenter: zAxis - s.r0, radius: s.r0, halfAngle: Math.atan(1 / Math.sinh(t)), zAxis, part: "traktrix",
       xWall: s.r0 * xN(t), sWall: s.r0 * Math.log(Math.cosh(s.tTh) / Math.cosh(t)),
@@ -523,9 +533,18 @@ function wavefrontAt(s, zWall, clothoid) {
   };
 }
 
+// Dichte Klothoiden-Tabelle je Klothoide nur einmal: wallArcLength wird für den runden Throat
+// tausendfach mit derselben Lösung gerufen (vorher jedes Mal neu, ≈ 3 ms je Reglerschritt)
+const denseClothoids = new WeakMap();
+const denseClothoid = s => {
+  if (!hasClothoid(s)) return null;
+  if (!denseClothoids.has(s.clothoid)) denseClothoids.set(s.clothoid, clothoidTable(s.clothoid, 400));
+  return denseClothoids.get(s.clothoid);
+};
+
 /** Bogenlänge der Wand vom Throat bis zum Wandpunkt bei zWall [mm]. */
 export function wallArcLength(s, zWall) {
-  return wavefrontAt(s, zWall, hasClothoid(s) ? clothoidTable(s.clothoid, 400) : null).sWall;
+  return wavefrontAt(s, zWall, denseClothoid(s)).sWall;
 }
 
 /**
@@ -533,7 +552,7 @@ export function wallArcLength(s, zWall) {
  * hWall an der Wand nach der Höhenregel des 3D-Körpers.
  */
 export function wallPoint(s, profile, zWall) {
-  const clothoid = hasClothoid(s) ? clothoidTable(s.clothoid, 400) : null;
+  const clothoid = denseClothoid(s);
   const { xWall, sWall } = wavefrontAt(s, zWall, clothoid);
   return { xWall, sWall, hWall: profile(s.zFocus + focusRadius(s, xWall, zWall)) };
 }
@@ -619,7 +638,7 @@ const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
  *   aufsteigend in z; zWall = zugehöriger Wandpunkt, cornerR = Eckradius dort
  */
 export function crossSection(s, profile, n = 100, zWallList = null, morph = null) {
-  const clothoid = hasClothoid(s) ? clothoidTable(s.clothoid, 400) : null;
+  const clothoid = denseClothoid(s);
   const zWalls = zWallList ? [...zWallList] : Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
   if (hasTraktrix(s)) zWalls.push(s.zTrans);
   if (clothoid) zWalls.push(clothoid[0].z);

@@ -42,38 +42,41 @@ function hornGroup(sections) {
   return group;
 }
 
+const FINE_DELAY = 300;   // ms ohne neue Eingabe, bis das feine Netz gerechnet wird
+
 /**
- * Netz im Web Worker bauen lassen. Es läuft höchstens eine Berechnung; Eingaben, die währenddessen
- * eintreffen, ersetzen einander, und nur die jeweils neueste wird danach gerechnet. Liefert die
- * Sektionen der zuletzt fertigen Berechnung (null ohne gültige Eingabe).
+ * Netz im Web Worker bauen lassen, in zwei Stufen: bei jeder neuen Eingabe sofort ein Entwurf
+ * (grobes Netz, flach schattiert – beim Ziehen schnell), nach FINE_DELAY ms Ruhe das feine,
+ * geglättete Netz. Es läuft höchstens eine Berechnung; Aufträge, die währenddessen eintreffen,
+ * ersetzen einander, nur der jeweils neueste wird danach gerechnet. Ein Ergebnis wird nur
+ * gezeigt, wenn es zur aktuellen Eingabe gehört. Liefert die Sektionen (null ohne Eingabe).
  */
 function useMeshWorker(input) {
   const [sections, setSections] = useState(null);
   const state = useRef(null);
   useEffect(() => {
     const worker = new Worker(new URL("../mesh.worker.js", import.meta.url), { type: "module" });
-    const st = { worker, busy: false, pending: undefined, wanted: null };
-    st.send = inp => { st.busy = true; worker.postMessage({ input: inp }); };
+    const st = { worker, busy: null, pending: null, wanted: null, timer: 0 };
+    st.send = job => { st.busy = job; worker.postMessage({ input: { ...job.input, quality: job.quality } }); };
+    st.request = job => { if (st.busy) st.pending = job; else st.send(job); };
     worker.onmessage = ({ data }) => {
-      st.busy = false;
+      const done = st.busy;
+      st.busy = null;
       if (data.error) console.error("3D-Netz:", data.error);
-      if (st.pending !== undefined) {                 // inzwischen neuere Eingabe: die zuerst rechnen
-        const next = st.pending;
-        st.pending = undefined;
-        if (next) { st.send(next); return; }
-      }
-      setSections(st.wanted ? data.sections ?? null : null);
+      if (st.pending) { const next = st.pending; st.pending = null; st.send(next); }
+      if (done.input === st.wanted && data.sections) setSections(data.sections);
     };
     state.current = st;
-    return () => { worker.terminate(); state.current = null; };
+    return () => { clearTimeout(st.timer); worker.terminate(); state.current = null; };
   }, []);
   useEffect(() => {
     const st = state.current;
     if (!st) return;
     st.wanted = input;
-    if (!input) { if (st.busy) st.pending = null; return; }
-    if (st.busy) st.pending = input;
-    else st.send(input);
+    clearTimeout(st.timer);
+    if (!input) { st.pending = null; return; }
+    st.request({ input, quality: "draft" });
+    st.timer = setTimeout(() => st.request({ input, quality: "fine" }), FINE_DELAY);
   }, [input]);
   return input ? sections : null;
 }

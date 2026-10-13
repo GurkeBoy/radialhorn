@@ -95,6 +95,20 @@ export function useThrottledValue(value, gap = 30) {
   return shown;
 }
 
+/**
+ * Wert erst weitergeben, wenn er delay ms lang unverändert war (der erste sofort): für Teures,
+ * das beim Ziehen nicht live mitlaufen muss (Frequenzgang) – es folgt nach dem Loslassen.
+ */
+export function useSettledValue(value, delay = 300) {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    if (settled === value) return;
+    const timer = setTimeout(() => setSettled(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, settled, delay]);
+  return settled;
+}
+
 /** useState, dessen Wert gespeichert wird und beim nächsten Start wieder da ist (settings.js). */
 export function usePersistentState(key, initial) {
   const [value, setValue] = useState(() => readSetting(key, initial));

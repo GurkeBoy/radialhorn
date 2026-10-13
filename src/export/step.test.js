@@ -94,6 +94,12 @@ describe("buildBrep", () => {
     expect(faces.some(f => f.name.startsWith("roundLin"))).toBe(false);
   });
 
+  it("Kantenradius = t: keine Splitterflächen über den Seitenwänden", () => {
+    const { faces } = buildBrep(hornPatches(design(std(), "exponential", 0, 12, { edgeR: 12 })));
+    expect(faces.some(f => f.name.includes("corner"))).toBe(false);
+    expect(faces.filter(f => f.name.startsWith("outer.edge"))).toHaveLength(8);
+  });
+
   it("gerundete Kanten: Streifen je Sektion und Seite, nach außen gewölbt", () => {
     const { faces } = buildBrep(hornPatches(CASES["Schale, Kanten r = 6"]));
     const strips = faces.filter(f => f.name.startsWith("outer.edge"));
