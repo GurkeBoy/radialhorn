@@ -24,28 +24,41 @@ export function meshBuffers({ s, rt, hMouth, curve, hypexT, fillet, wall, flange
   for (const section of sections) {
     const surfaces = geometry.surfaces.filter(f => f.section === section);
     if (!surfaces.length) continue;
-    const tris = surfaces.flatMap(triangulate);
-    const positions = new Float32Array(tris.length * 9);
-    tris.forEach((tri, k) => tri.forEach((p, m) => positions.set(p, k * 9 + m * 3)));
-    const normals = draft ? flatNormals(tris) : smoothNormals(tris);
-    const segs = surfaces.flatMap(gridLines);
-    const lines = new Float32Array(segs.length * 6);
-    segs.forEach(([p, q], k) => lines.set([p[0], p[1], p[2], q[0], q[1], q[2]], k * 6));
+    const positions = pack(surfaces.flatMap(triangulate));
+    const normals = draft ? flatNormals(positions) : smoothNormals(positions);
+    const lines = pack(surfaces.flatMap(gridLines));
     out.push({ section, positions, normals, lines });
   }
   return { sections: out, buffers: out.flatMap(x => [x.positions.buffer, x.normals.buffer, x.lines.buffer]) };
 }
 
-/** Normale je Dreieck (flach), für den Entwurf. */
-export function flatNormals(tris) {
-  const normals = new Float32Array(tris.length * 9);
-  tris.forEach(([a, b, c], k) => {
-    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-    const len = Math.hypot(nx, ny, nz) || 1;
-    for (let m = 0; m < 3; m++) normals.set([nx / len, ny / len, nz / len], k * 9 + m * 3);
-  });
+/** Dreiecke [[a, b, c], …] oder Strecken [[p, q], …] als Float32Array, je Punkt 3 Werte. */
+export function pack(items) {
+  const out = new Float32Array(items.length * (items[0]?.length ?? 0) * 3);
+  let o = 0;
+  for (const item of items) for (const p of item) { out[o++] = p[0]; out[o++] = p[1]; out[o++] = p[2]; }
+  return out;
+}
+
+/**
+ * Normale n = (b − a) × (c − a) des Dreiecks k (Puffer positions, je Dreieck 9 Werte), nicht
+ * normiert, nach out[o…o+2].
+ */
+function cross(positions, k, out, o) {
+  const i = k * 9;
+  const ux = positions[i + 3] - positions[i], uy = positions[i + 4] - positions[i + 1], uz = positions[i + 5] - positions[i + 2];
+  const vx = positions[i + 6] - positions[i], vy = positions[i + 7] - positions[i + 1], vz = positions[i + 8] - positions[i + 2];
+  out[o] = uy * vz - uz * vy; out[o + 1] = uz * vx - ux * vz; out[o + 2] = ux * vy - uy * vx;
+}
+
+/** Normale je Dreieck (flach), für den Entwurf. positions: je Dreieck 9 Werte (pack). */
+export function flatNormals(positions) {
+  const n = positions.length / 9, normals = new Float32Array(n * 9), c = new Float64Array(3);
+  for (let k = 0; k < n; k++) {
+    cross(positions, k, c, 0);
+    const len = Math.hypot(c[0], c[1], c[2]) || 1;
+    for (let m = 0; m < 9; m += 3) { normals[k * 9 + m] = c[0] / len; normals[k * 9 + m + 1] = c[1] / len; normals[k * 9 + m + 2] = c[2] / len; }
+  }
   return normals;
 }
 
@@ -57,19 +70,17 @@ const CREASE = Math.cos(30 * Math.PI / 180);   // stärker geneigte Nachbardreie
  * Facetten gekrümmter Flächen (Rundungen in 16 Stücken à 5,6°, Gitterzeilen) erscheinen so glatt,
  * echte Kanten (Deckel ↔ Seitenwand, Throat-Ring, Stirnflächen) bleiben scharf. Nur Darstellung –
  * die Geometrie bleibt dieselbe.
+ * @param positions  je Dreieck 9 Werte (pack)
  * @returns {Float32Array}  je Dreieck 9 Werte
  */
-export function smoothNormals(tris) {
-  const n = tris.length, corners = n * 3;
+export function smoothNormals(positions) {
+  const n = positions.length / 9, corners = n * 3;
   const area = new Float64Array(n * 3), unit = new Float64Array(n * 3);   // 2·Fläche·Normale, Einheitsnormale
-  tris.forEach(([a, b, c], k) => {
-    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-    const len = Math.hypot(nx, ny, nz) || 1;
-    area[k * 3] = nx; area[k * 3 + 1] = ny; area[k * 3 + 2] = nz;
-    unit[k * 3] = nx / len; unit[k * 3 + 1] = ny / len; unit[k * 3 + 2] = nz / len;
-  });
+  for (let k = 0; k < n; k++) {
+    cross(positions, k, area, k * 3);
+    const len = Math.hypot(area[k * 3], area[k * 3 + 1], area[k * 3 + 2]) || 1;
+    for (let i = 0; i < 3; i++) unit[k * 3 + i] = area[k * 3 + i] / len;
+  }
 
   // Punkt-Nummer je Ecke: gleiche Koordinaten (auf 1e-4 mm) = gleicher Punkt. Hashtabelle mit
   // offener Adressierung auf ganzzahligen Koordinaten (Text-Schlüssel kosteten ≈ 0,4 s)
@@ -78,15 +89,12 @@ export function smoothNormals(tris) {
   const qx = new Int32Array(corners), qy = new Int32Array(corners), qz = new Int32Array(corners);
   const vertexOf = new Int32Array(corners);
   let vertices = 0;
-  for (let k = 0; k < n; k++) {
-    for (let m = 0; m < 3; m++) {
-      const p = tris[k][m];
-      const x = Math.round(p[0] * 1e4), y = Math.round(p[1] * 1e4), z = Math.round(p[2] * 1e4);
-      let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & mask;
-      while (slot[h] >= 0 && !(qx[slot[h]] === x && qy[slot[h]] === y && qz[slot[h]] === z)) h = (h + 1) & mask;
-      if (slot[h] < 0) { slot[h] = vertices; qx[vertices] = x; qy[vertices] = y; qz[vertices] = z; vertices++; }
-      vertexOf[k * 3 + m] = slot[h];
-    }
+  for (let c = 0; c < corners; c++) {
+    const x = Math.round(positions[c * 3] * 1e4), y = Math.round(positions[c * 3 + 1] * 1e4), z = Math.round(positions[c * 3 + 2] * 1e4);
+    let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & mask;
+    while (slot[h] >= 0 && !(qx[slot[h]] === x && qy[slot[h]] === y && qz[slot[h]] === z)) h = (h + 1) & mask;
+    if (slot[h] < 0) { slot[h] = vertices; qx[vertices] = x; qy[vertices] = y; qz[vertices] = z; vertices++; }
+    vertexOf[c] = slot[h];
   }
   // Dreiecke je Punkt als kompakte Liste (Anfang je Punkt in start)
   const start = new Int32Array(vertices + 1);

@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet } from "./horn-math.js";
 import { buildShellGeometry, flangeLayout, triangulate, gridLines } from "./horn-mesh.js";
-import { meshBuffers, smoothNormals } from "./mesh-buffers.js";
+import { meshBuffers, pack, smoothNormals } from "./mesh-buffers.js";
 
 const RT = 25.4;
 const s = createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 182, 90);
@@ -58,7 +58,7 @@ describe("meshBuffers", () => {
   it("Rundungen glatt: an einem Punkt eines Kantenstreifens eine gemeinsame Normale", () => {
     const geo = buildShellGeometry(s, RT, profile, fillet, 20, flange, 20);
     const strip = geo.surfaces.find(f => f.name === "outer.edgeLinTopR");
-    const tris = triangulate(strip), normals = smoothNormals(tris);
+    const tris = triangulate(strip), normals = smoothNormals(pack(tris));
     const g = strip.grid, q = g[g.length >> 1][g[0].length >> 1];   // innerer Gitterpunkt
     const at = [];
     tris.forEach((tri, k) => tri.forEach((p, m) => { if (p === q) at.push([...normals.subarray(k * 9 + m * 3, k * 9 + m * 3 + 3)]); }));
@@ -93,7 +93,7 @@ describe("smoothNormals", () => {
   const at = (normals, k, m) => [...normals.subarray(k * 9 + m * 3, k * 9 + m * 3 + 3)];
 
   it("flacher Knick (10°): an der gemeinsamen Kante eine gemittelte Normale", () => {
-    const n = smoothNormals(strip(10));
+    const n = smoothNormals(pack(strip(10)));
     at(n, 0, 1).forEach((v, i) => expect(v).toBeCloseTo(at(n, 1, 0)[i], 9));
     expect(at(n, 0, 1)[0]).toBeLessThan(0);                    // zwischen beiden Flächen geneigt
     expect(at(n, 0, 1)[0]).toBeGreaterThan(-Math.sin(10 * Math.PI / 180));
@@ -101,7 +101,7 @@ describe("smoothNormals", () => {
   });
 
   it("scharfe Kante (90°): jede Fläche behält ihre Normale", () => {
-    const n = smoothNormals(strip(90));
+    const n = smoothNormals(pack(strip(90)));
     at(n, 0, 1).forEach((v, i) => expect(v).toBeCloseTo([0, 0, 1][i], 9));
     at(n, 1, 0).forEach((v, i) => expect(v).toBeCloseTo([-1, 0, 0][i], 9));
   });

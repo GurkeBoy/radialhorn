@@ -13,7 +13,7 @@ import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
 import { Ansicht3D } from "./components/Ansicht3D.jsx";
 import { Frequenzgang } from "./components/Frequenzgang.jsx";
-import { useGeometry, usePersistentState, useSettledValue, useThrottledValue, useUndo } from "./hooks.js";
+import { useGeometry, usePersistentState, useSimulation, useThrottledValue, useUndo } from "./hooks.js";
 import { GEOMETRY_KEYS } from "./geometry.js";
 import { LANGUAGES, LanguageContext, detectLanguage, translate } from "./i18n.js";
 import { clearSettings } from "./settings.js";
@@ -25,9 +25,7 @@ import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
 import { exportSTEP } from "./export/step.js";
 import { exportCSV } from "./export/csv.js";
-import {
-  airAt, logFrequencies, transverseLimit, areaCurve, GEOMETRY_STEP_MM, simulate, driverSI, PLACEHOLDER_DRIVER, hornDelay, phaseWithoutDelay,
-} from "./simulation.js";
+import { logFrequencies, PLACEHOLDER_DRIVER, phaseWithoutDelay } from "./simulation.js";
 
 // Gängige Austrittsdurchmesser von Kompressionstreibern; 1,4" wird mit 35,5 mm angegeben (Herstellerangabe)
 const THROAT_SIZES = [
@@ -194,26 +192,16 @@ export default function App() {
   } = geo.values;
   // Profil als Funktion (nicht übertragbar): hier aus s und Verrundung, billig
   const profile = useMemo(() => s && makeProfile(s, rt, g.hMouth, g.curve, g.hypexT, fillet), [s, rt, g.hMouth, g.curve, g.hypexT, fillet]);
-  // 1D-Simulation (Webster, Transfermatrizen) – nur bei eingeschaltetem Frequenzgang. S(x) hängt
-  // nur an der Geometrie: Treiber, Abstrahlung und Temperatur rechnen nur die Kette neu.
-  // Rechnet mit der beruhigten Geometrie (useSettledValue): beim Ziehen bleibt die Kurve stehen und
-  // folgt 300 ms nach dem Loslassen – spart je Reglerschritt ≈ 11 ms im Haupt-Thread (doppelt im
-  // Entwicklungsmodus)
-  const simGeometry = useSettledValue(useMemo(() => ({ s, rt, profile, morph }), [s, rt, profile, morph]));
-  const areaCurveSI = useMemo(() => {
-    const { s, rt, profile, morph } = simGeometry;
-    return s && p.simOn ? areaCurve(s, rt, profile, GEOMETRY_STEP_MM, morph) : null;
-  }, [simGeometry, p.simOn]);
-  const sim = useMemo(() => {
-    if (!areaCurveSI) return null;
-    const air = airAt(p.simTemp), driverSi = driverSI(p.driver, air.rho);
-    const delay = hornDelay(areaCurveSI, air, driverSi);
-    return {
-      result: simulate({ curve: areaCurveSI, air, driver: driverSi, mouth: p.mouth, freqs: SIM_FREQS }),
-      fLimit: transverseLimit(2 * simGeometry.rt / 1000, air.c),
-      delay, delayPath: delay * air.c,
-    };
-  }, [areaCurveSI, simGeometry.rt, p.simTemp, p.mouth, p.driver]);
+  // 1D-Simulation (Webster, Transfermatrizen) – nur bei eingeschaltetem Frequenzgang, im Web Worker
+  // (useSimulation): beim Ziehen folgt die Kurve laufend, der Haupt-Thread zeichnet nur. S(x) hängt
+  // nur an der Geometrie (geoKey aus den Versionen der Stufen): Treiber, Abstrahlung und Temperatur
+  // rechnen dort nur die Kette neu.
+  const simGeoKey = JSON.stringify([geo.versions.s, geo.versions.fillet, geo.versions.morph, rt, g.hMouth, g.curve, g.hypexT]);
+  const simInput = useMemo(() => s && p.simOn ? {
+    geoKey: simGeoKey, geometry: { s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph },
+    temp: p.simTemp, mouth: p.mouth, driver: p.driver, freqs: SIM_FREQS,
+  } : null, [simGeoKey, p.simOn, p.simTemp, p.mouth, p.driver]);   // eslint-disable-line react-hooks/exhaustive-deps -- Geometrie über simGeoKey
+  const sim = useSimulation(simInput);
   // Angezeigtes (und als CSV exportiertes) Ergebnis: Phase wahlweise ohne die Laufzeit durch Kammer und Horn
   const simResult = useMemo(() => sim && (simNoDelay
     ? { ...sim.result, phase: phaseWithoutDelay(sim.result.f, sim.result.phase, sim.delay) }

@@ -97,20 +97,6 @@ export function useThrottledValue(value, gap = 30) {
 }
 
 /**
- * Wert erst weitergeben, wenn er delay ms lang unverändert war (der erste sofort): für Teures,
- * das beim Ziehen nicht live mitlaufen muss (Frequenzgang) – es folgt nach dem Loslassen.
- */
-export function useSettledValue(value, delay = 300) {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    if (settled === value) return;
-    const timer = setTimeout(() => setSettled(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, settled, delay]);
-  return settled;
-}
-
-/**
  * Abgeleitete Geometrie zu den Reglerwerten params, gerechnet im Web Worker (geometry.worker.js).
  * Der erste Stand wird direkt gerechnet (kein leerer Start). Es läuft höchstens eine Berechnung;
  * Werte, die währenddessen kommen, ersetzen einander, nur die neuesten werden danach gerechnet.
@@ -140,6 +126,39 @@ export function useGeometry(params) {
     else st.send(params);
   }, [params]);   // eslint-disable-line react-hooks/exhaustive-deps -- nur bei neuen Werten senden
   return state;
+}
+
+/**
+ * Frequenzgang zu input (createSimulationEngine), gerechnet im Web Worker (simulation.worker.js) –
+ * beim Ziehen folgt die Kurve laufend, ohne den Haupt-Thread zu belasten. Es läuft höchstens eine
+ * Berechnung; Eingaben, die währenddessen kommen, ersetzen einander, nur die neueste wird danach
+ * gerechnet. Liefert das zuletzt fertige Ergebnis, null ohne Eingabe (und bis das erste da ist).
+ */
+export function useSimulation(input) {
+  const [output, setOutput] = useState(null);
+  const ref = useRef(null);
+  useEffect(() => {
+    const worker = new Worker(new URL("./simulation.worker.js", import.meta.url), { type: "module" });
+    const st = { busy: false, pending: null, wanted: null };
+    st.send = inp => { st.busy = true; worker.postMessage({ input: inp }); };
+    worker.onmessage = ({ data }) => {
+      st.busy = false;
+      if (st.pending) { const next = st.pending; st.pending = null; st.send(next); }
+      if (data.error) { console.error("Simulation:", data.error); return; }
+      setOutput(st.wanted ? data.output : null);   // ausgeschaltet, während noch gerechnet wurde: verwerfen
+    };
+    ref.current = st;
+    return () => { worker.terminate(); ref.current = null; };
+  }, []);
+  useEffect(() => {
+    const st = ref.current;
+    if (!st) return;
+    st.wanted = input;
+    if (!input) { st.pending = null; return; }
+    if (st.busy) st.pending = input;
+    else st.send(input);
+  }, [input]);
+  return input ? output : null;
 }
 
 /** useState, dessen Wert gespeichert wird und beim nächsten Start wieder da ist (settings.js). */

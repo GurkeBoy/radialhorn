@@ -18,24 +18,48 @@ function bufferGeometry(items) {
 }
 
 /**
- * Horn als Gruppe aus den Puffern des Workers: je Sektion Flächen und Gitterlinien (Kappen des
- * Luftvolumens werden nicht angefordert).
+ * Alle Materialien der Szene: Horn je Sektion (Flächen, Gitter), Treiber, Raumecke, Konflikt-
+ * Bohrungen. Einmal angelegt und für jedes neue Netz wiederverwendet – mit dem letzten Material
+ * eines Typs gibt three.js auch dessen Shader frei, ein neues müsste ihn bei jedem Netz (beim
+ * Ziehen also laufend) neu übersetzen. Freigegeben werden sie erst mit der Ansicht.
  */
-function hornGroup(sections) {
+function sceneMaterials() {
+  return {
+    sections: Object.fromEntries(Object.entries(SECTION_COLOR).map(([section, color]) => [section, {
+      faces: new THREE.MeshStandardMaterial({
+        color, side: THREE.DoubleSide, roughness: 0.75, metalness: 0,
+        polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+      }),
+      grid: new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 }),
+    }])),
+    driver: new THREE.MeshStandardMaterial({ color: COLOR.driv }),
+    corner: new THREE.MeshStandardMaterial({
+      color: COLOR.raum, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false,
+    }),
+    conflict: new THREE.MeshBasicMaterial({ color: COLOR.konflikt, side: THREE.DoubleSide }),
+    conflictLine: new THREE.LineBasicMaterial({ color: COLOR.konflikt }),
+  };
+}
+
+function disposeMaterials({ sections, ...rest }) {
+  for (const m of [...Object.values(sections).flatMap(Object.values), ...Object.values(rest)]) m.dispose();
+}
+
+/**
+ * Horn als Gruppe aus den Puffern des Workers: je Sektion Flächen und Gitterlinien (Kappen des
+ * Luftvolumens werden nicht angefordert). materials: sceneMaterials.
+ */
+function hornGroup(sections, materials) {
   const group = new THREE.Group();
   for (const { section, positions, normals, lines } of sections) {
     const faces = new THREE.BufferGeometry();
     faces.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     faces.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
-    const mesh = new THREE.Mesh(faces, new THREE.MeshStandardMaterial({
-      color: SECTION_COLOR[section], side: THREE.DoubleSide, roughness: 0.75, metalness: 0,
-      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
-    }));
+    const mesh = new THREE.Mesh(faces, materials.sections[section].faces);
     mesh.userData.kind = "faces";
     const grid = new THREE.BufferGeometry();
     grid.setAttribute("position", new THREE.BufferAttribute(lines, 3));
-    const gridMesh = new THREE.LineSegments(grid,
-      new THREE.LineBasicMaterial({ color: SECTION_COLOR[section], transparent: true, opacity: 0.8 }));
+    const gridMesh = new THREE.LineSegments(grid, materials.sections[section].grid);
     gridMesh.userData.kind = "grid";
     group.add(mesh, gridMesh);
   }
@@ -87,13 +111,13 @@ function useMeshWorker(input) {
  * doppelt so weit nach oben und unten wie das höchste Teil (Treiber, Mund samt Wandstärke,
  * Flansch) – sie sollen als Wand lesbar sein, nicht als Rahmen ums Horn.
  * @param top  halbe Höhe des höchsten Teils über der Achse [mm]
+ * @param materials  sceneMaterials
  */
-function referenceGroup(s, dw, dh, top, showRaumecke) {
+function referenceGroup(s, dw, dh, top, showRaumecke, materials) {
   const group = new THREE.Group();
   const cylinder = new THREE.CylinderGeometry(dw / 2, dw / 2, dh, 64);
   cylinder.rotateX(Math.PI / 2);                 // three.js-Zylinder liegen auf Y, die Hornachse ist Z
-  const driver = new THREE.Mesh(cylinder,
-    new THREE.MeshStandardMaterial({ color: COLOR.driv }));
+  const driver = new THREE.Mesh(cylinder, materials.driver);
   driver.position.set(0, 0, -dh / 2);
   driver.userData.kind = "driver";
   group.add(driver);
@@ -106,9 +130,7 @@ function referenceGroup(s, dw, dh, top, showRaumecke) {
         [[0, -halfMax, s.hatTipZ], [sign * endX, halfMax, s.zApex], [0, halfMax, s.hatTipZ]],
       ]);
       wall.computeVertexNormals();
-      const mesh = new THREE.Mesh(wall, new THREE.MeshStandardMaterial({
-        color: COLOR.raum, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false,
-      }));
+      const mesh = new THREE.Mesh(wall, materials.corner);
       mesh.userData.kind = "corner";
       group.add(mesh);
     }
@@ -119,12 +141,12 @@ function referenceGroup(s, dw, dh, top, showRaumecke) {
 /**
  * Bohrungen, die nicht gebohrt werden können (in der Schale): rote Scheibe mit Ring auf der
  * Flanschrückseite und Ring an der Vorderseite, damit das Bohrbild trotzdem sichtbar ist.
+ * @param materials  sceneMaterials
  */
-function conflictGroup(flange) {
+function conflictGroup(flange, materials) {
   const group = new THREE.Group();
   if (!flange?.conflicts.length) return group;
-  const material = new THREE.MeshBasicMaterial({ color: COLOR.konflikt, side: THREE.DoubleSide });
-  const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR.konflikt });
+  const { conflict: material, conflictLine: lineMaterial } = materials;
   const r = flange.holes.diameter / 2;
   for (const [x, h] of flange.conflicts) {
     const disk = new THREE.Mesh(new THREE.CircleGeometry(r, 32), material);
@@ -140,8 +162,9 @@ function conflictGroup(flange) {
   return group;
 }
 
+/** Geometrien einer Gruppe freigeben (die Materialien gehören der Ansicht, sceneMaterials). */
 function disposeGroup(group) {
-  group.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+  group.traverse(o => o.geometry?.dispose());
 }
 
 /** Kamera so setzen, dass das Horn schräg von vorn oben vollständig zu sehen ist. */
@@ -200,12 +223,14 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
       if (!frameId) frameId = requestAnimationFrame(() => { frameId = 0; renderer.render(scene, camera); });
     };
     controls.addEventListener("change", render);
-    three.current = { renderer, scene, camera, controls, render, horn: null, reference: null, conflicts: null, framed: false };
+    const materials = sceneMaterials();
+    three.current = { renderer, scene, camera, controls, render, materials, horn: null, reference: null, conflicts: null, framed: false };
     return () => {
       cancelAnimationFrame(frameId);
       controls.removeEventListener("change", render);
       controls.dispose();
       for (const g of [three.current.horn, three.current.reference, three.current.conflicts]) if (g) disposeGroup(g);
+      disposeMaterials(materials);
       renderer.dispose();
       renderer.domElement.remove();
       three.current = null;
@@ -232,7 +257,7 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
   useEffect(() => {
     const t = three.current;
     if (!t) return;
-    replace(t, "horn", sections && hornGroup(sections));
+    replace(t, "horn", sections && hornGroup(sections, t.materials));
     if (t.horn && !t.framed) { frame(t.camera, t.controls, t.horn); t.framed = true; }
     t.render();
   }, [sections]);
@@ -245,13 +270,13 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
   useEffect(() => {
     const t = three.current;
     if (!t) return;
-    replace(t, "reference", referenceKey && referenceGroup(s, dw, dh, top, showRaumecke));
+    replace(t, "reference", referenceKey && referenceGroup(s, dw, dh, top, showRaumecke, t.materials));
     t.render();
   }, [referenceKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- referenceKey fasst die Werte zusammen
   useEffect(() => {
     const t = three.current;
     if (!t) return;
-    replace(t, "conflicts", conflictKey && conflictGroup(flange));
+    replace(t, "conflicts", conflictKey && conflictGroup(flange, t.materials));
     t.render();
   }, [conflictKey]);    // eslint-disable-line react-hooks/exhaustive-deps -- conflictKey fasst die Werte zusammen
 

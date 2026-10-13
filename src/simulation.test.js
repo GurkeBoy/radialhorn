@@ -3,7 +3,7 @@ import {
   airAt, logFrequencies, sampleStep, transverseLimit, cx, abs,
   coneMatrix, propagate, inputImpedance, besselJ1, struveH1, radiationImpedance,
   mmdFromMms, driverSI, driverResponse, PLACEHOLDER_DRIVER, simulate, areaCurve, sampleArea,
-  curveLevels, GEOMETRY_STEP_MM, MAX_SEGMENT, hornDelay, phaseWithoutDelay,
+  curveLevels, GEOMETRY_STEP_MM, MAX_SEGMENT, hornDelay, phaseWithoutDelay, createSimulationEngine,
 } from "./simulation.js";
 import { createHornMath, makeProfile, computeFillet, mouthArea, crossSection } from "./horn-math.js";
 import { buildCSV } from "./export/csv.js";
@@ -445,5 +445,34 @@ describe("Laufzeit (hornDelay, phaseWithoutDelay)", () => {
     expect(phaseWithoutDelay([1000], [-170], 0.5e-3)).toEqual([10]);     // −170 + 180
     expect(phaseWithoutDelay([1000], [90], 0.5e-3)).toEqual([-90]);      // 270 → −90
     expect(phaseWithoutDelay([1000], [30], 0)).toEqual([30]);
+  });
+});
+
+describe("createSimulationEngine (Rechenkern im Worker)", () => {
+  const RT = 25.4;
+  const s = createHornMath(140).solveHorn(500, 80, RT, 182, 90);
+  const geometry = { s, rt: RT, hMouth: 200, curve: "exponential", hypexT: 0.5, fillet: null, morph: null };
+  const freqs = logFrequencies(20, 20000, 6);
+  const input = { geoKey: "a", geometry, temp: 20, mouth: "2pi", driver: PLACEHOLDER_DRIVER, freqs };
+
+  it("gleich der Rechnung von Hand; Eingaben klonbar (postMessage)", () => {
+    const out = createSimulationEngine()(structuredClone(input));
+    const curve = areaCurve(s, RT, makeProfile(s, RT, 200, "exponential", 0.5, null));
+    const driver = driverSI(PLACEHOLDER_DRIVER, AIR.rho);
+    expect(out.result).toEqual(simulate({ curve, air: AIR, driver, mouth: "2pi", freqs }));
+    expect(out.delay).toBe(hornDelay(curve, AIR, driver));
+    expect(out.delayPath).toBeCloseTo(out.delay * AIR.c, 12);
+    expect(out.fLimit).toBe(transverseLimit(2 * RT / 1000, AIR.c));
+  });
+
+  it("S(x) bleibt bei gleichem geoKey, neu bei neuem", () => {
+    const run = createSimulationEngine();
+    const first = run(input);
+    // andere Geometrie unter demselben Schlüssel: alte Kurve bleibt (nur die Kette wird neu gerechnet)
+    const other = { ...geometry, hMouth: 300 };
+    expect(run({ ...input, geometry: other }).result).toEqual(first.result);
+    expect(run({ ...input, geometry: other, geoKey: "b" }).result).not.toEqual(first.result);
+    // Treiber und Temperatur wirken auch ohne neuen Schlüssel
+    expect(run({ ...input, geometry: other, geoKey: "b", temp: 30 }).result.spl).not.toEqual(run({ ...input, geometry: other, geoKey: "b" }).result.spl);
   });
 });

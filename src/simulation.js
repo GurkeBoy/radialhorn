@@ -25,7 +25,7 @@
  *     gekrümmten Mund eines Radialhorns bis 20 dB zu hoch läge. Gegen Hornresp geprüft.
  *   - Verlustfrei (Wandverluste: spätere Erweiterung).
  */
-import { crossSection, cornerRadius, cornerDeficit } from "./horn-math.js";
+import { crossSection, cornerRadius, cornerDeficit, makeProfile } from "./horn-math.js";
 
 // ──────────────────────────────────────────────────────────────────
 // LUFT, FREQUENZEN
@@ -417,6 +417,37 @@ export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM, morph = nul
     S.push(A * 1e-6);
   }
   return { x, S };
+}
+
+// ──────────────────────────────────────────────────────────────────
+// RECHENKERN DER APP
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * Frequenzgang für die App (simulation.worker.js): Geometrie und Simulationswerte rein → Ergebnis.
+ * Die Eingaben sind reine Daten (klonbar), die Profilfunktion wird hier neu gebaut. S(x) bleibt
+ * zwischengespeichert, solange geoKey gleich ist: Treiber, Abstrahlung und Temperatur rechnen nur
+ * die Kette neu.
+ * @param input  { geoKey, geometry: { s, rt, hMouth, curve, hypexT, fillet, morph }, temp, mouth, driver, freqs }
+ *               driver in Anzeige-Einheiten (PLACEHOLDER_DRIVER)
+ * @returns {{ result, fLimit, delay, delayPath }}  result: simulate; fLimit: transverseLimit [Hz];
+ *   delay: hornDelay [s], delayPath: derselbe Weg [m]
+ */
+export function createSimulationEngine() {
+  let key, curve;
+  return function run({ geoKey, geometry: gm, temp, mouth, driver, freqs }) {
+    if (geoKey !== key) {
+      const profile = makeProfile(gm.s, gm.rt, gm.hMouth, gm.curve, gm.hypexT, gm.fillet);
+      curve = areaCurve(gm.s, gm.rt, profile, GEOMETRY_STEP_MM, gm.morph);
+      key = geoKey;
+    }
+    const air = airAt(temp), dr = driverSI(driver, air.rho), delay = hornDelay(curve, air, dr);
+    return {
+      result: simulate({ curve, air, driver: dr, mouth, freqs }),
+      fLimit: transverseLimit(2 * gm.rt / 1000, air.c),
+      delay, delayPath: delay * air.c,
+    };
+  };
 }
 
 /**
