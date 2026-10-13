@@ -89,14 +89,14 @@ function CollapsibleGroup({ title, id, defaultOpen, children }) {
  */
 export function Toast({ notice, onClose }) {
   if (!notice) return null;
-  const color = notice.kind === "error" ? UI.error : notice.kind === "info" ? UI.label : UI.accent;
+  const color = notice.kind === "error" || notice.kind === "warn" ? UI.error : notice.kind === "info" ? UI.label : UI.accent;
   return (
     <div role="status" aria-live="polite" onClick={onClose} style={{
       position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
       maxWidth: "min(560px, calc(100vw - 32px))", padding: "10px 16px", borderRadius: 6, cursor: "pointer",
       background: UI.card, border: `1px solid ${color}`, color, boxShadow: "0 4px 18px rgba(0,0,0,0.5)",
       fontFamily: FONT, fontSize: 12, lineHeight: 1.45, overflowWrap: "anywhere",
-    }}>{notice.kind === "ok" ? "✓ " : notice.kind === "error" ? "⚠ " : ""}{notice.text}</div>
+    }}>{notice.kind === "ok" ? "✓ " : notice.kind === "error" || notice.kind === "warn" ? "⚠ " : ""}{notice.text}</div>
   );
 }
 

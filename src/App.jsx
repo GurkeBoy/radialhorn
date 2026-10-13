@@ -122,23 +122,29 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [projectStatus]);
   // Rückmeldung nach jedem Speichern/Export (sonst merkt man nicht, ob es geklappt hat)
-  const [notice, setNotice] = useState(null);   // { kind: "ok" | "info" | "error", text }
+  const [notice, setNotice] = useState(null);   // { kind: "ok" | "info" | "warn" | "error", text }
   useEffect(() => {
-    if (!notice || notice.kind === "error") return;
+    if (!notice || notice.kind === "error" || notice.kind === "warn") return;   // Warnung und Fehler bleiben stehen
     const timer = setTimeout(() => setNotice(null), 6000);
     return () => clearTimeout(timer);
   }, [notice]);
-  const reportSave = async run => {
+  // conflictNote: Export mit Flansch – Hinweis auf Bohrungen im Konflikt mit der Schale ("3d" | "dxf" | "pdf")
+  const reportSave = async (run, conflictNote = null) => {
     try {
       const r = await run();
-      setNotice(
-        r.status === "cancelled" ? { kind: "info", text: t("save.cancelled") }
+      const saved = r.status === "cancelled" ? { kind: "info", text: t("save.cancelled") }
         : r.status === "opened" ? { kind: "ok", text: t("save.printOpened") }
-        : { kind: "ok", text: t(r.status === "downloaded" ? "save.downloaded" : r.html ? "save.savedHtml" : "save.saved", { name: r.name }) });
+        : { kind: "ok", text: t(r.status === "downloaded" ? "save.downloaded" : r.html ? "save.savedHtml" : "save.saved", { name: r.name }) };
+      const n = conflictNote && r.status !== "cancelled" ? flange?.invalidHoles ?? 0 : 0;
+      setNotice(n > 0 ? {
+        kind: "warn",
+        text: `${saved.text} · ${conflictText(n)}${conflictNote === "3d" ? ", " + t("export.conflict3d") : conflictNote === "dxf" ? ", " + t("export.conflictDxf") : ""}`,
+      } : saved);
     } catch (err) {
       setNotice({ kind: "error", text: t("save.error", { msg: err?.message ?? String(err) }) });
     }
   };
+  const conflictText = n => n === 1 ? t("export.conflictOne") : t("export.conflictMany", { n });
   const saveProject = () => {
     setProjectStatus(null);
     reportSave(() => downloadFile(buildProject(designValues, { appVersion: APP_VERSION }), projectFileName(designValues), "application/json"));
@@ -354,11 +360,12 @@ export default function App() {
           <Card title={t("card.export")} id="export">
             <Note>{t("export.dxfHint")}</Note>
             <Toggle label={t("export.dimensions")} checked={pdfDimensions} onChange={setPdfDimensions} hint={t("export.dimensionsHint")} />
+            {flange?.invalidHoles > 0 && <Warn>{conflictText(flange.invalidHoles)}: {t("export.conflictCard")}</Warn>}
             <div style={{ marginTop: 4 }}>
-              <Button primary onClick={() => reportSave(() => exportDXF(design))}>{t("export.dxf")}</Button>
-              <Button onClick={() => reportSave(() => exportPDF(design, { ...ALL_LAYERS, bemassung: pdfDimensions }, lang))}>{t("export.pdf")}</Button>
-              <Button onClick={() => reportSave(() => exportSTL(design))}>{wall > 0 ? t(flange ? "export.stlShellFlange" : "export.stlShell", { mm: wall }) : t("export.stlAir")}</Button>
-              <Button onClick={() => reportSave(() => exportSTEP(design))}>{wall > 0 ? t(flange ? "export.stepShellFlange" : "export.stepShell", { mm: wall }) : t("export.stepAir")}</Button>
+              <Button primary onClick={() => reportSave(() => exportDXF(design), "dxf")}>{t("export.dxf")}</Button>
+              <Button onClick={() => reportSave(() => exportPDF(design, { ...ALL_LAYERS, bemassung: pdfDimensions }, lang), "pdf")}>{t("export.pdf")}</Button>
+              <Button onClick={() => reportSave(() => exportSTL(design), "3d")}>{wall > 0 ? t(flange ? "export.stlShellFlange" : "export.stlShell", { mm: wall }) : t("export.stlAir")}</Button>
+              <Button onClick={() => reportSave(() => exportSTEP(design), "3d")}>{wall > 0 ? t(flange ? "export.stepShellFlange" : "export.stepShell", { mm: wall }) : t("export.stepAir")}</Button>
             </div>
           </Card>
         </>}
