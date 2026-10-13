@@ -1,7 +1,7 @@
 // Radialhorn-Konfigurator: Parameter in der Seitenleiste, Draufsicht und Seitenriss rechts.
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
-  createHornMath, hasTraktrix, CURVES, computeFillet, makeProfile, throatMorph,
+  hasTraktrix, CURVES, makeProfile,
   mouthArea, verticalMouthAngle, frequencyEstimates,
 } from "./horn-math.js";
 import { FONT, SIDEBAR_WIDTH, UI } from "./theme.js";
@@ -13,7 +13,8 @@ import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
 import { Ansicht3D } from "./components/Ansicht3D.jsx";
 import { Frequenzgang } from "./components/Frequenzgang.jsx";
-import { usePersistentState, useSettledValue, useThrottledValue, useUndo } from "./hooks.js";
+import { useGeometry, usePersistentState, useSettledValue, useThrottledValue, useUndo } from "./hooks.js";
+import { GEOMETRY_KEYS } from "./geometry.js";
 import { LANGUAGES, LanguageContext, detectLanguage, translate } from "./i18n.js";
 import { clearSettings } from "./settings.js";
 import { DESIGN_DEFAULTS as D, ProjectError, buildProject, parseProject, projectFileName } from "./project.js";
@@ -24,7 +25,6 @@ import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
 import { exportSTEP } from "./export/step.js";
 import { exportCSV } from "./export/csv.js";
-import { flangeLayout } from "./horn-mesh.js";
 import {
   airAt, logFrequencies, transverseLimit, areaCurve, GEOMETRY_STEP_MM, simulate, driverSI, PLACEHOLDER_DRIVER, hornDelay, phaseWithoutDelay,
 } from "./simulation.js";
@@ -37,7 +37,6 @@ const THROAT_SIZES = [
 ];
 const THROAT_CUSTOM = "custom";                   // Knopf „Eigene“: Durchmesser frei über den Regler
 const THROAT_RANGE = { min: 10, max: 150 };       // [mm]
-const L_MAX = 1200;   // Obergrenze des L-Reglers ohne Raumecke [mm]
 const SIM_FREQS = logFrequencies(20, 20000, 24);
 const MOUTH_OPTIONS = ["auto", "4pi", "2pi", "pi", "pi/2"];
 const MOUTH_LABELS = { "4pi": "4π", "2pi": "2π", "pi": "π", "pi/2": "π/2" };
@@ -173,69 +172,22 @@ export default function App() {
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
     edgeOn, edgeR, simOn, mouth, simTemp, driver]);
   const p = useThrottledValue(live);
-  const rt = p.throatDiam / 2;
-
-  // Grenzen und Lösung der Draufsicht. Die Grenzsuchen sind teuer (verschachtelte Bisektionen);
-  // jede Stufe hängt nur an ihren eigenen Eingaben, damit ein Regler nur neu rechnen lässt, was er
-  // betrifft: Mundhöhe, Flansch, Simulation … lassen s unverändert (gleiches Objekt), und damit
-  // alles Nachgelagerte samt 3D-Netz. Die Winkel-Instanz bleibt erhalten – ihr Zwischenspeicher
-  // für den Übergang (mit Klothoide teuer) überlebt so die Reglerschritte.
-  const { openingAngle: pAngle, L: pL, Lt: pLt, dw: pDw, dh: pDh, showRaumecke: pRaum, showWandstaerke: pWand,
-    wandstaerke: pT, clothoidOn: pKlo, clothoidLength: pKloLen } = p;
-  const math = useMemo(() => createHornMath(pAngle, { clothoid: pKlo ? pKloLen : 0 }), [pAngle, pKlo, pKloLen]);
-  // Wandstärke vergrößert die Außenkante senkrecht zur Wand; ihre Projektion auf die
-  // 45°-Raumecke verkleinert den verfügbaren Platz
-  const extraBreite = pRaum && pWand ? (Math.cos(math.ALPHA2) + Math.sin(math.ALPHA2)) * pT : 0;
-  // Grenzen für Lₜ: hängen an L, nicht an Lₜ
-  const ltLimits = useMemo(() => ({
-    LtMax:         math.maxLt(pL, rt, pDw, pDh),
-    LtMinRaumecke: pRaum ? math.minLtForRaumecke(pL, rt, pDw, pDh, extraBreite) : null,
-  }), [math, pL, rt, pDw, pDh, pRaum, extraBreite]);
-  const { LtMax, LtMinRaumecke } = ltLimits;
-  const LtMinClothoid = useMemo(() => math.minLtForClothoid(rt), [math, rt]);   // nur Throat und Klothoide
-  const LtMin     = Math.max(LtMinRaumecke ?? 0, LtMinClothoid);
-  const LtClamped = Math.min(Math.max(pLt, LtMin), LtMax);
-  // Grenzen für L: hängen am begrenzten Lₜ, nicht an L
-  const lLimits = useMemo(() => ({
-    LMaxRaumecke: pRaum ? math.maxLforRaumecke(LtClamped, rt, pDw, pDh, extraBreite) : null,
-    Lmin:         math.minL(LtClamped, rt, pDw, pDh),
-  }), [math, LtClamped, rt, pDw, pDh, pRaum, extraBreite]);
-  const { LMaxRaumecke, Lmin } = lLimits;
-  const LClamped = LMaxRaumecke !== null && pL > LMaxRaumecke ? LMaxRaumecke : pL;
-  const Lmax = LMaxRaumecke ?? L_MAX;
-  const s = useMemo(() => math.solveHorn(LClamped, LtClamped, rt, pDw, pDh), [math, LClamped, LtClamped, rt, pDw, pDh]);
-  const warnings = {
-    raumecke: pRaum && LMaxRaumecke !== null && pL >= LMaxRaumecke - 1,
-    ltMax:    pLt > LtMax,
-    ltMin:    pRaum && LtMinRaumecke !== null && pLt <= LtMin + 0.5,
-    clothoid: LtMinClothoid > LtMax ? "zu lang" : pLt < LtMinClothoid ? "Lt" : null,
-  };
-
-  const fillet = useMemo(
-    () => p.filletOn ? computeFillet(s, rt, p.hMouth, p.curve, p.hypexT, p.filletR) : null,
-    [p.filletOn, s, rt, p.hMouth, p.curve, p.hypexT, p.filletR],
-  );
-  const profile = useMemo(
-    () => s && makeProfile(s, rt, p.hMouth, p.curve, p.hypexT, fillet),
-    [s, rt, p.hMouth, p.curve, p.hypexT, fillet],
-  );
-  // Übergang rund → eckig am Throat (Eckradius entlang der Wand), auf das Machbare begrenzt
-  const morph = useMemo(
-    () => p.morphOn && s ? throatMorph(s, rt, p.morphLength) : null,
-    [p.morphOn, p.morphLength, s, rt],
-  );
-
-  const wall = p.showWandstaerke ? p.wandstaerke : 0;
-  // gerundete Längskanten außen: Radius höchstens die Wandstärke (sonst würde die Wand an der Ecke dünner)
-  const edge = wall > 0 && p.edgeOn ? Math.min(p.edgeR ?? wall, wall) : 0;
-  // Flansch nur an der Schale; Ø und Lochkreis werden gegen den Außenkörper aufgelöst
-  const flange = useMemo(
-    () => s && wall > 0 && p.flangeOn ? flangeLayout(s, rt, profile, fillet, wall, {
-      diameter: p.flangeD, fallback: p.dw, thickness: p.flangeT,
-      holes: { count: p.holeCount, circle: p.holeCircle, diameter: p.holeD, angle: p.holeAngle },
-    }, edge, morph) : null,
-    [s, rt, profile, fillet, wall, p.flangeOn, p.flangeD, p.dw, p.flangeT, p.holeCount, p.holeCircle, p.holeD, p.holeAngle, edge, morph],
-  );
+  // Abgeleitete Geometrie im Web Worker (geometry.js, useGeometry): beim Ziehen rechnet der
+  // Haupt-Thread nicht, er zeichnet nur. Jede Stufe rechnet dort nur neu, was der Regler betrifft;
+  // unveränderte Teile behalten ihr Objekt (memo/useMemo dahinter bleiben wirksam). g = die
+  // Reglerwerte, zu denen das Ergebnis gehört – Ansichten und Exporte nehmen sie statt p, damit
+  // Werte und Geometrie immer zusammenpassen, auch während der Worker noch rechnet.
+  const geoKey = JSON.stringify(GEOMETRY_KEYS.map(k => p[k]));
+  const geoParams = useMemo(() => Object.fromEntries(GEOMETRY_KEYS.map(k => [k, p[k]])), [geoKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- p über geoKey
+  const geo = useGeometry(geoParams);
+  const g = geo.params;
+  const rt = g.throatDiam / 2;
+  const {
+    s, fillet, morph, flange, shellOuter, shellCut, wall, edge,
+    LtMin, LtMax, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin, Lmax, LClamped, warnings,
+  } = geo.values;
+  // Profil als Funktion (nicht übertragbar): hier aus s und Verrundung, billig
+  const profile = useMemo(() => s && makeProfile(s, rt, g.hMouth, g.curve, g.hypexT, fillet), [s, rt, g.hMouth, g.curve, g.hypexT, fillet]);
   // 1D-Simulation (Webster, Transfermatrizen) – nur bei eingeschaltetem Frequenzgang. S(x) hängt
   // nur an der Geometrie: Treiber, Abstrahlung und Temperatur rechnen nur die Kette neu.
   // Rechnet mit der beruhigten Geometrie (useSettledValue): beim Ziehen bleibt die Kurve stehen und
@@ -261,13 +213,13 @@ export default function App() {
     ? { ...sim.result, phase: phaseWithoutDelay(sim.result.f, sim.result.phase, sim.delay) }
     : sim.result), [sim, simNoDelay]);
 
-  const flangeOverRaumecke = flange && p.showRaumecke && flange.diameter / 2 > p.dw / 2 + p.dh;
+  const flangeOverRaumecke = flange && g.showRaumecke && flange.diameter / 2 > g.dw / 2 + g.dh;
   const design = {
-    s, rt, L: LClamped, hMouth: p.hMouth, curve: p.curve, hypexT: p.hypexT, fillet, profile, wall, flange,
-    showRaumecke: p.showRaumecke, showWandstaerke: p.showWandstaerke, wandstaerke: p.wandstaerke, edgeR: edge, morph,
+    s, rt, L: LClamped, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, profile, wall, flange,
+    showRaumecke: g.showRaumecke, showWandstaerke: g.showWandstaerke, wandstaerke: g.wandstaerke, edgeR: edge, morph,
   };
   // Während eines Zugs zeigt der Regler den Live-Wert, sonst den (ggf. begrenzten) gerechneten
-  const shown = (key, computed) => live[key] !== p[key] ? live[key] : computed;
+  const shown = (key, computed) => live[key] !== g[key] ? live[key] : computed;
 
   return (
     <LanguageContext.Provider value={lang}>
@@ -395,7 +347,7 @@ export default function App() {
         </Card>
 
         {s && <>
-          <KeyFigures s={s} rt={rt} hMouth={p.hMouth} profile={profile} roundThroat={!!morph} t={t} />
+          <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={!!morph} t={t} />
           <Card title={t("card.crossSection")} id="querschnitt">
             <Querschnitt s={s} profile={profile} morph={morph} />
           </Card>
@@ -416,16 +368,16 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 10, gap: 8, overflow: "hidden", minWidth: 0 }}>
         <div style={{ flex: 6, display: "flex", gap: 8, minHeight: 0 }}>
           <ViewPanel flex={1}>
-            <Draufsicht s={s} rt={rt} dw={p.dw} dh={p.dh} L={LClamped}
-              showRaumecke={p.showRaumecke} showWandstaerke={p.showWandstaerke} wandstaerke={p.wandstaerke} flange={flange} />
+            <Draufsicht s={s} rt={rt} dw={g.dw} dh={g.dh} L={LClamped}
+              showRaumecke={g.showRaumecke} showWandstaerke={g.showWandstaerke} wandstaerke={g.wandstaerke} flange={flange} shellOuter={shellOuter} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={p.dw} dh={p.dh} hMouth={p.hMouth} curve={p.curve} hypexT={p.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={p.showRaumecke} />
+            <Ansicht3D s={s} rt={rt} dw={g.dw} dh={g.dh} hMouth={g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke} />
           </ViewPanel>
         </div>
         <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
           <ViewPanel flex={1}>
-            <Seitenriss s={s} rt={rt} dw={p.dw} dh={p.dh} L={LClamped} hMouth={p.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} />
+            <Seitenriss s={s} rt={rt} dw={g.dw} dh={g.dh} L={LClamped} hMouth={g.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} shellCut={shellCut} />
           </ViewPanel>
           {sim && <ViewPanel flex={1}>
             <Frequenzgang result={simResult} fLimit={sim.fLimit} mouth={p.mouth} showPhase={simPhase} placeholder={isPlaceholder(p.driver)} />

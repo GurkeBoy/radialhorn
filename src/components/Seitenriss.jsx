@@ -1,5 +1,5 @@
 // Seitenriss (vertikaler Schnitt): Throat, Aufweitung, optionale Verrundung, Treiber, Raumecke.
-import { memo, useMemo, useRef } from "react";
+import { memo, useRef } from "react";
 import { useT } from "../i18n.js";
 import { hasTraktrix } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash, raumDashCenter } from "../theme.js";
@@ -9,7 +9,6 @@ import { ZoomControls, ArrowMarker, ViewTitle } from "./ui.jsx";
 import { Dim } from "./Dim.jsx";
 import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
 import { WandSchnitt } from "./WandSchnitt.jsx";
-import { shellProfileOutline } from "../horn-mesh.js";
 
 const DIM_LEADER = 24;   // Länge der Radius-Leitlinie außerhalb der Wand [px]
 
@@ -19,18 +18,14 @@ const DIM_LEADER = 24;   // Länge der Radius-Leitlinie außerhalb der Wand [px]
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null
  * @param wall     Wandstärke [mm]; > 0 zeichnet den Schnitt durch die Schale
  */
-export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, wall = 0 }) {
+export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, wall = 0, shellCut = null }) {
   const tr = useT();
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
   const zoom = useZoomPan(containerRef);
 
-  // Schnitt durch die Schale in Geometrie-Koordinaten: nur bei Geometrieänderung neu, nicht bei Zoom
-  const zShell = flange ? flange.thickness : 0;
-  const shellCut = useMemo(() => s && wall > 0 ? {
-    inner: linspace(zShell, s.zApex, 300).map(z => [profile(z), z]),
-    outer: shellProfileOutline(s, rt, profile, wall, zShell),
-  } : null, [s, rt, profile, wall, zShell]);
+  // Schnitt durch die Schale (innen Profil, außen shellProfileOutline, ab der Flanschebene) kommt
+  // fertig aus dem Geometrie-Worker
 
   if (!s || VW < 10 || VH < 10) return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 

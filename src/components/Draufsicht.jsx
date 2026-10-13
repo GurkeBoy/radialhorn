@@ -9,7 +9,6 @@ import { ZoomControls, ArrowMarker, ViewTitle } from "./ui.jsx";
 import { Dim, DimAligned } from "./Dim.jsx";
 import { FlanschSchnitt } from "./FlanschSchnitt.jsx";
 import { WandSchnitt } from "./WandSchnitt.jsx";
-import { shellPlanOutline } from "../horn-mesh.js";
 
 const TRAKTRIX_SAMPLES = 600;
 const CLOTHOID_SAMPLES = 120;
@@ -17,7 +16,7 @@ const WALL_SAMPLES = 80;
 const DIM_LAYER = 18, DIM_LAYER_STEP = 22;   // Bemaßungslagen [px], siehe CLAUDE.md
 
 /** @param flange  aufgelöster Throat-Flansch (flangeLayout) oder null */
-export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange }) {
+export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange, shellOuter = null }) {
   const tr = useT();
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
@@ -33,7 +32,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
     wall: linearWallPoints(s, WALL_SAMPLES),
     innerWall: hasTraktrix(s) ? [...entrancePoints(s, 200, 60), ...linearWallPoints(s, 40).slice(1)] : linearWallPoints(s, 40),
   }, [s]);
-  const shellOuter = useMemo(() => s && t > 0 ? shellPlanOutline(s, rt, t, zShell) : null, [s, rt, t, zShell]);
+  // Außenkontur der Schale (shellPlanOutline) kommt fertig aus dem Geometrie-Worker
 
   if (!s || VW < 10 || VH < 10) return (
     <div ref={containerRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: COLOR.trans, fontSize: 12, fontFamily: FONT }}>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { readSetting, writeSetting } from "./settings.js";
 import * as H from "./history.js";
+import { createGeometryEngine, adoptGeometry } from "./geometry.js";
 
 /** Größe eines DOM-Elements, laufend per ResizeObserver gemessen. */
 export function useSize(ref) {
@@ -107,6 +108,38 @@ export function useSettledValue(value, delay = 300) {
     return () => clearTimeout(timer);
   }, [value, settled, delay]);
   return settled;
+}
+
+/**
+ * Abgeleitete Geometrie zu den Reglerwerten params, gerechnet im Web Worker (geometry.worker.js).
+ * Der erste Stand wird direkt gerechnet (kein leerer Start). Es läuft höchstens eine Berechnung;
+ * Werte, die währenddessen kommen, ersetzen einander, nur die neuesten werden danach gerechnet.
+ * Liefert das zuletzt fertige Ergebnis { params, values, versions } – params sind die Werte,
+ * zu denen es gehört; unveränderte Teile behalten ihr Objekt (adoptGeometry).
+ */
+export function useGeometry(params) {
+  const [state, setState] = useState(() => createGeometryEngine()(params));
+  const ref = useRef(null);
+  useEffect(() => {
+    const worker = new Worker(new URL("./geometry.worker.js", import.meta.url), { type: "module" });
+    const st = { busy: false, pending: null };
+    st.send = prm => { st.busy = true; worker.postMessage({ params: prm }); };
+    worker.onmessage = ({ data }) => {
+      st.busy = false;
+      if (st.pending) { const next = st.pending; st.pending = null; st.send(next); }
+      if (data.error) { console.error("Geometrie:", data.error); return; }
+      setState(prev => adoptGeometry(prev, data));
+    };
+    ref.current = st;
+    return () => { worker.terminate(); ref.current = null; };
+  }, []);
+  useEffect(() => {
+    const st = ref.current;
+    if (!st || params === state.params) return;   // erster Stand ist schon gerechnet
+    if (st.busy) st.pending = params;
+    else st.send(params);
+  }, [params]);   // eslint-disable-line react-hooks/exhaustive-deps -- nur bei neuen Werten senden
+  return state;
 }
 
 /** useState, dessen Wert gespeichert wird und beim nächsten Start wieder da ist (settings.js). */
