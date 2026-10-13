@@ -83,8 +83,10 @@ export function useZoomPan(ref, { minZoom = ZOOM_MIN, unitsPerPx = () => 1 } = {
  * nach einer kurzen Pause (gap) auf den dann neuesten Stand nach; die nächste Runde beginnt erst
  * nach dem Neuzeichnen. So aktualisieren aufwendige Ansichten beim Ziehen eines Reglers laufend,
  * so schnell sie rechnen können, und zwischen den Runden bleibt Zeit für die Eingabe selbst.
+ * gap kurz: Geometrie, 3D-Netz und Simulation rechnen in Workern, die selbst nur den neuesten
+ * Auftrag übernehmen – 30 ms begrenzten das 3D-Modell beim Ziehen auf ≈ 24 statt ≈ 36 Bilder/s.
  */
-export function useThrottledValue(value, gap = 30) {
+export function useThrottledValue(value, gap = 8) {
   const [shown, setShown] = useState(value);
   const latest = useRef(value);
   useEffect(() => { latest.current = value; });

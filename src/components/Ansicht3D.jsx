@@ -72,8 +72,11 @@ const FINE_DELAY = 300;   // ms ohne neue Eingabe, bis das feine Netz gerechnet 
  * Netz im Web Worker bauen lassen, in zwei Stufen: bei jeder neuen Eingabe sofort ein Entwurf
  * (grobes Netz, flach schattiert – beim Ziehen schnell), nach FINE_DELAY ms Ruhe das feine,
  * geglättete Netz. Es läuft höchstens eine Berechnung; Aufträge, die währenddessen eintreffen,
- * ersetzen einander, nur der jeweils neueste wird danach gerechnet. Ein Ergebnis wird nur
- * gezeigt, wenn es zur aktuellen Eingabe gehört. Liefert die Sektionen (null ohne Eingabe).
+ * ersetzen einander, nur der jeweils neueste wird danach gerechnet. Jedes fertige Netz wird
+ * gezeigt, auch wenn inzwischen eine neuere Eingabe wartet: der Worker rechnet der Reihe nach,
+ * jedes Ergebnis ist also neuer als das angezeigte. Beim Ziehen kommen die Eingaben schneller,
+ * als ein Entwurf dauert – nur passende Ergebnisse zu zeigen hieß, fast alle zu verwerfen, das
+ * Modell blieb stehen. Liefert die Sektionen (null ohne Eingabe).
  */
 function useMeshWorker(input) {
   const [sections, setSections] = useState(null);
@@ -84,11 +87,10 @@ function useMeshWorker(input) {
     st.send = job => { st.busy = job; worker.postMessage({ input: { ...job.input, quality: job.quality } }); };
     st.request = job => { if (st.busy) st.pending = job; else st.send(job); };
     worker.onmessage = ({ data }) => {
-      const done = st.busy;
       st.busy = null;
       if (data.error) console.error("3D-Netz:", data.error);
       if (st.pending) { const next = st.pending; st.pending = null; st.send(next); }
-      if (done.input === st.wanted && data.sections) setSections(data.sections);
+      if (st.wanted && data.sections) setSections(data.sections);   // ohne Eingabe (ungültig): verwerfen
     };
     state.current = st;
     return () => { clearTimeout(st.timer); worker.terminate(); state.current = null; };

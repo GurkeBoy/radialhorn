@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  createHornMath, hasClothoid, traktrixPoints, clothoidPoints, clothoidTable, entrancePoints,
+  createHornMath, hasClothoid, traktrixPoints, clothoidPoints, clothoidTable, clothoidEnd, entrancePoints,
   makeProfile, crossSection, xN, zN,
 } from "./horn-math.js";
 import { buildHornGeometry, buildShellGeometry, triangulate } from "./horn-mesh.js";
@@ -196,5 +196,20 @@ describe("DXF mit Klothoide", () => {
     expect(splines("Draufsicht_Traktrix")).toHaveLength(2);    // je links/rechts
     expect(splines("Draufsicht_Klothoide")).toHaveLength(2);
     expect(dxf).not.toMatch(/POLYLINE/);
+  });
+});
+
+describe("clothoidEnd (Suchen ohne Tabelle)", () => {
+  it("bitgleich mit dem letzten Tabellenpunkt", () => {
+    for (const n of [1, 8, 64, 400]) {
+      const end = clothoidEnd(s.clothoid, n), last = clothoidTable(s.clothoid, n).at(-1);
+      expect(Object.is(end.x, last.x) && Object.is(end.z, last.z)).toBe(true);
+    }
+  });
+
+  it("Endpunkt ist der Übergang in die gerade Wand", () => {
+    const end = clothoidEnd(s.clothoid);
+    expect(end.x).toBe(s.xTrans);
+    expect(end.z).toBe(s.zTrans);
   });
 });

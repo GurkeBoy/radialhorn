@@ -64,9 +64,20 @@ export function offsetHeight(hAt, rMax, t) {
   const src = Array.from({ length: Math.ceil(rMax / dr) + 2 + 2 * w }, (_, i) => hExt((i - w) * dr));
   // Kreisform √(t² − d²) ist für jeden Tabellenpunkt dieselbe: einmal vorab (ergebnisgleich)
   const bump = Array.from({ length: 2 * w + 1 }, (_, j) => { const d = (j - w) * dr; return Math.sqrt(Math.max(0, t * t - d * d)); });
+  // Steigt das Profil nicht ab (der Normalfall), bleibt das Maximum dasselbe (Bit für Bit), wenn
+  // nur die Mitte und die Seite dahinter geprüft werden: davor sind Höhe und Kreishöhe beide
+  // kleiner. Dahinter ist die Höhe höchstens die am Fensterende – Abbruch, sobald selbst die mit
+  // der Kreishöhe nicht mehr über das bisherige Maximum käme.
+  let monotone = true;
+  for (let i = 1; i < src.length && monotone; i++) monotone = src[i] >= src[i - 1];
   const table = Array.from({ length: Math.ceil(rMax / dr) + 2 }, (_, i) => {   // r = i·dr
     let best = -Infinity;
-    for (let j = 0; j <= 2 * w; j++) best = Math.max(best, src[i + j] + bump[j]);
+    if (monotone) {
+      const top = src[i + 2 * w];
+      for (let j = w; j <= 2 * w && top + bump[j] > best; j++) best = Math.max(best, src[i + j] + bump[j]);
+    } else {
+      for (let j = 0; j <= 2 * w; j++) best = Math.max(best, src[i + j] + bump[j]);
+    }
     return best;
   });
   return r => {
@@ -122,11 +133,33 @@ function wallEnvelope(s, wall, t) {
     while (lo < hi) { const mid = (lo + hi) >> 1; samples[mid][1] < z ? (lo = mid + 1) : (hi = mid); }
     return lo;
   };
+  // Wächst die Wand nach außen (x nicht fallend mit z – der Normalfall), muss nicht jeder Punkt im
+  // Fenster geprüft werden, das Maximum bleibt dasselbe (Bit für Bit): unterhalb von z sind x und
+  // die Kreishöhe √(t² − d²) beide kleiner, je weiter der Punkt weg ist – der nächste gewinnt;
+  // oberhalb ist x höchstens das x am Fensterende, die Suche endet, sobald selbst das mit der
+  // Kreishöhe des Punkts nicht mehr über das bisherige Maximum käme.
+  let monotone = true;
+  for (let i = 1; i < samples.length && monotone; i++) monotone = samples[i][0] >= samples[i - 1][0];
+  const candidate = (i, z) => {
+    const [x, zi] = samples[i], d = z - zi;
+    return Math.abs(d) <= t ? x + Math.sqrt(t * t - d * d) : -Infinity;
+  };
   return z => {
     let best = -Infinity;
-    for (let i = firstAtLeast(z - t - 1e-6); i < samples.length && samples[i][1] <= z + t + 1e-6; i++) {
-      const [x, zi] = samples[i], d = z - zi;
-      if (Math.abs(d) <= t) best = Math.max(best, x + Math.sqrt(t * t - d * d));
+    const from = firstAtLeast(z - t - 1e-6);
+    if (monotone) {
+      const k = firstAtLeast(z);   // erster Punkt mit z_i ≥ z
+      if (k - 1 >= from) best = candidate(k - 1, z);
+      let end = firstAtLeast(z + t + 1e-6);
+      while (end < samples.length && samples[end][1] <= z + t + 1e-6) end++;   // erster Punkt hinter dem Fenster
+      const xEnd = end > k ? samples[end - 1][0] : 0;
+      for (let i = k; i < end; i++) {
+        const d = z - samples[i][1];
+        if (Math.abs(d) <= t && xEnd + Math.sqrt(t * t - d * d) <= best) break;
+        best = Math.max(best, candidate(i, z));
+      }
+    } else {
+      for (let i = from; i < samples.length && samples[i][1] <= z + t + 1e-6; i++) best = Math.max(best, candidate(i, z));
     }
     if (best > -Infinity) return best;
     const k = Math.min(Math.max(firstAtLeast(z), 1), samples.length - 1);

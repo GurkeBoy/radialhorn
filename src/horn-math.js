@@ -76,19 +76,35 @@ const CLOTHOID_STEPS = 64;   // Simpson-Schritte für die Klothoiden-Integration
  * @param c  { start: [x, z], theta0, kappa0, length }
  */
 export function clothoidTable(c, n = CLOTHOID_STEPS) {
+  const out = [{ x: c.start[0], z: c.start[1], theta: c.theta0 }];
+  clothoidWalk(c, n, (x, z, theta) => out.push({ x, z, theta }));
+  return out;
+}
+
+/** Endpunkt der Klothoide { x, z } wie clothoidTable(c, n).at(-1), ohne Tabelle (für die Suchen). */
+export function clothoidEnd(c, n = CLOTHOID_STEPS) {
+  return clothoidWalk(c, n);
+}
+
+/**
+ * Simpson-Integration der Klothoide in n Schritten; visit(x, z, θ) je Schrittende. Sinus und
+ * Kosinus am Schrittende sind die am Anfang des nächsten Schritts (gleiches Argument, gleicher
+ * Wert) – je Schritt zwei statt drei Auswertungen.
+ */
+function clothoidWalk(c, n, visit) {
   const theta = u => c.theta0 + c.kappa0 * (u - u * u / (2 * c.length));
   const ds = c.length / n;
-  const out = [{ x: c.start[0], z: c.start[1], theta: c.theta0 }];
+  let x = c.start[0], z = c.start[1];
+  let sa = Math.sin(theta(0)), ca = Math.cos(theta(0));
   for (let k = 0; k < n; k++) {
-    const a = theta(k * ds), m = theta((k + 0.5) * ds), b = theta((k + 1) * ds);
-    const prev = out[k];
-    out.push({
-      x: prev.x + ds / 6 * (Math.sin(a) + 4 * Math.sin(m) + Math.sin(b)),
-      z: prev.z + ds / 6 * (Math.cos(a) + 4 * Math.cos(m) + Math.cos(b)),
-      theta: b,
-    });
+    const m = theta((k + 0.5) * ds), b = theta((k + 1) * ds);
+    const sb = Math.sin(b), cb = Math.cos(b);
+    x = x + ds / 6 * (sa + 4 * Math.sin(m) + sb);
+    z = z + ds / 6 * (ca + 4 * Math.cos(m) + cb);
+    if (visit) visit(x, z, b);
+    sa = sb; ca = cb;
   }
-  return out;
+  return { x, z };
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -148,7 +164,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
       kappa0: 1 / (r0 * Math.sinh(tauA)),
       length,
     };
-    const end = clothoidTable(c).at(-1);
+    const end = clothoidEnd(c);
     return { r0, tTh, tEnd: tauA, clothoid: c, xTrans: end.x, zTrans: end.z };
   }
 
@@ -199,7 +215,11 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
    */
   function solveHorn(L, Lt, rt, dw, dh) {
     const tr = transition(Lt, rt);
-    if (!tr) return null;
+    return tr ? solveWith(tr, L, Lt, dw, dh) : null;
+  }
+
+  /** solveHorn mit bereits bestimmtem Übergang tr = transition(Lt, rt) (für Suchen über L). */
+  function solveWith(tr, L, Lt, dw, dh) {
     const { r0, tTh, tEnd, xTrans, zTrans } = tr;
 
     const { zFocus, rInner } = focusOf(tr);
@@ -282,16 +302,18 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     // Mundkante auf der Raumecke: xTrans + Ls·tan = dw/2 + (zTrans + Ls) + dh − extraBreite
     const LsMax = (dw / 2 + dh + zTrans - xTrans - extraBreite) / (TAN - 1);
     if (LsMax <= 0) return null;
+    // Lt ist fest: Übergang einmal, nicht in jedem Suchschritt (minLtForRaumecke ruft diese Suche
+    // selbst in einer Suche über Lt – ohne Klothoide gibt es keinen Zwischenspeicher)
     let lo = minL(Lt, rt, dw, dh), hi = lo + 5000;
     for (let i = 0; i < 40; i++) {
-      const sv = solveHorn(hi, Lt, rt, dw, dh);
+      const sv = solveWith(tr, hi, Lt, dw, dh);
       if (sv && sv.Ls >= LsMax) break;
       hi *= 2;
     }
     for (let i = 0; i < 80 && hi - lo > LIMIT_TOL; i++) {
       const mid = (lo + hi) / 2;
       if (mid <= lo || mid >= hi) break;
-      const sv  = solveHorn(mid, Lt, rt, dw, dh);
+      const sv  = solveWith(tr, mid, Lt, dw, dh);
       sv && sv.Ls < LsMax ? (lo = mid) : (hi = mid);
     }
     return (lo + hi) / 2;
