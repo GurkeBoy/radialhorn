@@ -3,7 +3,8 @@ import { memo, useMemo, useRef } from "react";
 import { useT } from "../i18n.js";
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
-import { svgPath, clipFromZ, nestedLayers, fmtLength } from "../utils.js";
+import { svgPath, clipFromZ } from "../utils.js";
+import { topViewDims, dimsOverflow, raumeckeEndX as cornerEndX, DIM_FIRST, DIM_STEP } from "../dim-layout.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker, ViewTitle } from "./ui.jsx";
 import { Dim, DimAligned } from "./Dim.jsx";
@@ -13,7 +14,6 @@ import { WandSchnitt } from "./WandSchnitt.jsx";
 const TRAKTRIX_SAMPLES = 600;
 const CLOTHOID_SAMPLES = 120;
 const WALL_SAMPLES = 80;
-const DIM_LAYER = 18, DIM_LAYER_STEP = 22;   // Bemaßungslagen [px], siehe CLAUDE.md
 
 /** @param flange  aufgelöster Throat-Flansch (flangeLayout) oder null */
 export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange, shellOuter = null }) {
@@ -41,7 +41,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
   );
 
   // ── Abbildung Geometrie (x, z) → Bildschirm ───────────────────────
-  const raumeckeEndX = dw / 2 + (s.zApex - (-dh));
+  const raumeckeEndX = cornerEndX(s, dw, dh);
   const zMin = s.hatTipZ - 140;
   const zMax = s.zApex + Math.max(16, Math.ceil((s.zApex - zMin) * 30 / 432));
   // Schale: Schnitt zwischen Innenwand und Außenkontur, mit Flansch erst ab dessen Dicke
@@ -49,16 +49,25 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
   const xMax = Math.max(s.xMouth, dw / 2, flange ? flange.diameter / 2 : 0, shellOuter ? shellOuter[shellOuter.length - 1][0] : 0,
     showRaumecke ? raumeckeEndX + 4 : 0) + 20;
 
-  const ml = 50, mr = 58, mt = 22, mb = 40;   // unten: Mundbreite (1. Lage)
-  const drawW = VW - ml - mr, drawH = VH - mt - mb;
-  const { k, tx, ty } = zoom.view;
-  const scale0 = Math.min(drawW / (2 * xMax), drawH / (zMax - zMin));
-  const cx0 = ml + drawW / 2;
-  const scale = scale0 * k;
-  const cx = tx + k * cx0;
-  const topOffset = ty + k * (mt + (drawH - (zMax - zMin) * scale0) / 2);
-  const toX = x => cx + x * scale;
-  const toY = z => topOffset + (z - zMin) * scale;
+  // Ränder [px]: Standard für zwei Lagen; brauchen die Maße mehr (mehr Lagen, dim-layout.js), wachsen
+  // sie um genau so viel – ermittelt ohne Zoom, damit die Ausgangsansicht alles zeigt
+  const mapping = ({ ml, mr, mt, mb }, { k, tx, ty }) => {
+    const drawW = VW - ml - mr, drawH = VH - mt - mb;
+    const scale0 = Math.min(drawW / (2 * xMax), drawH / (zMax - zMin));
+    const scale = scale0 * k, cx = tx + k * (ml + drawW / 2);
+    const topOffset = ty + k * (mt + (drawH - (zMax - zMin) * scale0) / 2);
+    return { scale, cx, toX: x => cx + x * scale, toY: z => topOffset + (z - zMin) * scale };
+  };
+  const dimInput = { s, rt, dw, dh, L, showRaumecke, flange, shellOuter };
+  let margins = { ml: 50, mr: 58, mt: 22, mb: 40 };
+  for (let i = 0; i < 2; i++) {
+    const base = mapping(margins, { k: 1, tx: 0, ty: 0 });
+    const over = dimsOverflow(topViewDims({ ...dimInput, toX: base.toX, toY: base.toY }).dims, VW, VH);
+    if (!(over.left || over.right || over.top || over.bottom)) break;
+    margins = { ml: margins.ml + over.left, mr: margins.mr + over.right, mt: margins.mt + over.top, mb: margins.mb + over.bottom };
+  }
+  const { scale, cx, toX, toY } = mapping(margins, zoom.view);
+  const { k } = zoom.view;
 
   // Wandpunkte: rechte Seite und gespiegelte linke Seite
   const screen = pts => ({
@@ -73,9 +82,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
   const fy  = toY(s.zFocus);
   const mRx = toX(s.xMouth), mLx = toX(-s.xMouth), mY = toY(s.zMouth);
   const rp  = s.arcR * scale;
-  const outerX = Math.max(s.xMouth, showRaumecke ? raumeckeEndX : dw / 2);
-  const ax  = toX(-outerX) - 30;   // linke Maßlagen
-  const bx  = toX(outerX) + 30;    // rechte Maßlagen
+  const { dims } = topViewDims({ ...dimInput, toX, toY });
   const reRx = toX(raumeckeEndX), reLx = toX(-raumeckeEndX), reY = toY(s.zApex);
   const hatX = toX(0), hatY = toY(s.hatTipZ);
   const tLx = toX(-s.xTrans), tLy = toY(s.zTrans);
@@ -99,7 +106,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
       const t = (qx - mLx) * ux + (qy - mY) * uy;
       if (t >= 0 && t <= len) need = Math.max(need, (qx - mLx) * nx + (qy - mY) * ny);
     }
-    return Math.max(DIM_LAYER, need + DIM_LAYER);
+    return Math.max(DIM_FIRST, need + DIM_FIRST);
   })();
 
   const angleR = Math.min(rp * 0.13, 26);   // Radius des Öffnungswinkel-Bogens
@@ -183,7 +190,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
         {/* Wandstärke: rechts parallel zur Stirnfläche der Seitenwand, außerhalb des Horns */}
         {shellOuter && (() => {
           const [xE, zE] = shellOuter[shellOuter.length - 1];
-          return <DimAligned p1={[toX(xE), toY(zE)]} p2={[mRx, mY]} offset={DIM_LAYER}
+          return <DimAligned p1={[toX(xE), toY(zE)]} p2={[mRx, mY]} offset={DIM_FIRST}
             color={COLOR.wand} marker="url(#arrH)" label={`${t} mm`} />;
         })()}
         {flange && <FlanschSchnitt flange={flange} map={(x, z) => [toX(x), toY(z)]} inner={innerWall} />}
@@ -198,52 +205,16 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           fill="none" stroke={COLOR.dim} strokeWidth="0.8" />
         <text x={cx} y={fy + angleR * 0.5} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>{s.openingAngle}°</text>
 
-        {/* Links: Gesamtlänge L – mit Raumecke ab der Hut-Spitze, ohne ab der Treiberrückseite */}
-        <Dim p1={[cx, showRaumecke ? hatY : toY(-dh)]} p2={[cx, toY(s.zApex)]}
-          arrowPos={ax} color={COLOR.dimL} marker="url(#arrH)" label={`L=${fmtLength(L)} mm`} sw="0.8" />
+        {/* Maße links, rechts, oben, unten: Lagen nach den Bemaßungsregeln (dim-layout.js) */}
+        {dims.map(d => <Dim key={d.id} p1={d.p1} p2={d.p2} orient={d.orient} arrowPos={d.arrowPos}
+          color={d.color} marker="url(#arrH)" label={d.label} sw={d.sw} textAt={d.text.at} />)}
 
-        {/* Rechts, 1. Lage: Kette (Hut-Spitze →) Treiberrückseite → Treiberfront; 2. Lage: Traktrix */}
-        <Dim p1={[toX(dw/2), toY(-dh)]} p2={[toX(dw/2), toY(0)]} orient="v"
-          arrowPos={bx} color={COLOR.dim} marker="url(#arrH)" label={`${dh} mm`} />
-        {showRaumecke && <Dim p1={[hatX, hatY]} p2={[toX(dw/2), toY(-dh)]} orient="v"
-          arrowPos={bx} color={COLOR.raum} marker="url(#arrH)" label={`${(dw/2).toFixed(0)} mm`} />}
-        {/* mit Klothoide: Kette weiter über Traktrix und Klothoide bis zum Beginn der Geraden (axial, an der Wand) */}
-        {hasClothoid(s) && (() => {
-          const [xa, za] = s.clothoid.start;
-          return <>
-            <Dim p1={[toX(rt), toY(0)]} p2={[toX(xa), toY(za)]} orient="v"
-              arrowPos={bx} color={COLOR.trak} marker="url(#arrH)" label={`${za.toFixed(0)} mm`} />
-            <Dim p1={[toX(xa), toY(za)]} p2={[toX(s.xTrans), toY(s.zTrans)]} orient="v"
-              arrowPos={bx} color={COLOR.klo} marker="url(#arrH)" label={`${(s.zTrans - za).toFixed(0)} mm`} />
-          </>;
-        })()}
-        {hasTraktrix(s) &&
-          <Dim p1={[toX(rt), toY(0)]} p2={[cx, toY(s.zInnerApex)]}
-            arrowPos={bx + DIM_LAYER_STEP} color={COLOR.trak} marker="url(#arrH)" label={`${s.zInnerApex.toFixed(0)} mm`} />
-        }
-
-        {/* Oben: Throat und Treiberbreite, nach Größe verschachtelt (das kleinere innen) */}
-        {(() => {
-          const [throatLayer, drivLayer] = nestedLayers([2 * rt, dw]);
-          const topY = layer => hatY - 16 - DIM_LAYER_STEP * layer;
-          return <>
-            <Dim p1={[toX(-rt), toY(0)]} p2={[toX(rt), toY(0)]}
-              arrowPos={topY(throatLayer)} color={COLOR.trak} marker="url(#arrH)" label={`Ø ${(rt*2).toFixed(1)} mm`} />
-            <Dim p1={[toX(-dw/2), toY(-dh)]} p2={[toX(dw/2), toY(-dh)]}
-              arrowPos={topY(drivLayer)} color={COLOR.dim} marker="url(#arrH)" label={`${dw} mm`} />
-          </>;
-        })()}
-
-        {/* Seitenwand parallel zur Wand: gerader Bereich (1. Lage), Fokus → Mund (2. Lage) */}
+        {/* Seitenwand parallel zur Wand: gerader Bereich (1. Lage), Fokus → Mund (2. Lage); der
+            Teilkreis-Radius steht am schrägen Maß Fokus → Mund */}
         <DimAligned p1={[mLx, mY]} p2={[tLx, tLy]} offset={wallDimOff}
           color={COLOR.horn} marker="url(#arrH)" label={`${(s.arcR - s.rInner).toFixed(1)} mm`} />
-        <DimAligned p1={[mLx, mY]} p2={[cx, fy]} offset={wallDimOff + DIM_LAYER_STEP}
+        <DimAligned p1={[mLx, mY]} p2={[cx, fy]} offset={wallDimOff + DIM_STEP}
           color={COLOR.arc} marker="url(#arrH)" label={`R ${s.arcR.toFixed(1)} mm`} />
-
-        {/* Unten, außerhalb der Zeichnung: Mundbreite (1. Lage unter dem Mundscheitel); der Teilkreis-
-            Radius steht am schrägen Maß Fokus → Mund */}
-        <Dim p1={[mLx, mY]} p2={[mRx, mY]} orient="h"
-          arrowPos={toY(s.zApex) + DIM_LAYER} color={COLOR.dim} marker="url(#arrH)" label={`${(2 * s.xMouth).toFixed(0)} mm`} />
       </svg>
 
       <Legend showWandstaerke={showWandstaerke} showClothoid={hasClothoid(s)} showFlange={!!flange} />

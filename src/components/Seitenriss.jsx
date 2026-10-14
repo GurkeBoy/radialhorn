@@ -3,7 +3,8 @@ import { memo, useRef } from "react";
 import { useT } from "../i18n.js";
 import { hasTraktrix } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash, raumDashCenter } from "../theme.js";
-import { linspace, nestedLayers, fmtLength } from "../utils.js";
+import { linspace } from "../utils.js";
+import { sideViewDims, dimsOverflow } from "../dim-layout.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker, ViewTitle } from "./ui.jsx";
 import { Dim } from "./Dim.jsx";
@@ -33,14 +34,24 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
   const halfMax = Math.max(dw / 2, hMouth / 2 + wall, flange ? flange.diameter / 2 : 0) * 1.05;
   const zMin = s.hatTipZ - 10, zMax = s.zApex + 10;
   const zLStart = showRaumecke ? s.hatTipZ : -dh;   // Beginn von L (ohne Raumecke: Treiberrückseite)
-  const mT = Math.min(80, VH * 0.45), mB = Math.min(flange ? 62 : 40, VH * 0.15);   // oben: Titel + zwei Maßlagen
-  const scale0 = Math.min((VW - Math.min(80, VW * 0.12) * 2) / (zMax - zMin), (VH - mT - mB) / (2 * halfMax));
-  const contentW = (zMax - zMin) * scale0;
-  const cy = mT + (VH - mT - mB) / 2;
-  const { k, tx, ty } = zoom.view;
-  const scale = scale0 * k;
-  const toX = z => tx + k * ((VW - contentW) / 2 + (z - zMin) * scale0);
-  const toY = h => ty + k * (cy - h * scale0);
+  // Ränder [px]: oben Titel + zwei Maßlagen, unten mit Flansch zwei; brauchen die Maße mehr (mehr
+  // Lagen, dim-layout.js), wachsen sie um genau so viel – ermittelt ohne Zoom
+  const mapping = ({ mL, mR, mT, mB }, { k, tx, ty }) => {
+    const scale0 = Math.min((VW - mL - mR) / (zMax - zMin), (VH - mT - mB) / (2 * halfMax));
+    const left = mL + (VW - mL - mR - (zMax - zMin) * scale0) / 2, cy = mT + (VH - mT - mB) / 2;
+    return { scale: scale0 * k, toX: z => tx + k * (left + (z - zMin) * scale0), toY: h => ty + k * (cy - h * scale0) };
+  };
+  const dimInput = { s, rt, dw, dh, L, hMouth, profile, flange, wall, shellCut, showRaumecke, raumeckeHalf: halfMax };
+  const side0 = Math.min(80, VW * 0.12);
+  let margins = { mL: side0, mR: side0, mT: Math.min(80, VH * 0.45), mB: Math.min(flange ? 62 : 40, VH * 0.15) };
+  for (let i = 0; i < 2; i++) {
+    const base = mapping(margins, { k: 1, tx: 0, ty: 0 });
+    const over = dimsOverflow(sideViewDims({ ...dimInput, toX: base.toX, toY: base.toY }).dims, VW, VH);
+    if (!(over.left || over.right || over.top || over.bottom)) break;
+    margins = { mL: margins.mL + over.left, mR: margins.mR + over.right, mT: margins.mT + over.top, mB: margins.mB + over.bottom };
+  }
+  const { scale, toX, toY } = mapping(margins, zoom.view);
+  const { k } = zoom.view;
 
   // ── Wand: Sektionen bleiben an zInnerApex farblich getrennt; eine Verrundung liegt
   //    zur Hälfte in der Throat- (rosa), zur Hälfte in der Aufweitungssektion (grün) ──
@@ -53,17 +64,8 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
   const wallPath = (zs, sign) => zs.map((z, i) => `${i === 0 ? "M" : "L"}${toX(z)},${toY(sign * profile(z))}`).join(" ");
   const hTrans = profile(s.zInnerApex);
 
-  // Bemaßungslagen
-  const dimMouthX  = toX(s.zApex) + 18;
-  // links verschachtelt nach Größe: Throat, Treiber, Flansch – das kleinste innen
-  const [throatLayer, drivLayer, flangeLayer] = nestedLayers([2 * rt, dw, flange ? flange.diameter : Infinity]);
-  const leftDimX   = layer => toX(s.hatTipZ) - 18 - 22 * layer;
-  const dimThroatX = leftDimX(throatLayer);
-  const dimDrivX   = leftDimX(drivLayer);
-  const dimFlangeX = leftDimX(flangeLayer);
-  const dimLY      = toY(-halfMax) + 16;
-  const dimTop1Y   = toY(halfMax) - 18;
-  const dimTop2Y   = toY(halfMax) - 40;
+  // Maße mit Lagen nach den Bemaßungsregeln (dim-layout.js); die Raumecken-Linie reicht bis ±halfMax
+  const { dims } = sideViewDims({ ...dimInput, toX, toY });
 
   return (
     <div ref={containerRef} {...zoom.handlers}
@@ -108,40 +110,9 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
         <circle cx={toX(s.zApex)} cy={toY(hMouth/2)} r={DOT} fill={COLOR.arc} />
         <circle cx={toX(s.zApex)} cy={toY(-hMouth/2)} r={DOT} fill={COLOR.arc} />
 
-        {/* Rechts: Mundhöhe, als Kette weiter mit der Wandstärke */}
-        <Dim p1={[toX(s.zApex), toY(hMouth/2)]} p2={[toX(s.zApex), toY(-hMouth/2)]}
-          arrowPos={dimMouthX} color={COLOR.arc} marker="url(#arrV)" label={`${hMouth} mm`} />
-        {wall > 0 &&
-          <Dim p1={[toX(s.zApex), toY(hMouth/2 + wall)]} p2={[toX(s.zApex), toY(hMouth/2)]}
-            arrowPos={dimMouthX} color={COLOR.wand} marker="url(#arrV)" label={`${wall} mm`} />
-        }
-        {/* Links: Throat, Treiberbreite, Flansch-Ø – nach Größe verschachtelt */}
-        <Dim p1={[toX(0), toY(rt)]} p2={[toX(0), toY(-rt)]}
-          arrowPos={dimThroatX} color={COLOR.trak} marker="url(#arrV)" label={`Ø ${(rt*2).toFixed(1)} mm`} />
-        <Dim p1={[toX(-dh), toY(dw/2)]} p2={[toX(-dh), toY(-dw/2)]}
-          arrowPos={dimDrivX} color={COLOR.dim} marker="url(#arrV)" label={`${dw} mm`} />
-        {/* Flansch-Ø (links, Lage nach Größe) und -Dicke (unten, 2. Lage) */}
-        {flange && <>
-          <Dim p1={[toX(0), toY(flange.diameter / 2)]} p2={[toX(0), toY(-flange.diameter / 2)]}
-            arrowPos={dimFlangeX} color={COLOR.flansch} marker="url(#arrV)" label={`Ø ${flange.diameter.toFixed(0)} mm`} />
-          <Dim p1={[toX(0), toY(-flange.diameter / 2)]} p2={[toX(flange.thickness), toY(-flange.diameter / 2)]} orient="h"
-            arrowPos={dimLY + 22} color={COLOR.flansch} marker="url(#arrV)" label={`${flange.thickness} mm`} />
-        </>}
-        {/* Unten: Gesamtlänge – mit Raumecke ab der Hut-Spitze, ohne ab der Treiberrückseite */}
-        <Dim p1={[toX(zLStart), toY(0)]} p2={[toX(s.zApex), toY(0)]}
-          arrowPos={dimLY} color={COLOR.dim} marker="url(#arrV)" label={`L=${fmtLength(L)} mm`} sw="0.8" />
-        {/* Oben, 1. Lage: Kette (Hut-Spitze →) Treiberrückseite → Treiberfront */}
-        {showRaumecke && <Dim p1={[toX(s.hatTipZ), toY(dw/2)]} p2={[toX(-dh), toY(dw/2)]} orient="h"
-          arrowPos={dimTop1Y} color={COLOR.raum} marker="url(#arrV)" label={`${(dw/2).toFixed(0)} mm`} />}
-        <Dim p1={[toX(-dh), toY(dw/2)]} p2={[toX(0), toY(dw/2)]}
-          arrowPos={dimTop1Y} color={COLOR.driv} marker="url(#arrV)" label={`${dh} mm`} />
-        {/* Oben, 2. Lage: Kette Traktrix → Mund (axiale Längen) */}
-        {trakOn &&
-          <Dim p1={[toX(0), toY(rt)]} p2={[toX(s.zInnerApex), toY(hTrans)]} orient="h"
-            arrowPos={dimTop2Y} color={COLOR.trak} marker="url(#arrV)" label={`${s.zInnerApex.toFixed(0)} mm`} />
-        }
-        <Dim p1={[toX(zProfileStart), toY(profile(zProfileStart))]} p2={[toX(s.zApex), toY(hMouth/2)]} orient="h"
-          arrowPos={dimTop2Y} color={COLOR.horn} marker="url(#arrV)" label={`${(s.zApex - zProfileStart).toFixed(0)} mm`} />
+        {/* Maße rechts, links, unten, oben: Lagen nach den Bemaßungsregeln (dim-layout.js) */}
+        {dims.map(d => <Dim key={d.id} p1={d.p1} p2={d.p2} orient={d.orient} arrowPos={d.arrowPos}
+          color={d.color} marker="url(#arrV)" label={d.label} sw={d.sw} textAt={d.text.at} />)}
       </svg>
     </div>
   );

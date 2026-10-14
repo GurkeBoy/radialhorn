@@ -9,17 +9,6 @@ export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export const fmtLength = v => String(Number(v.toFixed(1)));
 
 /**
- * Maßlage je Wert für verschachtelte Bemaßungen: das kleinste Maß innen (Lage 0), das
- * größte außen; bei gleichen Werten bleibt die gegebene Reihenfolge.
- */
-export function nestedLayers(values) {
-  const order = values.map((v, i) => i).sort((a, b) => values[a] - values[b] || a - b);
-  const layer = new Array(values.length);
-  order.forEach((i, rank) => { layer[i] = rank; });
-  return layer;
-}
-
-/**
  * Polygonzug [a, z] (z aufsteigend) ab der Ebene z0: Punkte davor entfallen, der Schnittpunkt
  * mit z = z0 wird interpoliert.
  */

@@ -8,15 +8,17 @@ import { S } from "../theme.js";
  * Orientierung aus der größeren Ausdehnung (|dy| ≥ |dx| → senkrecht), bei 45°-Strecken
  * per orient="v" | "h" erzwingen.
  * @param arrowPos  Lage der Maßlinie: x bei senkrechter, y bei waagerechter Bemaßung
+ * @param textAt    Mitte der Beschriftung entlang der Maßlinie (y bzw. x); ohne: Mitte des Maßes.
+ *                  Passt der Text nicht zwischen die Pfeile, setzt dim-layout.js ihn neben ein Ende.
  */
-export function Dim({ p1, p2, arrowPos, color, marker, label, sw = "0.7", orient }) {
+export function Dim({ p1, p2, arrowPos, color, marker, label, sw = "0.7", orient, textAt }) {
   const [x1, y1] = p1, [x2, y2] = p2;
   const vertical = orient ? orient === "v" : Math.abs(y2 - y1) >= Math.abs(x2 - x1);
 
   if (vertical) {
     const ax = arrowPos;
     const d  = ax < (x1 + x2) / 2 ? -1 : 1;
-    const tx = ax + d * 8, my = (y1 + y2) / 2;
+    const tx = ax + d * 8, my = textAt ?? (y1 + y2) / 2;
     return <>
       <line x1={x1 + d*2} y1={y1} x2={ax + d*2} y2={y1} {...S.dimRef} stroke={color} />
       <line x1={x2 + d*2} y1={y2} x2={ax + d*2} y2={y2} {...S.dimRef} stroke={color} />
@@ -28,7 +30,7 @@ export function Dim({ p1, p2, arrowPos, color, marker, label, sw = "0.7", orient
 
   const ay = arrowPos;
   const d  = ay < (y1 + y2) / 2 ? -1 : 1;
-  const mx = (x1 + x2) / 2, ty = d > 0 ? ay + 11 : ay - 8;
+  const mx = textAt ?? (x1 + x2) / 2, ty = d > 0 ? ay + 11 : ay - 8;
   return <>
     <line x1={x1} y1={y1 + d*2} x2={x1} y2={ay + d*2} {...S.dimRef} stroke={color} />
     <line x1={x2} y1={y2 + d*2} x2={x2} y2={ay + d*2} {...S.dimRef} stroke={color} />
