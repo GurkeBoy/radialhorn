@@ -2,14 +2,35 @@
 // Enthält alles, was das Horn festlegt – nicht persönliche Einstellungen (Sprache, eingeklappte
 // Karten, Export-Auswahl, Ansicht an/aus). Beim Öffnen wird jeder Wert nach denselben Regeln geprüft
 // wie gespeicherte Einstellungen (settings.js); ungültige oder fehlende Werte → Standard.
-import { checkSetting } from "./settings.js";
-import { CURVES } from "./horn-math.js";
+import { checkSetting, readSetting, writeSetting } from "./settings.js";
+import { CURVES, lengthOffset } from "./horn-math.js";
 import { PLACEHOLDER_DRIVER } from "./simulation.js";
 import { fmtLength } from "./utils.js";
 
 export const PROJECT_FORMAT = "radialhorn-project";
-export const PROJECT_VERSION = 1;
+/** 2: L ohne Raumecke ab der Treiberrückseite (in Version 1 ab der Hut-Spitze, dw/2 dahinter). */
+export const PROJECT_VERSION = 2;
 export const PROJECT_EXTENSION = ".radialhorn.json";
+
+/**
+ * L aus der Zeit vor Version 2 umrechnen: ohne Raumecke zählte L ab der Hut-Spitze, jetzt ab der
+ * Treiberrückseite – um dw/2 kürzer, das Horn bleibt dasselbe. Mit Raumecke unverändert.
+ */
+export const legacyLength = (L, dw, showRaumecke) => L - lengthOffset(dw, showRaumecke);
+
+/**
+ * Gespeicherte Einstellungen einmalig auf den aktuellen Stand bringen (Schlüssel "schema", fehlt =
+ * Stand 1). Vor dem ersten Rendern aufrufen (main.jsx), nach initSettings.
+ */
+export function migrateSettings(storage) {
+  if (readSetting("schema", 1, storage) >= 2) return;
+  const L = readSetting("L", null, storage);
+  if (L !== null) {
+    writeSetting("L", legacyLength(L, readSetting("dw", DESIGN_DEFAULTS.dw, storage),
+      readSetting("showRaumecke", DESIGN_DEFAULTS.showRaumecke, storage)), storage);
+  }
+  writeSetting("schema", 2, storage);
+}
 
 /**
  * Entwurf: Schlüssel (wie die gespeicherten Einstellungen) → Standardwert. Einzige Quelle für die
@@ -122,5 +143,7 @@ export function parseProject(text) {
     }
     design[key] = checked;
   }
+  // vor Version 2 zählte L ohne Raumecke ab der Hut-Spitze (fehlende Version: die erste)
+  if (!(Number(data.version) >= 2)) design.L = legacyLength(design.L, design.dw, design.showRaumecke);
   return { design, invalid, missing, newer: Number(data.version) > PROJECT_VERSION };
 }

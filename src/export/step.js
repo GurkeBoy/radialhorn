@@ -421,6 +421,6 @@ export function hornStep(design, meta) {
 export function exportSTEP(design) {
   const { s, rt, wall = 0 } = design;
   const kind = wall > 0 ? `schale_${wall}mm${design.flange ? "_flansch" : ""}` : "luftvolumen";
-  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(s.zApex - s.hatTipZ)}_T${(rt * 2).toFixed(0)}mm_${kind}.step`;
+  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm_${kind}.step`;
   return downloadFile(() => hornStep(design, { fileName: fname }), fname, "model/step");
 }

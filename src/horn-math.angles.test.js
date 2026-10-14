@@ -121,3 +121,20 @@ describe("Winkelabhängigkeit", () => {
     for (let i = 1; i < widths.length; i++) expect(widths[i]).toBeGreaterThan(widths[i - 1]);
   });
 });
+
+describe("maxLWithRaumecke (L-Grenze, wenn Lₜ der Raumecke folgt)", () => {
+  const RT_ = 25.4, DW_ = 182, DH_ = 90;
+  it("bis zum Reglerende lösbar, mit passendem Lₜ (auch mit Wandstärke)", () => {
+    for (const [angle, extra] of [[100, 0], [140, 0], [140, 30], [160, 0]]) {
+      const m = createHornMath(angle);
+      expect(m.maxLWithRaumecke(RT_, DW_, DH_, extra, 1200)).toBe(1200);
+      const lt = m.minLtForRaumecke(1200, RT_, DW_, DH_, extra);
+      expect(lt).not.toBeNull();
+      expect(lt).toBeLessThanOrEqual(m.maxLt(1200, RT_, DW_, DH_));
+    }
+  });
+
+  it("Öffnungswinkel ≤ 90°: die Wand erreicht die Raumecke nie – keine Grenze", () => {
+    expect(createHornMath(80).maxLWithRaumecke(RT_, DW_, DH_, 0, 1200)).toBe(null);
+  });
+});

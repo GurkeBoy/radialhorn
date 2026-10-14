@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  DESIGN_DEFAULTS, PROJECT_FORMAT, PROJECT_VERSION, ProjectError, buildProject, parseProject, projectFileName,
+  DESIGN_DEFAULTS, PROJECT_FORMAT, PROJECT_VERSION, ProjectError, buildProject, parseProject, projectFileName, migrateSettings,
 } from "./project.js";
 import { PLACEHOLDER_DRIVER } from "./simulation.js";
 
@@ -89,5 +89,38 @@ describe("Projektdateien", () => {
 
   it("Dateiname aus Winkel und Länge", () => {
     expect(projectFileName({ openingAngle: 140, L: 575.2898834303028 })).toBe("radialhorn_140deg_L575.3.radialhorn.json");
+  });
+});
+
+describe("Gesamtlänge ab der Treiberrückseite (Formatversion 2)", () => {
+  const v1 = design => JSON.stringify({ format: PROJECT_FORMAT, version: 1, design });
+
+  it("Version 1 ohne Raumecke: L um dw/2 kürzer (dasselbe Horn), mit Raumecke unverändert", () => {
+    expect(parseProject(v1({ ...DESIGN_DEFAULTS, showRaumecke: false, L: 600, dw: 182 })).design.L).toBe(509);
+    expect(parseProject(v1({ ...DESIGN_DEFAULTS, showRaumecke: true, L: 600 })).design.L).toBe(600);
+    const noVersion = JSON.stringify({ format: PROJECT_FORMAT, design: { ...DESIGN_DEFAULTS, showRaumecke: false, L: 600, dw: 120 } });
+    expect(parseProject(noVersion).design.L).toBe(540);
+  });
+
+  it("Version 2 bleibt, wie sie ist; neue Dateien sind Version 2", () => {
+    const text = buildProject({ ...DESIGN_DEFAULTS, showRaumecke: false, L: 509 });
+    expect(JSON.parse(text).version).toBe(2);
+    expect(parseProject(text).design.L).toBe(509);
+  });
+
+  it("gespeicherte Einstellungen: einmalig umgerechnet", () => {
+    const data = new Map();
+    const st = { getItem: k => data.get(k) ?? null, setItem: (k, v) => data.set(k, String(v)), removeItem: k => data.delete(k),
+      key: i => [...data.keys()][i] ?? null, get length() { return data.size; } };
+    st.setItem("radialhorn.v1.L", "600");
+    st.setItem("radialhorn.v1.showRaumecke", "false");
+    migrateSettings(st);
+    expect(st.getItem("radialhorn.v1.L")).toBe("509");
+    migrateSettings(st);                                          // kein zweites Mal
+    expect(st.getItem("radialhorn.v1.L")).toBe("509");
+    const fresh = new Map();
+    const st2 = { ...st, getItem: k => fresh.get(k) ?? null, setItem: (k, v) => fresh.set(k, String(v)) };
+    migrateSettings(st2);                                         // neue Installation: nur die Kennung
+    expect([...fresh.keys()]).toEqual(["radialhorn.v1.schema"]);
   });
 });

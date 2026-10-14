@@ -5,6 +5,7 @@ import { GLOBAL_CSS } from "./theme.js";
 import { FONT_CSS } from "./fonts.js";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { initSettings } from "./settings.js";
+import { migrateSettings } from "./project.js";
 
 const SETTINGS_FILE = import.meta.env.DEV ? "einstellungen-dev.json" : "einstellungen.json";
 
@@ -30,8 +31,11 @@ const settingsReady = isTauri()
     }).catch(e => console.error("Einstellungsdatei nicht lesbar, nur WebView2-Speicher:", e))
   : Promise.resolve();
 
-settingsReady.finally(() => ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-));
+settingsReady.finally(() => {
+  migrateSettings();   // ältere gespeicherte Werte einmalig umrechnen (project.js)
+  ReactDOM.createRoot(document.getElementById("root")).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+});

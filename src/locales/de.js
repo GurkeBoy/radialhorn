@@ -40,12 +40,14 @@ export default {
   // Horizontales Profil
   "geometry.openingAngle": "Öffnungswinkel",
   "geometry.length": "Gesamtlänge L",
+  "geometry.lengthFromCorner": "ab der Spitze der Raumecke",
+  "geometry.lengthFromDriver": "ab der Treiberrückseite",
   "geometry.tractrixLength": "Traktrix-Länge Lₜ",
   "geometry.clothoid": "Krümmungsstetiger Übergang",
   "geometry.clothoidLength": "Klothoide ℓ",
   "warn.cornerLimit": "Raumecken-Limit ({mm} mm)",
   "warn.ltMax": "Lₜ-Maximum erreicht ({mm} mm)",
-  "warn.ltMin": "Lₜ-Minimum (Raumecke: {mm} mm)",
+  "note.ltFollows": "Lₜ folgt der Raumecke ({mm} mm), damit die Mundkanten an der Wand bleiben",
   "warn.clothoidLt": "Lₜ für diese Klothoide mind. {mm} mm",
   "warn.clothoidTooLong": "Klothoide zu lang für diese Geometrie",
 

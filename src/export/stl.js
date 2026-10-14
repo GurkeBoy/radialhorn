@@ -43,7 +43,7 @@ export const hornTriangles = (design, res = undefined) => hornGeometry(design, r
 export function exportSTL(design) {
   const { s, rt, wall = 0 } = design;
   const kind = wall > 0 ? `schale_${wall}mm${design.flange ? "_flansch" : ""}` : "luftvolumen";
-  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(s.zApex - s.hatTipZ)}_T${(rt * 2).toFixed(0)}mm_${kind}.stl`;
+  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm_${kind}.stl`;
   // doppelte Auflösung: Facetten ≈ ¼ so tief wie in der Ansicht (≤ 0,02 mm statt ≤ 0,06 mm innen)
   return downloadFile(() => stlBinary(hornTriangles(design, EXPORT_RES)), fname, "model/stl");
 }

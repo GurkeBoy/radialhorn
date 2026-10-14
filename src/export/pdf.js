@@ -164,7 +164,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   const kv = [
     [tr("pdf.openingHoriz"),   s.openingAngle + " °"],
     [tr("pdf.openingVert"),    verticalMouthAngle(s, profile).toFixed(1) + " °"],
-    [tr("pdf.length"),         fmtLength(L) + " mm"],
+    [tr("pdf.length"),         fmtLength(L) + " mm " + tr(showRaumecke ? "geometry.lengthFromCorner" : "geometry.lengthFromDriver")],
     [tr("pdf.tractrixLength"), s.Lt.toFixed(0) + " mm"],
     [tr("pdf.throat"),         (rt * 2).toFixed(1) + " mm"],
     [tr("pdf.mouthWidth"),     mundB + " mm"],

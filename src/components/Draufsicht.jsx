@@ -113,7 +113,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs><ArrowMarker id="arrH" /></defs>
 
-        <line x1={cx} y1={toY(s.hatTipZ - 6)} x2={cx} y2={toY(s.zApex) + 6} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
+        <line x1={cx} y1={toY((showRaumecke ? s.hatTipZ : -dh) - 6)} x2={cx} y2={toY(s.zApex) + 6} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
 
         {showRaumecke && <>
           {[reRx, reLx].map(x => (
@@ -198,15 +198,15 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           fill="none" stroke={COLOR.dim} strokeWidth="0.8" />
         <text x={cx} y={fy + angleR * 0.5} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>{s.openingAngle}°</text>
 
-        {/* Links: Gesamtlänge L */}
-        <Dim p1={[cx, hatY]} p2={[cx, toY(s.zApex)]}
+        {/* Links: Gesamtlänge L – mit Raumecke ab der Hut-Spitze, ohne ab der Treiberrückseite */}
+        <Dim p1={[cx, showRaumecke ? hatY : toY(-dh)]} p2={[cx, toY(s.zApex)]}
           arrowPos={ax} color={COLOR.dimL} marker="url(#arrH)" label={`L=${fmtLength(L)} mm`} sw="0.8" />
 
-        {/* Rechts, 1. Lage: Kette Hut-Spitze → Treiberrückseite → Treiberfront; 2. Lage: Traktrix */}
+        {/* Rechts, 1. Lage: Kette (Hut-Spitze →) Treiberrückseite → Treiberfront; 2. Lage: Traktrix */}
         <Dim p1={[toX(dw/2), toY(-dh)]} p2={[toX(dw/2), toY(0)]} orient="v"
           arrowPos={bx} color={COLOR.dim} marker="url(#arrH)" label={`${dh} mm`} />
-        <Dim p1={[hatX, hatY]} p2={[toX(dw/2), toY(-dh)]} orient="v"
-          arrowPos={bx} color={COLOR.raum} marker="url(#arrH)" label={`${(dw/2).toFixed(0)} mm`} />
+        {showRaumecke && <Dim p1={[hatX, hatY]} p2={[toX(dw/2), toY(-dh)]} orient="v"
+          arrowPos={bx} color={COLOR.raum} marker="url(#arrH)" label={`${(dw/2).toFixed(0)} mm`} />}
         {/* mit Klothoide: Kette weiter über Traktrix und Klothoide bis zum Beginn der Geraden (axial, an der Wand) */}
         {hasClothoid(s) && (() => {
           const [xa, za] = s.clothoid.start;

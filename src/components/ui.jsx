@@ -139,6 +139,10 @@ export function Slider({ label, value, min, max, step, unit, onChange }) {
   // Anzeige mit einer Nachkommastelle (feinere Schrittweite wie Le 0,01: deren Stellen), ohne unnötige Null
   const display = String(Number(value.toFixed(Math.max(1, decimals))));
   const clampTo = v => Math.max(min, Math.min(max, v));
+  // Raster des Schiebers auf Vielfachen der Schrittweite statt ab min: ein gerechnetes min (Lmin hängt
+  // an Lₜ, das an der Raumecke mit L mitwandert) verschöbe es sonst bei jedem Schritt, der Schieber
+  // zeigte dann den nächsten Rasterwert statt des Werts. Unter min Gezogenes wird auf min begrenzt.
+  const gridMin = round(Math.floor(min / step + 1e-9) * step);
 
   const discard = useRef(false);   // Esc: beim folgenden Verlassen nichts übernehmen
   const commit = () => {
@@ -159,8 +163,8 @@ export function Slider({ label, value, min, max, step, unit, onChange }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: ROW_COLUMNS, columnGap: ROW_GAP, alignItems: "center", marginBottom: 8 }}>
       <span style={{ fontSize: 11, color: UI.label, fontFamily: FONT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-      <input type="range" min={min} max={max} step={step} value={Math.min(Math.max(value, min), max)} aria-label={label}
-        onChange={e => onChange(parseFloat(e.target.value))}
+      <input type="range" min={gridMin} max={max} step={step} value={Math.min(Math.max(value, min), max)} aria-label={label}
+        onChange={e => onChange(clampTo(parseFloat(e.target.value)))}
         style={{ width: "100%", margin: 0, accentColor: UI.accent }} />
       <div style={{ position: "relative" }}>
         <input type="number" step={step} value={draft ?? display} aria-label={label}

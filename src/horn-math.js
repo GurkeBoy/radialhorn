@@ -8,8 +8,9 @@
  *     x = halbe Breite.  Seitenriss: z wie oben, h = halbe Höhe.
  *   - Horizontale Kontur: Traktrix-Eingang (0 … Lt) → gerade Wand unter dem halben
  *     Öffnungswinkel, radial zum Fokuspunkt → Mundbogen (Teilkreis um den Fokus).
- *   - Die Gesamtlänge L wird von der Hut-Spitze der Raumecke (hatTipZ = −dh − dw/2)
- *     bis zum Scheitel des Mundbogens gemessen.
+ *   - Die Gesamtlänge L wird hier immer von der Hut-Spitze der Raumecke (hatTipZ = −dh − dw/2)
+ *     bis zum Scheitel des Mundbogens gemessen. Die App zeigt L ohne Raumecke ab der
+ *     Treiberrückseite (lengthOffset); geometry.js rechnet um.
  *
  * Aufbau
  *   createHornMath(openingAngle) liefert die winkelabhängigen Funktionen (Solver und
@@ -40,6 +41,13 @@ export const SPEED_OF_SOUND = 343000;
  */
 export const focusRadius = (s, x, z) =>
   z >= s.zFocus ? Math.hypot(x, z - s.zFocus) : z - s.zFocus + Math.abs(x);
+
+/**
+ * Abstand [mm] der Hut-Spitze (Beginn von L in dieser Datei) hinter dem Beginn der angezeigten
+ * Gesamtlänge: mit Raumecke 0 (L ab der Hut-Spitze), ohne dw/2 (L ab der Treiberrückseite –
+ * eine unsichtbare Hut-Spitze wäre kein sinnvoller Bezug). Angezeigt = intern − lengthOffset.
+ */
+export const lengthOffset = (dw, showRaumecke) => showRaumecke ? 0 : dw / 2;
 
 /** Normierte Traktrix (r0 = 1), Parameter t: axiale Position und Radius. */
 export const zN = t => t - Math.tanh(t);
@@ -336,9 +344,32 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     return hi;
   }
 
+  /**
+   * Größte Gesamtlänge bis cap, die mit Raumecke noch geht, wenn Lₜ der Raumecke folgt (Lₜ so
+   * groß, dass die Mundkante an der Wand liegt – minLtForRaumecke – und höchstens maxLt). Bisher
+   * in allen geprüften Geometrien bis 1200 mm lösbar; sonst Bisektion (lösbar ist ein Anfangsstück).
+   * null, wenn die Wand die Raumecke nie erreicht (Öffnungswinkel ≤ 90°: keine Grenze durch die
+   * Raumecke). Passt gar keine Länge, die kleinste (minL ohne Traktrix).
+   */
+  function maxLWithRaumecke(rt, dw, dh, extraBreite = 0, cap = Infinity) {
+    if (TAN <= 1) return null;
+    const fits = L => {
+      const lt = minLtForRaumecke(L, rt, dw, dh, extraBreite);
+      return lt !== null && lt <= maxLt(L, rt, dw, dh);
+    };
+    if (fits(cap)) return cap;
+    let lo = minL(0, rt, dw, dh), hi = cap;
+    if (!fits(lo)) return lo;
+    for (let i = 0; i < 60 && hi - lo > LIMIT_TOL; i++) {
+      const m = (lo + hi) / 2;
+      fits(m) ? (lo = m) : (hi = m);
+    }
+    return lo;
+  }
+
   return {
     openingAngle, ALPHA2, T_TRANS, PHI_TOTAL,
-    solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke, minLtForClothoid,
+    solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke, minLtForClothoid, maxLWithRaumecke,
   };
 }
 

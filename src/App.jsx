@@ -1,7 +1,7 @@
 // Radialhorn-Konfigurator: Parameter in der Seitenleiste, Draufsicht und Seitenriss rechts.
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
-  hasTraktrix, CURVES, makeProfile,
+  hasTraktrix, CURVES, makeProfile, lengthOffset,
   mouthArea, verticalMouthAngle, frequencyEstimates,
 } from "./horn-math.js";
 import { FONT, SIDEBAR_WIDTH, UI } from "./theme.js";
@@ -92,6 +92,12 @@ export default function App() {
   const [simNoDelay,      setSimNoDelay]      = usePersistentState("simNoDelay", false);
   const [driver,          setDriver]          = usePersistentState("driver", D.driver);
   const setDriverValue = key => v => setDriver(d => ({ ...d, [key]: v }));
+  // L beginnt mit Raumecke an der Hut-Spitze, ohne an der Treiberrückseite (dw/2 davor): beim
+  // Umschalten wird L mit umgerechnet, das Horn bleibt dasselbe
+  const toggleRaumecke = on => {
+    setL(l => l + lengthOffset(dw, !on) - lengthOffset(dw, on));
+    setShowRaumecke(on);
+  };
 
   // Projektdatei (project.js): der Entwurf als Ganzes, Schlüssel wie die gespeicherten Einstellungen
   const designValues = {
@@ -245,10 +251,11 @@ export default function App() {
         <Card title={t("card.geometry")} id="geometrie">
           <Slider label={t("geometry.openingAngle")} value={openingAngle} min={60} max={160} step={1} unit="°" onChange={setOpeningAngle} />
           <Slider label={t("geometry.length")} value={shown("L", LClamped)} min={Lmin} max={Lmax} step={5} unit="mm" onChange={setL} />
+          <Note>{t(g.showRaumecke ? "geometry.lengthFromCorner" : "geometry.lengthFromDriver")}</Note>
           {warnings.raumecke && <Warn>{t("warn.cornerLimit", { mm: LMaxRaumecke.toFixed(0) })}</Warn>}
           <Slider label={t("geometry.tractrixLength")} value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={setLt} />
           {warnings.ltMax && <Warn>{t("warn.ltMax", { mm: LtMax.toFixed(0) })}</Warn>}
-          {warnings.ltMin && <Warn>{t("warn.ltMin", { mm: LtMin.toFixed(0) })}</Warn>}
+          {warnings.ltFollows && <Note>{t("note.ltFollows", { mm: LtClamped.toFixed(0) })}</Note>}
           <Toggle label={t("geometry.clothoid")} checked={clothoidOn} onChange={setClothoidOn} />
           {clothoidOn && <Slider label={t("geometry.clothoidLength")} value={clothoidLength} min={1} max={150} step={1} unit="mm" onChange={setClothoidLength} />}
           {clothoidOn && warnings.clothoid === "Lt" && <Warn>{t("warn.clothoidLt", { mm: LtMinClothoid.toFixed(0) })}</Warn>}
@@ -273,7 +280,7 @@ export default function App() {
         </Card>
 
         <Card title={t("card.placement")} id="aufstellung">
-          <Toggle label={t("placement.corner")} checked={showRaumecke} onChange={setShowRaumecke}
+          <Toggle label={t("placement.corner")} checked={showRaumecke} onChange={toggleRaumecke}
             hint={showRaumecke ? t("placement.cornerHint") : null} />
         </Card>
 
@@ -372,7 +379,7 @@ export default function App() {
         </div>
         <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
           <ViewPanel flex={1}>
-            <Seitenriss s={s} rt={rt} dw={g.dw} dh={g.dh} L={LClamped} hMouth={g.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} shellCut={shellCut} />
+            <Seitenriss s={s} rt={rt} dw={g.dw} dh={g.dh} L={LClamped} hMouth={g.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} shellCut={shellCut} showRaumecke={g.showRaumecke} />
           </ViewPanel>
           {sim && <ViewPanel flex={1}>
             <Frequenzgang result={simResult} fLimit={sim.fLimit} mouth={p.mouth} showPhase={simPhase} placeholder={isPlaceholder(p.driver)} />

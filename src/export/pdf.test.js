@@ -27,7 +27,7 @@ describe("buildDatasheet", () => {
     const en = buildDatasheet(design(), ALL, DATE, "en");
     expect(en).toContain('<html lang="en">');
     expect(row(en, "Opening angle horiz.")).toBe("140 °");
-    expect(row(en, "Total length L")).toBe("500 mm");
+    expect(row(en, "Total length L")).toBe("500 mm from the tip of the room corner");
     expect(row(en, "Flare")).toBe("Exponential");
     expect(row(en, "Room corner")).toBe("yes");
     expect(en).toContain("<b>Date</b> 01/10/2026");
@@ -39,7 +39,7 @@ describe("buildDatasheet", () => {
 
   it("Kennwerte", () => {
     expect(row(html, "Öffnungswinkel horiz.")).toBe("140 °");
-    expect(row(html, "Gesamtlänge L")).toBe("500 mm");
+    expect(row(html, "Gesamtlänge L")).toBe("500 mm ab der Spitze der Raumecke");
     expect(row(html, "Throat Ø")).toBe("50.8 mm");
     expect(row(html, "Mundbreite")).toBe((2 * s.xMouth).toFixed(0) + " mm");
     expect(row(html, "Teilkreis-Radius")).toBe(s.arcR.toFixed(1) + " mm");

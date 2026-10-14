@@ -6,11 +6,11 @@
 // rechnet nur neu, was er betrifft. Jedes Ergebnis trägt eine Version; die App behält bei gleicher
 // Version ihr bisheriges Objekt (adoptGeometry) – so bleiben memo/useMemo dahinter wirksam, auch
 // wenn die Daten als Kopie aus dem Worker kommen.
-import { createHornMath, computeFillet, makeProfile, throatMorph } from "./horn-math.js";
+import { createHornMath, computeFillet, makeProfile, throatMorph, lengthOffset } from "./horn-math.js";
 import { flangeLayout, shellPlanOutline, shellProfileOutline } from "./horn-mesh.js";
 import { linspace } from "./utils.js";
 
-export const L_MAX = 1200;   // Obergrenze des L-Reglers ohne Raumecke [mm]
+export const L_MAX = 1200;   // Obergrenze des L-Reglers [mm]; mit Raumecke gilt maxLWithRaumecke, falls kleiner
 
 /** Reglerwerte, von denen die Geometrie abhängt (alles andere – Simulation, Ansicht – nicht). */
 export const GEOMETRY_KEYS = [
@@ -25,7 +25,8 @@ const VERSIONED = ["s", "fillet", "morph", "flange", "shellOuter", "shellCut"];
 /**
  * Rechenkern mit Zwischenspeichern. compute(params) → { params, values, versions }.
  * values: s, fillet, morph, flange, shellOuter (Draufsicht), shellCut (Seitenriss), Grenzen
- * (LtMin, LtMax, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin, Lmax, LClamped), warnings, wall, edge.
+ * (LtMin, LtMax, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin, Lmax, LClamped – Längen wie angezeigt,
+ * ohne Raumecke ab der Treiberrückseite; s rechnet intern ab der Hut-Spitze), warnings, wall, edge.
  * versions: je Eintrag aus VERSIONED, eindeutig über Kerne hinweg.
  */
 export function createGeometryEngine() {
@@ -49,21 +50,30 @@ export function createGeometryEngine() {
     // 45°-Raumecke verkleinert den verfügbaren Platz
     const extraBreite = p.showRaumecke && p.showWandstaerke ? (Math.cos(m.ALPHA2) + Math.sin(m.ALPHA2)) * p.wandstaerke : 0;
     const geo = [math.version, rt, p.dw, p.dh];
+    // Angezeigtes L beginnt ohne Raumecke an der Treiberrückseite, gerechnet wird ab der Hut-Spitze
+    // (dw/2 dahinter): L hier intern, Grenzen und LClamped gehen angezeigt zurück
+    const off = lengthOffset(p.dw, p.showRaumecke);
+    const L = p.L + off;
 
-    // Grenzen für Lₜ hängen an L, nicht an Lₜ; die Klothoiden-Grenze nur an rt
-    const { LtMax, LtMinRaumecke } = stage("ltLimits", [...geo, p.L, p.showRaumecke, extraBreite], () => ({
-      LtMax:         m.maxLt(p.L, rt, p.dw, p.dh),
-      LtMinRaumecke: p.showRaumecke ? m.minLtForRaumecke(p.L, rt, p.dw, p.dh, extraBreite) : null,
+    // Grenzen für Lₜ hängen an L, nicht an Lₜ; die Klothoiden-Grenze nur an rt. Lₜ folgt der
+    // Raumecke: wächst L, steigt die Untergrenze so, dass die Mundkante an der Wand bleibt – das
+    // eingestellte Lₜ bleibt gespeichert und gilt wieder, sobald L kleiner wird
+    const { LtMax, LtMinRaumecke } = stage("ltLimits", [...geo, L, p.showRaumecke, extraBreite], () => ({
+      LtMax:         m.maxLt(L, rt, p.dw, p.dh),
+      LtMinRaumecke: p.showRaumecke ? m.minLtForRaumecke(L, rt, p.dw, p.dh, extraBreite) : null,
     })).value;
     const LtMinClothoid = stage("ltClothoid", [math.version, rt], () => m.minLtForClothoid(rt)).value;
     const LtMin     = Math.max(LtMinRaumecke ?? 0, LtMinClothoid);
     const LtClamped = Math.min(Math.max(p.Lt, LtMin), LtMax);
-    // Grenzen für L hängen am begrenzten Lₜ, nicht an L
-    const { LMaxRaumecke, Lmin } = stage("lLimits", [...geo, LtClamped, p.showRaumecke, extraBreite], () => ({
-      LMaxRaumecke: p.showRaumecke ? m.maxLforRaumecke(LtClamped, rt, p.dw, p.dh, extraBreite) : null,
-      Lmin:         m.minL(LtClamped, rt, p.dw, p.dh),
+    // Grenzen für L hängen am begrenzten Lₜ, nicht an L. LMaxForLt: mit diesem Lₜ (begrenzt nur,
+    // wenn Lₜ nicht mehr folgen kann); LMaxRaumecke: Reglergrenze, mit folgendem Lₜ – hängt weder an L noch an Lₜ
+    const { LMaxForLt, Lmin } = stage("lLimits", [...geo, LtClamped, p.showRaumecke, extraBreite], () => ({
+      LMaxForLt: p.showRaumecke ? m.maxLforRaumecke(LtClamped, rt, p.dw, p.dh, extraBreite) : null,
+      Lmin:      m.minL(LtClamped, rt, p.dw, p.dh),
     })).value;
-    const LClamped = LMaxRaumecke !== null && p.L > LMaxRaumecke ? LMaxRaumecke : p.L;
+    const LMaxRaumecke = stage("lMaxRaumecke", [...geo, p.showRaumecke, extraBreite],
+      () => p.showRaumecke ? m.maxLWithRaumecke(rt, p.dw, p.dh, extraBreite, L_MAX) : null).value;
+    const LClamped = LMaxForLt !== null && L > LMaxForLt ? LMaxForLt : L;
     const s = stage("s", [...geo, LClamped, LtClamped], () => m.solveHorn(LClamped, LtClamped, rt, p.dw, p.dh));
     const sv = s.value;
 
@@ -99,12 +109,14 @@ export function createGeometryEngine() {
       params: p,
       values: {
         ...Object.fromEntries(VERSIONED.map(k => [k, stages[k].value])),
-        LtMin, LtMax, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin, Lmax: LMaxRaumecke ?? L_MAX, LClamped, wall, edge,
+        // Längen angezeigt (ohne Raumecke ab der Treiberrückseite); LMaxRaumecke nur mit Raumecke, dort ist off = 0
+        LtMin, LtMax, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin: Lmin - off, Lmax: LMaxRaumecke ?? L_MAX,
+        LClamped: LClamped - off, wall, edge,
         warnings: {
-          raumecke: p.showRaumecke && LMaxRaumecke !== null && p.L >= LMaxRaumecke - 1,
-          ltMax:    p.Lt > LtMax,
-          ltMin:    p.showRaumecke && LtMinRaumecke !== null && p.Lt <= LtMin + 0.5,
-          clothoid: LtMinClothoid > LtMax ? "zu lang" : p.Lt < LtMinClothoid ? "Lt" : null,
+          raumecke:  LMaxRaumecke !== null && LMaxRaumecke < L_MAX && p.L >= LMaxRaumecke - 1,
+          ltMax:     p.Lt > LtMax,
+          ltFollows: LtMinRaumecke !== null && LtMinRaumecke >= LtMinClothoid && p.Lt < LtMinRaumecke - 1e-6,
+          clothoid:  LtMinClothoid > LtMax ? "zu lang" : p.Lt < LtMinClothoid ? "Lt" : null,
         },
       },
       versions: Object.fromEntries(VERSIONED.map(k => [k, `${id}:${stages[k].version}`])),

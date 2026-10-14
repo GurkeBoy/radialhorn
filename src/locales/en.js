@@ -40,12 +40,14 @@ export default {
   // Horizontal profile
   "geometry.openingAngle": "Opening angle",
   "geometry.length": "Total length L",
+  "geometry.lengthFromCorner": "from the tip of the room corner",
+  "geometry.lengthFromDriver": "from the back of the driver",
   "geometry.tractrixLength": "Tractrix length Lₜ",
   "geometry.clothoid": "Curvature-continuous transition",
   "geometry.clothoidLength": "Clothoid ℓ",
   "warn.cornerLimit": "Room-corner limit ({mm} mm)",
   "warn.ltMax": "Lₜ maximum reached ({mm} mm)",
-  "warn.ltMin": "Lₜ minimum (room corner: {mm} mm)",
+  "note.ltFollows": "Lₜ follows the room corner ({mm} mm) so the mouth edges stay on the walls",
   "warn.clothoidLt": "This clothoid needs Lₜ ≥ {mm} mm",
   "warn.clothoidTooLong": "Clothoid too long for this geometry",
 

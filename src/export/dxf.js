@@ -156,6 +156,6 @@ export const ALL_LAYERS = { draufsicht: true, mundbogen: true, fokus: true, seit
 
 export function exportDXF(design) {
   const { s, rt } = design;
-  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(s.zApex - s.hatTipZ)}_T${(rt * 2).toFixed(0)}mm.dxf`;
+  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm.dxf`;
   return downloadFile(() => buildDXF(design, ALL_LAYERS), fname, "application/dxf");
 }

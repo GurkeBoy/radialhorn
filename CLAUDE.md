@@ -103,7 +103,9 @@ Horizontale Kontur in drei (mit Klothoide vier) Abschnitten:
 
 **Treiber:** Zylinder mit Durchmesser dw und Länge dh, Achse = Hornachse z, Front bei z = 0 (in beiden Schnitten ein Rechteck dw × dh).
 
-**L** wird von der Hut-Spitze der Raumecke (`hatTipZ = −dh − dw/2`) bis zum Mundscheitel `zApex` gemessen.
+**L** wird mit Raumecke von der Hut-Spitze (`hatTipZ = −dh − dw/2`), ohne von der Treiberrückseite (z = −dh) bis zum Mundscheitel `zApex` gemessen. `horn-math.js` rechnet immer ab der Hut-Spitze; `geometry.js` rechnet um (`lengthOffset`: ohne Raumecke dw/2) und gibt `LClamped`, `Lmin`, `Lmax` wie angezeigt zurück. Beim Umschalten der Raumecke rechnet die App L mit um (`toggleRaumecke`, das Horn bleibt dasselbe). Ältere Daten: Projektdateien vor Formatversion 2 und gespeicherte Einstellungen ohne `schema` ≥ 2 zählten ohne Raumecke noch ab der Hut-Spitze – `parseProject` bzw. `migrateSettings` (vor dem ersten Rendern) ziehen dw/2 ab.
+
+**Lₜ folgt der Raumecke:** mit Raumecke ist die Untergrenze von Lₜ `minLtForRaumecke(L)` – wächst L, steigt Lₜ so, dass die Mundkante an der Wand bleibt; das eingestellte Lₜ bleibt gespeichert und gilt wieder, sobald L kleiner wird. Lₜ ändert L nicht (unter die Untergrenze lässt es sich nicht ziehen). Der L-Regler reicht deshalb bis `maxLWithRaumecke` (größtes L, bei dem dieses Lₜ ≤ `maxLt(L)` ist – in allen geprüften Geometrien bis zum Reglerende 1200 mm), nicht nur bis `maxLforRaumecke` des aktuellen Lₜ. Hinweis statt Warnung: `note.ltFollows`.
 
 **Seitenriss-Profil** (`verticalHalfHeight`): waagerechter Throat (h = rt) bis zInnerApex, danach Aufweitung Linear/Exponential/Hypex bis hMouth/2. Der Hypex-Exponent wird gecacht (der Verrundungs-Solver wertet das Profil zehntausendfach aus).
 
@@ -220,6 +222,7 @@ Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint
 **Verschachtelung:** Wo mehrere Maße auf derselben Seite übereinander liegen, kommt das kleinste innen (1. Lage), das größte außen – die Lage ergibt sich aus der Größe, nicht aus einer festen Reihenfolge (`nestedLayers` in `utils.js`), damit sich Hilfslinien nicht kreuzen.
 
 **Lagen-Belegung**
+- Ohne Raumecke beginnen L und die Achse an der Treiberrückseite; das Kettenglied Hut-Spitze → Treiberrückseite (dw/2) und im Seitenriss die Raumecken-Linie entfallen.
 - Draufsicht links: L. Rechts, 1. Lage: Kette Hut-Spitze → Treiberrückseite (dw/2, Raumecke-Farbe) → Treiberfront (dh), mit Klothoide weiter → Traktrix-Ende → Beginn der Geraden (axial an der Wand, Summe = Lt); 2. Lage: Eingang auf der Achse (0 → zInnerApex). Oben: Throat und Treiberbreite, nach Größe verschachtelt. Schräg links: gerader Bereich (1.), Fokus → Mund (2., beschriftet als Teilkreis-Radius „R …“). Schräg rechts (mit Wandstärke): t parallel zur Stirnfläche der Seitenwand, Mundkante → E, außerhalb des Horns. Unten: Mundbreite, außerhalb der Zeichnung (1. Lage unter dem Mundscheitel).
 - Seitenriss links: Throat, Treiberbreite, Flansch-Ø – nach Größe verschachtelt. Rechts: Kette Mundhöhe → Wandstärke t (mit Wandstärke). Unten: L, Flanschdicke (2.). Oben, 1. Lage: Kette dw/2 → dh; 2. Lage: Kette Traktrix → Mund (axial). Der obere Rand `mT` reserviert Platz für Titel + zwei Lagen.
 

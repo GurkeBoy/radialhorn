@@ -18,7 +18,7 @@ const DIM_LEADER = 24;   // Länge der Radius-Leitlinie außerhalb der Wand [px]
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null
  * @param wall     Wandstärke [mm]; > 0 zeichnet den Schnitt durch die Schale
  */
-export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, wall = 0, shellCut = null }) {
+export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, profile, fillet, flange, wall = 0, shellCut = null, showRaumecke = true }) {
   const tr = useT();
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
@@ -32,6 +32,7 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
   // ── Abbildung Geometrie (z, h) → Bildschirm ───────────────────────
   const halfMax = Math.max(dw / 2, hMouth / 2 + wall, flange ? flange.diameter / 2 : 0) * 1.05;
   const zMin = s.hatTipZ - 10, zMax = s.zApex + 10;
+  const zLStart = showRaumecke ? s.hatTipZ : -dh;   // Beginn von L (ohne Raumecke: Treiberrückseite)
   const mT = Math.min(80, VH * 0.45), mB = Math.min(flange ? 62 : 40, VH * 0.15);   // oben: Titel + zwei Maßlagen
   const scale0 = Math.min((VW - Math.min(80, VW * 0.12) * 2) / (zMax - zMin), (VH - mT - mB) / (2 * halfMax));
   const contentW = (zMax - zMin) * scale0;
@@ -72,14 +73,14 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs><ArrowMarker id="arrV" /></defs>
 
-        <line x1={toX(s.hatTipZ)} y1={toY(0)} x2={toX(s.zApex)} y2={toY(0)} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
+        <line x1={toX(zLStart)} y1={toY(0)} x2={toX(s.zApex)} y2={toY(0)} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
 
         {/* Treiber */}
         <rect x={toX(-dh)} y={toY(dw/2)} width={dh*scale} height={dw*scale} fill={COLOR.drivFill} stroke={COLOR.driv} strokeWidth="1.3" rx="2" />
         <text x={toX(-dh/2)} y={toY(0)} {...S.label} textAnchor="middle" dominantBaseline="central" fill={COLOR.text}>{tr("view.driver")}</text>
 
         {/* Raumecke: von der Achse aus nach oben und unten, Strichmuster symmetrisch zur Achse */}
-        {[halfMax, -halfMax].map(hEnd =>
+        {showRaumecke && [halfMax, -halfMax].map(hEnd =>
           <line key={hEnd} x1={toX(s.hatTipZ)} y1={toY(0)} x2={toX(s.hatTipZ)} y2={toY(hEnd)}
             stroke={COLOR.raum} strokeWidth="1.2" strokeLinecap="butt"
             strokeDasharray={raumDash(scale)} strokeDashoffset={raumDashCenter(scale)} />
@@ -126,12 +127,12 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
           <Dim p1={[toX(0), toY(-flange.diameter / 2)]} p2={[toX(flange.thickness), toY(-flange.diameter / 2)]} orient="h"
             arrowPos={dimLY + 22} color={COLOR.flansch} marker="url(#arrV)" label={`${flange.thickness} mm`} />
         </>}
-        {/* Unten: Gesamtlänge */}
-        <Dim p1={[toX(s.hatTipZ), toY(0)]} p2={[toX(s.zApex), toY(0)]}
+        {/* Unten: Gesamtlänge – mit Raumecke ab der Hut-Spitze, ohne ab der Treiberrückseite */}
+        <Dim p1={[toX(zLStart), toY(0)]} p2={[toX(s.zApex), toY(0)]}
           arrowPos={dimLY} color={COLOR.dim} marker="url(#arrV)" label={`L=${fmtLength(L)} mm`} sw="0.8" />
-        {/* Oben, 1. Lage: Kette Hut-Spitze → Treiberrückseite → Treiberfront */}
-        <Dim p1={[toX(s.hatTipZ), toY(dw/2)]} p2={[toX(-dh), toY(dw/2)]} orient="h"
-          arrowPos={dimTop1Y} color={COLOR.raum} marker="url(#arrV)" label={`${(dw/2).toFixed(0)} mm`} />
+        {/* Oben, 1. Lage: Kette (Hut-Spitze →) Treiberrückseite → Treiberfront */}
+        {showRaumecke && <Dim p1={[toX(s.hatTipZ), toY(dw/2)]} p2={[toX(-dh), toY(dw/2)]} orient="h"
+          arrowPos={dimTop1Y} color={COLOR.raum} marker="url(#arrV)" label={`${(dw/2).toFixed(0)} mm`} />}
         <Dim p1={[toX(-dh), toY(dw/2)]} p2={[toX(0), toY(dw/2)]}
           arrowPos={dimTop1Y} color={COLOR.driv} marker="url(#arrV)" label={`${dh} mm`} />
         {/* Oben, 2. Lage: Kette Traktrix → Mund (axiale Längen) */}
