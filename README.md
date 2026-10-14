@@ -40,7 +40,8 @@ each [release](https://github.com/GurkeBoy/radialhorn/releases). They are not co
 - **Export:** DXF with exact curves (SPLINE/ARC/LINE instead of polylines, so CAD builds smooth solids), STL of the
   shell or air volume, and a PDF datasheet with scaled drawings.
 - **Project files:** save a design as `*.radialhorn.json`, open it again or share it; values are checked on opening.
-- **English and German**, switchable; settings are kept between sessions.
+- **English and German**, switchable; settings are kept between sessions (desktop app: also saved as a file,
+  on Windows `%APPDATA%\com.pilch.radialhorn\einstellungen.json`).
 
 ## Validation
 

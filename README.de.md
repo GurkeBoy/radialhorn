@@ -41,7 +41,8 @@ Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.
 - **Export:** DXF mit exakten Kurven (SPLINE/ARC/LINE statt Polylinien, damit CAD glatte Körper erzeugt), STL der
   Schale bzw. des Luftvolumens und PDF-Datenblatt mit maßstäblichen Zeichnungen.
 - **Projektdateien:** Entwurf als `*.radialhorn.json` speichern, wieder öffnen oder weitergeben; beim Öffnen wird jeder Wert geprüft.
-- **Deutsch und Englisch** umschaltbar; Einstellungen bleiben zwischen den Sitzungen erhalten.
+- **Deutsch und Englisch** umschaltbar; Einstellungen bleiben zwischen den Sitzungen erhalten (Desktop-App: zusätzlich
+  als Datei, unter Windows `%APPDATA%\com.pilch.radialhorn\einstellungen.json`).
 
 ## Validierung
 

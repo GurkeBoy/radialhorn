@@ -434,8 +434,7 @@ function ResetSettingsButton({ t }) {
   }, [armed]);
   const reset = () => {
     if (!armed) { setArmed(true); return; }
-    clearSettings();
-    window.location.reload();
+    clearSettings().finally(() => window.location.reload());   // erst die Einstellungsdatei leeren
   };
   return <Button onClick={reset}>{armed ? t("reset.confirm") : t("reset.button")}</Button>;
 }
