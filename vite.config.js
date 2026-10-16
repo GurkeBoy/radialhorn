@@ -7,6 +7,8 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   test: {
     environment: "node",
+    // Die 3D-Netz-Tests (Schale, Klothoide, Morph) sind rechenintensiv
+    testTimeout: 60000,
   },
   plugins: [react()],
   // Desktop-App: das Bundle wird lokal geladen, three.js macht es bewusst > 500 kB

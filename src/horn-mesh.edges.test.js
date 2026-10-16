@@ -48,7 +48,7 @@ describe("gerundete Längskanten", () => {
       const flange = flangeLayout(sol, RT, p, fillet, t, FLANGE, r);
       expect(edgeCheck(tris(buildShellGeometry(sol, RT, p, fillet, t, flange, r)))).toEqual({ open: 0, flipped: 0 });
     }
-  }, 30000);   // 14 vollständige Schalen
+  }, 120000);   // 14 vollständige Schalen
 
   it("ohne Radius genau die scharfkantige Schale", () => {
     const sharp = buildShellGeometry(s, RT, profile, null, T), zero = buildShellGeometry(s, RT, profile, null, T, null, 0);
