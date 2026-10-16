@@ -34,5 +34,8 @@
     "globals": "^17.12.0",
     "vite": "^7.0.4",
     "vitest": "^4.1.8"
+  },
+  "allowScripts": {
+    "esbuild": true
   }
 }
