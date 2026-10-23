@@ -34,6 +34,7 @@ export default {
   "card.construction": "CONSTRUCTION",
   "card.simulation": "SIMULATION (1D)",
   "card.keyFigures": "KEY FIGURES",
+  "card.volume": "VOLUME",
   "card.crossSection": "CROSS-SECTION A(z)",
   "card.export": "EXPORT",
 
@@ -123,6 +124,11 @@ export default {
   "key.fcLow": "fc_low — mouth (circumference = λ)",
   "key.fcCut": "fc_cut — horn cutoff",
   "key.fcHigh": "fc_high — throat (λ = 2r)",
+  "volume.air": "Air volume",
+  "volume.shell": "Wall material",
+  "volume.outer": "Outer body",
+  "volume.hint": "From the 3D mesh: air volume from the throat, without the driver chamber; wall material incl. flange",
+  "volume.noWall": "Without wall thickness only the air volume (from the throat, without driver chamber)",
 
   // Export
   "export.dimensions": "Dimensions",
