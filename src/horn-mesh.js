@@ -1146,50 +1146,42 @@ const band = (a, b) => [[...a, a[0]], [...b, b[0]]];
 const ROUND_GAP = 0.3;   // so viel Platz bleibt neben einer Verrundung zu Schale, Rand und Nachbarn [mm]
 
 /**
- * Wirksame Verrundungsradien der Hornseite der Flanschplatte: Außenrand (rim) und Bohrungskanten
- * (hole). Der gewünschte Radius flange.round wird begrenzt, damit die Verrundung nicht in die
- * Schale, über die Dicke oder in die Bohrungen reicht.
+ * Wirksamer Verrundungsradius des Außenrands der Flanschplatte auf der Hornseite (rim; die Bohrungen
+ * bleiben scharfkantig). Der gewünschte Radius flange.round wird begrenzt, damit die Verrundung
+ * nicht in die Schale, über die Dicke oder in die Bohrungen reicht.
  * @param flange     aufgelöster Flansch (flangeLayout)
  * @param nRim       Ecken des Flanschrands (res.flange)
  */
 export function flangeRounds(flange, nRim) {
   const want = flange.round ?? 0;
-  if (!(want > 0)) return { rim: 0, hole: 0 };
+  if (!(want > 0)) return { rim: 0 };
   const R = flange.diameter / 2, rh = flange.holes.diameter / 2, cosN = Math.cos(Math.PI / nRim);
   const loop = flange.loop, cs = flange.centers;
   const maxLoop = Math.max(...loop.map(([x, h]) => Math.hypot(x, h)));
-  const clean = v => v < 0.05 ? 0 : v;
-  const rim = clean(Math.min(want, 0.9 * flange.thickness, R - (maxLoop + ROUND_GAP) / cosN,
-    ...cs.map(c => R - Math.hypot(...c) - rh - ROUND_GAP)));
-  const gaps = cs.map(c => Math.min(polygonDistance(c, loop).d - rh, (R - rim) * cosN - Math.hypot(...c) - rh) - ROUND_GAP);
-  for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
-    gaps.push(Math.hypot(cs[i][0] - cs[j][0], cs[i][1] - cs[j][1]) / 2 - rh - ROUND_GAP);
-  }
-  return { rim, hole: clean(Math.min(want, 0.9 * flange.thickness, ...gaps)) };
+  const rim = Math.min(want, 0.9 * flange.thickness, R - (maxLoop + ROUND_GAP) / cosN,
+    ...cs.map(c => R - Math.hypot(...c) - rh - ROUND_GAP));
+  return { rim: rim < 0.05 ? 0 : rim };
 }
 
 /**
- * Viertelkreis-Ringe einer gerundeten Plattenkante auf der Hornseite (Material innen): von der
- * Seitenwand (z = d − rr) bis zur Plattenfläche (z = d). outer: Außenrand mit Radius r0 (Ringe
- * verengen sich), sonst Bohrung mit Radius r0 (Ringe weiten sich).
+ * Viertelkreis-Ringe des gerundeten Außenrands der Platte auf der Hornseite (Material innen): von der
+ * Seitenwand (z = d − rr) bis zur Plattenfläche (z = d), der Radius verengt sich von r auf r − rr.
  */
-function edgeRings(cx, ch, r0, d, rr, n, steps, outer) {
-  return Array.from({ length: steps + 1 }, (_, k) => {
-    const a = Math.PI / 2 * k / steps;
-    return ring(cx, ch, outer ? r0 - rr + rr * Math.cos(a) : r0 + rr - rr * Math.cos(a), d - rr + rr * Math.sin(a), n);
-  });
-}
+const rimRings = (r, d, rr, n, steps) => Array.from({ length: steps + 1 }, (_, k) => {
+  const a = Math.PI / 2 * k / steps;
+  return ring(0, 0, r - rr + rr * Math.cos(a), d - rr + rr * Math.sin(a), n);
+});
 
-/** Außenrichtung einer Randverrundung: vom Mittelkreis des Viertelkreises (Radius rc um (cx, ch), Höhe zc) nach außen. */
-const roundOutward = (cx, ch, rc, zc) => ([x, h, z]) => {
-  const a = Math.atan2(h - ch, x - cx);
-  return [x - (cx + rc * Math.cos(a)), h - (ch + rc * Math.sin(a)), z - zc];
+/** Außenrichtung der Randverrundung: vom Mittelkreis des Viertelkreises (Radius rc, Höhe zc) nach außen. */
+const roundOutward = (rc, zc) => ([x, h, z]) => {
+  const a = Math.atan2(h, x);
+  return [x - rc * Math.cos(a), h - rc * Math.sin(a), z - zc];
 };
 
 /**
  * Flansch als Flächen: Rückseite (z = 0) mit Throat-Öffnung, Vorderseite (z = Dicke) um den
- * Außenkörper der Schale, Zylindermantel und Bohrungswände. Mit flange.round auf der Hornseite
- * Außenrand und Bohrungskanten gerundet (flangeRounds).
+ * Außenkörper der Schale, Zylindermantel und Bohrungswände. Mit flange.round ist der Außenrand
+ * auf der Hornseite gerundet (flangeRounds), die Bohrungen bleiben scharfkantig.
  * @param airLoop    Randzug des Luftvolumens am Throat (z = 0)
  * @param outerLoop  Randzug des Außenkörpers bei z = Dicke
  */
@@ -1197,25 +1189,23 @@ function flangeSurfaces(flange, airLoop, outerLoop, res) {
   const { flange: nRim, hole: nHole, round: steps } = resOf(res);
   const holes = flange.centers;
   const r = flange.diameter / 2, rh = flange.holes.diameter / 2, d = flange.thickness;
-  const { rim: rr, hole: rhr } = flangeRounds(flange, nRim);
+  const { rim: rr } = flangeRounds(flange, nRim);
   const back = ring(0, 0, r, 0, nRim);
-  const rimRows = rr > 0 ? edgeRings(0, 0, r, d, rr, nRim, steps, true) : null;
+  const rimRows = rr > 0 ? rimRings(r, d, rr, nRim, steps) : null;
   const front = rimRows ? rimRows[steps] : ring(0, 0, r, d, nRim);
   const holesBack = holes.map(([x, h]) => ring(x, h, rh, 0, nHole));
-  const holeRows = holes.map(([x, h]) => rhr > 0 ? edgeRings(x, h, rh, d, rhr, nHole, steps, false) : null);
-  const holesFront = holes.map(([x, h], i) => holeRows[i] ? holeRows[i][steps] : ring(x, h, rh, d, nHole));
+  const holesFront = holes.map(([x, h]) => ring(x, h, rh, d, nHole));
   const open = loop => loop.slice(0, -1);
   const closed = rows => rows.map(row => [...row, row[0]]);
   return [
     { name: "flangeBack",  section: "flansch", oriented: true, triangles: planarFace(back, [open(airLoop), ...holesBack], -1) },
     { name: "flangeFront", section: "flansch", oriented: true, triangles: planarFace(front, [open(outerLoop), ...holesFront], 1) },
     { name: "flangeRim",   section: "flansch", outward: ([x, h]) => [x, h, 0], grid: band(back, rimRows ? rimRows[0] : front) },
-    ...(rimRows ? [{ name: "flangeRound", section: "flansch", outward: roundOutward(0, 0, r - rr, d - rr), grid: closed(rimRows) }] : []),
-    ...holes.flatMap(([cx, ch], i) => [
-      { name: `flangeHole${i}`, section: "flansch", outward: ([x, h]) => [cx - x, ch - h, 0],
-        grid: band(holesBack[i], holeRows[i] ? holeRows[i][0] : holesFront[i]) },
-      ...(holeRows[i] ? [{ name: `flangeHoleRound${i}`, section: "flansch", outward: roundOutward(cx, ch, rh + rhr, d - rhr), grid: closed(holeRows[i]) }] : []),
-    ]),
+    ...(rimRows ? [{ name: "flangeRound", section: "flansch", outward: roundOutward(r - rr, d - rr), grid: closed(rimRows) }] : []),
+    ...holes.map(([cx, ch], i) => ({
+      name: `flangeHole${i}`, section: "flansch", outward: ([x, h]) => [cx - x, ch - h, 0],
+      grid: band(holesBack[i], holesFront[i]),
+    })),
   ];
 }
 

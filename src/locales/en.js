@@ -89,7 +89,7 @@ export default {
   "flange.ribThickness": "Rib thickness",
   "flange.ribLength": "Rib length (along the horn)",
   "flange.round": "Fillets (horn side)",
-  "flange.roundHint": "Outer rim and bolt hole edges of the plate; the radius is limited where space is short",
+  "flange.roundHint": "Outer rim of the plate; the radius is limited where space is short",
   "flange.roundRadius": "Fillet radius",
   "warn.flangeOverCorner": "Flange extends beyond the room corner",
   "warn.holeConflictOne": "1 hole conflicts with the shell (marked red, not drilled)",

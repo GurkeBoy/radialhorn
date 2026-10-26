@@ -1,5 +1,5 @@
 /**
- * Verrundungen der Hornseite der Flanschplatte: Außenrand und Bohrungskanten.
+ * Verrundung des Außenrands der Flanschplatte auf der Hornseite (die Bohrungen bleiben scharfkantig).
  */
 import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet } from "./horn-math.js";
@@ -41,15 +41,15 @@ describe("Verrundung der Flanschplatte (Hornseite)", () => {
   it("ohne Radius unverändert, mit Radius geschlossen und einheitlich orientiert", () => {
     expect(plain.geo.surfaces.some(f => f.name.includes("Round"))).toBe(false);
     expect(edgeCheck(tris(rounded.geo))).toEqual(edgeCheck(tris(plain.geo)));
-    expect(rounded.geo.surfaces.map(f => f.name)).toEqual(expect.arrayContaining(["flangeRound", "flangeHoleRound0", "flangeHoleRound3"]));
+    expect(rounded.geo.surfaces.map(f => f.name)).toEqual(expect.arrayContaining(["flangeRound"]));
+    expect(rounded.geo.surfaces.some(f => f.name.startsWith("flangeHoleRound"))).toBe(false);   // Bohrungen unverändert
   });
 
-  it("Volumen sinkt um den abgenommenen Viertelkreis-Ring (Rand und Bohrungen)", () => {
-    const { rim, hole } = flangeRounds(rounded.layout, N_RIM);
+  it("Volumen sinkt um den abgenommenen Viertelkreis-Ring am Außenrand", () => {
+    const { rim } = flangeRounds(rounded.layout, N_RIM);
     expect(rim).toBeCloseTo(3, 9);
-    expect(hole).toBeCloseTo(3, 9);
-    const R = rounded.layout.diameter / 2, rh = rounded.layout.holes.diameter / 2, A = 1 - Math.PI / 4;
-    const expected = A * 2 * Math.PI * (rim ** 2 * (R - 0.2234 * rim) + 4 * hole ** 2 * (rh + 0.2234 * hole));
+    const R = rounded.layout.diameter / 2, A = 1 - Math.PI / 4;
+    const expected = A * 2 * Math.PI * rim ** 2 * (R - 0.2234 * rim);
     const removed = meshVolume(tris(plain.geo)) - meshVolume(tris(rounded.geo));
     expect(removed).toBeGreaterThan(0);
     expect(removed / expected).toBeGreaterThan(0.97);
@@ -58,11 +58,9 @@ describe("Verrundung der Flanschplatte (Hornseite)", () => {
 
   it("Radius wird begrenzt: höchstens 90 % der Dicke, geschlossen", () => {
     const big = build(100);
-    const { rim, hole } = flangeRounds(big.layout, N_RIM);
+    const { rim } = flangeRounds(big.layout, N_RIM);
     expect(rim).toBeGreaterThan(0);
     expect(rim).toBeLessThanOrEqual(0.9 * TH + 1e-9);
-    expect(hole).toBeGreaterThan(0);
-    expect(hole).toBeLessThanOrEqual(0.9 * TH + 1e-9);
     expect(edgeCheck(tris(big.geo))).toEqual(edgeCheck(tris(plain.geo)));
   });
 

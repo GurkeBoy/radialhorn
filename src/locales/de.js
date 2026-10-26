@@ -89,7 +89,7 @@ export default {
   "flange.ribThickness": "Rippendicke",
   "flange.ribLength": "Rippenlänge (am Horn)",
   "flange.round": "Verrundungen (Hornseite)",
-  "flange.roundHint": "Außenrand und Bohrungskanten der Platte, Radius wird bei Platzmangel begrenzt",
+  "flange.roundHint": "Außenrand der Platte, Radius wird bei Platzmangel begrenzt",
   "flange.roundRadius": "Verrundungsradius",
   "warn.flangeOverCorner": "Flansch ragt über die Raumecke",
   "warn.holeConflictOne": "1 Bohrung im Konflikt mit der Schale (rot markiert, nicht gebohrt)",
