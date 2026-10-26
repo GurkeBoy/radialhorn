@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet } from "./horn-math.js";
 import { buildShellGeometry, flangeLayout, flangeRounds, triangulate } from "./horn-mesh.js";
 import { meshVolume } from "./volume.js";
+import { edgeCheck } from "./test-helpers.js";
 
 const RT = 25.4, WALL = 10, TH = 10, N_RIM = 96;
 const s = createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 182, 90);
@@ -19,21 +20,6 @@ const build = (round, extra) => {
 };
 const tris = geo => geo.surfaces.flatMap(triangulate);
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
-function edgeCheck(list) {
-  const directed = new Map();
-  for (const t of list) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, doubled = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) doubled++;
-  }
-  return { open, doubled };
-}
 
 describe("Verrundung der Flanschplatte (Hornseite)", () => {
   const plain = build(0), rounded = build(3);
@@ -78,6 +64,6 @@ describe("Verrundung der Flanschplatte (Hornseite)", () => {
     const ribs = withRibs.geo.surfaces.filter(f => f.name.startsWith("flangeRib"));
     expect(ribs).toHaveLength(4);
     for (const rib of ribs) for (const [x, h] of triangulate(rib).flat()) expect(Math.hypot(x, h)).toBeLessThanOrEqual(R - 4 + 1e-9);
-    for (const rib of ribs) expect(edgeCheck(triangulate(rib))).toEqual({ open: 0, doubled: 0 });
+    for (const rib of ribs) expect(edgeCheck(triangulate(rib))).toEqual({ open: 0, flipped: 0 });
   });
 });

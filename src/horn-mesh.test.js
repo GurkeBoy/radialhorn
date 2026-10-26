@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet, traktrixPoints, createHornMath, focusRadius, crossSection } from "./horn-math.js";
 import { buildHornGeometry, buildShellGeometry, triangulate } from "./horn-mesh.js";
-import { stlBinary } from "./export/stl.js";
+import { edgeCheck, signedVolume } from "./test-helpers.js";
 
 const RT = 25.4, H_MOUTH = 200;
 const s  = solveHorn(500, 60, RT, 120, 100);
@@ -13,28 +13,7 @@ const profile = makeProfile(s, RT, H_MOUTH, "exponential", 0.5);
 const geometry = (sol = s, prof = profile, fillet = null) => buildHornGeometry(sol, RT, prof, fillet);
 const trianglesOf = geo => geo.surfaces.flatMap(triangulate);
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const signedVolume = tris => tris.reduce((V, [a, b, c]) => V + (a[0] * cross(b, c)[0] + a[1] * cross(b, c)[1] + a[2] * cross(b, c)[2]) / 6, 0);
 
-/** Gerichtete Kanten zählen: geschlossen und konsistent orientiert ⇔ jede Kante genau einmal je Richtung. */
-function edgeCheck(tris) {
-  const directed = new Map();
-  for (const t of tris) {
-    for (let k = 0; k < 3; k++) {
-      const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-      directed.set(e, (directed.get(e) || 0) + 1);
-    }
-  }
-  let open = 0, flipped = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    const back = directed.get(b + ">" + a) || 0;
-    if (back === 0) open++;
-    if (n > 1) flipped++;
-  }
-  return { open, flipped };
-}
 
 /** Referenzvolumen: 2·rt·Fläche(Traktrix-Grundfläche) + ∫∫ 2h dA über den Kreisringsektor. */
 function referenceVolume(sol, prof) {
@@ -132,33 +111,6 @@ describe("buildHornGeometry – Konstruktion", () => {
       }
     }
     expect(trakTop.flat().some(([, h]) => h > RT + 0.1)).toBe(true);
-  });
-});
-
-describe("stlBinary", () => {
-  const tris = trianglesOf(geometry());
-  const buf = stlBinary(tris);
-  const view = new DataView(buf);
-
-  it("Größe und Dreiecksanzahl", () => {
-    expect(buf.byteLength).toBe(84 + 50 * tris.length);
-    expect(view.getUint32(80, true)).toBe(tris.length);
-  });
-
-  it("Normalen zeigen nach außen (positives Volumen in STL-Koordinaten)", () => {
-    let V = 0;
-    for (let t = 0; t < tris.length; t++) {
-      const p = [0, 1, 2].map(k => [0, 1, 2].map(c => view.getFloat32(84 + 50 * t + 12 + 12 * k + 4 * c, true)));
-      const c = cross(p[1], p[2]);
-      V += (p[0][0] * c[0] + p[0][1] * c[1] + p[0][2] * c[2]) / 6;
-    }
-    expect(V / signedVolume(tris)).toBeCloseTo(1, 4);
-  });
-
-  it("Hochachse Z: Höhe des Mundes ±hMouth/2", () => {
-    let zMax = -Infinity;
-    for (let t = 0; t < tris.length; t++) for (let k = 0; k < 3; k++) zMax = Math.max(zMax, view.getFloat32(84 + 50 * t + 12 + 12 * k + 8, true));
-    expect(zMax).toBeCloseTo(H_MOUTH / 2, 3);
   });
 });
 

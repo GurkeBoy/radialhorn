@@ -6,28 +6,14 @@
 import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet, throatMorph } from "./horn-math.js";
 import { buildShellGeometry, flangeLayout, triangulate } from "./horn-mesh.js";
+import { edgeCheck } from "./test-helpers.js";
 
 const RT = 25.4, T = 20;
 const solve = (Lt, clothoid = 0) => createHornMath(140, { clothoid }).solveHorn(500, Lt, RT, 182, 90);
 const profileOf = (s, fillet = null) => makeProfile(s, RT, 200, "exponential", 0.5, fillet);
 const FLANGE = { diameter: null, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
 const tris = geo => geo.surfaces.flatMap(triangulate);
-function edgeCheck(ts) {
-  const directed = new Map();
-  for (const t of ts) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, flipped = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) flipped++;
-  }
-  return { open, flipped };
-}
 
 // Nächster Punkt eines Dreiecks (Ericson, Real-Time Collision Detection 5.1.5)
 const sub = (u, v) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];

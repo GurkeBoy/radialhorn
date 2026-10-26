@@ -6,8 +6,8 @@ import {
   createHornMath, hasClothoid, traktrixPoints, clothoidPoints, clothoidTable, clothoidEnd, entrancePoints,
   makeProfile, crossSection, xN, zN,
 } from "./horn-math.js";
-import { buildHornGeometry, buildShellGeometry, triangulate } from "./horn-mesh.js";
-import { buildDXF } from "./export/dxf.js";
+import { buildHornGeometry, buildShellGeometry } from "./horn-mesh.js";
+import { edgeCheck, trianglesOf } from "./test-helpers.js";
 
 const RT = 25.4, DW = 120, DH = 100, L = 500, LT = 60, LEN = 30;
 const math = createHornMath(140, { clothoid: LEN });
@@ -130,23 +130,11 @@ describe("Querschnitt mit Klothoide", () => {
 
 describe("3D-Körper mit Klothoide", () => {
   const profile = makeProfile(s, RT, 200, "exponential", 0.5);
-  const key = p => p.map(v => Math.round(v * 1e6)).join(",");
-  const closed = geo => {
-    const directed = new Map();
-    for (const t of geo.surfaces.flatMap(triangulate)) for (let k = 0; k < 3; k++) {
-      const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-      directed.set(e, (directed.get(e) || 0) + 1);
-    }
-    let open = 0, flipped = 0;
-    for (const [e, n] of directed) { const [a, b] = e.split(">"); if (!directed.get(b + ">" + a)) open++; if (n > 1) flipped++; }
-    return { open, flipped };
-  };
-
   it("Luftvolumen und Schale wasserdicht, Klothoide als eigene Fläche", () => {
     const air = buildHornGeometry(s, RT, profile);
-    expect(closed(air)).toEqual({ open: 0, flipped: 0 });
+    expect(edgeCheck(trianglesOf(air))).toEqual({ open: 0, flipped: 0 });
     expect(air.surfaces.filter(f => f.section === "klothoide").length).toBe(4);
-    for (const t of [20, 60]) expect(closed(buildShellGeometry(s, RT, profile, null, t))).toEqual({ open: 0, flipped: 0 });
+    for (const t of [20, 60]) expect(edgeCheck(trianglesOf(buildShellGeometry(s, RT, profile, null, t)))).toEqual({ open: 0, flipped: 0 });
   });
 
   it("Wand der Klothoiden-Fläche liegt auf der Klothoide", () => {
@@ -185,17 +173,6 @@ describe("Klothoide – Grenzen", () => {
 
   it("ohne Klothoide ist das Mindest-Lt 0", () => {
     expect(createHornMath(140).minLtForClothoid(RT)).toBe(0);
-  });
-});
-
-describe("DXF mit Klothoide", () => {
-  it("Klothoide als eigener SPLINE je Seite auf eigenem Layer, kein POLYLINE", () => {
-    const dxf = buildDXF({ s, rt: RT, hMouth: 200, curve: "exponential", hypexT: 0.5, fillet: null },
-      { draufsicht: true, uebergang: true });
-    const splines = layer => dxf.split("\n0\n").filter(e => e.startsWith("SPLINE") && e.includes(`\n8\n${layer}\n`));
-    expect(splines("Draufsicht_Traktrix")).toHaveLength(2);    // je links/rechts
-    expect(splines("Draufsicht_Klothoide")).toHaveLength(2);
-    expect(dxf).not.toMatch(/POLYLINE/);
   });
 });
 

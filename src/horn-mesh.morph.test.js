@@ -6,28 +6,14 @@
 import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet, throatMorph, crossSection } from "./horn-math.js";
 import { buildHornGeometry, buildShellGeometry, flangeLayout, triangulate } from "./horn-mesh.js";
+import { edgeCheck } from "./test-helpers.js";
 
 const RT = 25.4;
 const solve = (Lt, { clothoid = 0, rt = RT, angle = 140 } = {}) => createHornMath(angle, { clothoid }).solveHorn(500, Lt, rt, 182, 90);
 const profileOf = (s, rt = RT, fillet = null) => makeProfile(s, rt, 200, "exponential", 0.5, fillet);
 const FLANGE = { diameter: null, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
 const tris = geo => geo.surfaces.flatMap(triangulate);
-function edgeCheck(ts) {
-  const directed = new Map();
-  for (const t of ts) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, flipped = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) flipped++;
-  }
-  return { open, flipped };
-}
 const surface = (geo, name) => geo.surfaces.find(f => f.name === name);
 
 const CASES = [

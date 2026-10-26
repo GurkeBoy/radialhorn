@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { solveHorn, computeFillet, makeProfile } from "../horn-math.js";
+import { solveHorn, computeFillet, makeProfile, createHornMath } from "../horn-math.js";
 import { flangeLayout } from "../horn-mesh.js";
 import { buildDXF } from "./dxf.js";
 
@@ -136,5 +136,17 @@ describe("buildDXF", () => {
 
   it("ohne ausgewählte Layer nur der leere Rahmen", () => {
     expect(parse(buildDXF(design(), {})).map(e => e.type)).toEqual(["SECTION", "ENDSEC", "EOF"]);
+  });
+});
+
+describe("DXF mit Klothoide", () => {
+  it("Klothoide als eigener SPLINE je Seite auf eigenem Layer, kein POLYLINE", () => {
+    const clothoidHorn = createHornMath(140, { clothoid: 30 }).solveHorn(500, 60, RT, 120, 100);
+    const dxf = buildDXF({ s: clothoidHorn, rt: RT, hMouth: 200, curve: "exponential", hypexT: 0.5, fillet: null },
+      { draufsicht: true, uebergang: true });
+    const splines = layer => dxf.split("\n0\n").filter(e => e.startsWith("SPLINE") && e.includes(`\n8\n${layer}\n`));
+    expect(splines("Draufsicht_Traktrix")).toHaveLength(2);    // je links/rechts
+    expect(splines("Draufsicht_Klothoide")).toHaveLength(2);
+    expect(dxf).not.toMatch(/POLYLINE/);
   });
 });

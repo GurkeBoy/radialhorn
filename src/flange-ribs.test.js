@@ -7,6 +7,7 @@ import { createHornMath, makeProfile, computeFillet, throatMorph } from "./horn-
 import { buildShellGeometry, flangeLayout, triangulate, boltHoleCenters } from "./horn-mesh.js";
 import { meshVolume, computeVolumes } from "./volume.js";
 import { surfaceTriangles, sliceSegments, rayReach } from "./flange-ribs.js";
+import { edgeCheck } from "./test-helpers.js";
 
 const RT = 25.4, WALL = 10, TH = 10;
 const math = createHornMath(140, { clothoid: 30 });
@@ -22,21 +23,6 @@ const build = (ribs, { count, angle, morph = null, edgeR = 0 } = {}) => {
 };
 const ribsOf = geo => geo.surfaces.filter(f => f.name.startsWith("flangeRib"));
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
-function edgeCheck(tris) {
-  const directed = new Map();
-  for (const t of tris) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, doubled = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) doubled++;
-  }
-  return { open, doubled };
-}
 
 const RIBS = { thickness: 4, length: 30 };
 
@@ -56,7 +42,7 @@ describe("Stützrippen am Flansch", () => {
     expect(geo.ribs).toMatchObject({ count: 4 });
     for (const rib of ribs) {
       const tris = triangulate(rib);
-      expect(edgeCheck(tris)).toEqual({ open: 0, doubled: 0 });
+      expect(edgeCheck(tris)).toEqual({ open: 0, flipped: 0 });
       expect(meshVolume(tris)).toBeGreaterThan(0);
     }
   });
@@ -136,7 +122,7 @@ describe("Stützrippen am Flansch", () => {
     const morph = throatMorph(s, RT, 150);
     const { geo: g } = build(RIBS, { morph, edgeR: WALL });
     expect(ribsOf(g)).toHaveLength(4);
-    for (const rib of ribsOf(g)) expect(edgeCheck(triangulate(rib))).toEqual({ open: 0, doubled: 0 });
+    for (const rib of ribsOf(g)) expect(edgeCheck(triangulate(rib))).toEqual({ open: 0, flipped: 0 });
   });
 });
 

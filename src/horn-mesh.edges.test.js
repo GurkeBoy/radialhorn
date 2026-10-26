@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet, solveHorn } from "./horn-math.js";
 import { buildShellGeometry, flangeLayout, triangulate } from "./horn-mesh.js";
+import { edgeCheck, signedVolume as volume } from "./test-helpers.js";
 
 const RT = 25.4, T = 20;
 const s = solveHorn(500, 60, RT, 182, 90);
@@ -12,24 +13,7 @@ const profile = makeProfile(s, RT, 200, "exponential", 0.5);
 const hAt = r => profile(s.zFocus + r);
 const FLANGE = { diameter: null, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
 const tris = geo => geo.surfaces.flatMap(triangulate);
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const volume = ts => ts.reduce((V, [a, b, c]) => { const n = cross(b, c); return V + (a[0] * n[0] + a[1] * n[1] + a[2] * n[2]) / 6; }, 0);
-function edgeCheck(ts) {
-  const directed = new Map();
-  for (const t of ts) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, flipped = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) flipped++;
-  }
-  return { open, flipped };
-}
 const grid = (geo, name) => geo.surfaces.find(f => f.name === name).grid;
 
 describe("gerundete Längskanten", () => {
