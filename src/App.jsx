@@ -323,7 +323,7 @@ export default function App() {
                 <Slider label={t("flange.ribLength")} value={ribLength} min={5} max={150} step={1} unit="mm" onChange={setRibLength} />
               </>}
             </>}
-            <Toggle label={t("flange.round")} checked={roundOn} onChange={setRoundOn} hint={roundOn ? t(holeCount > 0 && ribsOn ? "flange.roundHintRibs" : "flange.roundHint") : null} />
+            <Toggle label={t("flange.round")} checked={roundOn} onChange={setRoundOn} hint={roundOn ? t("flange.roundHint") : null} />
             {roundOn && <Slider label={t("flange.roundRadius")} value={roundR} min={0.5} max={10} step={0.5} unit="mm" onChange={setRoundR} />}
           </Group>}
         </Card>
