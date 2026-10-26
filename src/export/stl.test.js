@@ -37,3 +37,21 @@ describe("STL-Export mit doppelter Auflösung (EXPORT_RES)", () => {
     expect(arcPoints(coarse)).toBe(16 + 1);
   }, 30000);
 });
+
+describe("STL mit Stützrippen und Verrundung", () => {
+  const ribbed = {
+    ...shell,
+    flange: flangeLayout(s, RT, profile, null, 12, { ...FLANGE, diameter: 160, ribs: { thickness: 4, length: 30 }, round: 3 }, 12, morph),
+  };
+
+  it("die Rippen sind im Netz, jede ein eigener geschlossener Körper, das Gesamtnetz bleibt geschlossen", () => {
+    const ribs = hornGeometry(ribbed, EXPORT_RES).surfaces.filter(f => f.rib);
+    expect(ribs).toHaveLength(4);
+    expect(hornTriangles(ribbed).length).toBeGreaterThan(hornTriangles({ ...shell, flange: flangeLayout(s, RT, profile, null, 12, { ...FLANGE, diameter: 160 }, 12, morph) }).length);
+    expect(openEdges(hornTriangles(ribbed, EXPORT_RES))).toBe(0);
+  }, 60000);
+
+  it("ohne Rippenvorgabe keine Rippenflächen", () => {
+    expect(hornGeometry(shell).surfaces.some(f => f.rib)).toBe(false);
+  }, 30000);
+});

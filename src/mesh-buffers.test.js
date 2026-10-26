@@ -11,9 +11,8 @@ const RT = 25.4;
 const s = createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 182, 90);
 const fillet = computeFillet(s, RT, 200, "exponential", 0.5, 100);
 const profile = makeProfile(s, RT, 200, "exponential", 0.5, fillet);
-const flange = flangeLayout(s, RT, profile, fillet, 20, {
-  diameter: null, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 },
-});
+const FLANGE = { diameter: null, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
+const flange = flangeLayout(s, RT, profile, fillet, 20, FLANGE);
 const SECTIONS = ["traktrix", "klothoide", "linear", "rim", "flansch"];
 const input = { s, rt: RT, hMouth: 200, curve: "exponential", hypexT: 0.5, fillet, wall: 20, flange, sections: SECTIONS };
 
@@ -82,6 +81,27 @@ describe("meshBuffers", () => {
     expect(air.sections.map(x => x.section)).toEqual(["traktrix", "linear"]);
     expect(air.buffers).toHaveLength(6);
     expect(air.buffers.every(b => b instanceof ArrayBuffer)).toBe(true);
+  });
+});
+
+describe("meshBuffers mit Stützrippen", () => {
+  const ribbed = flangeLayout(s, RT, profile, fillet, 20, { ...FLANGE, ribs: { thickness: 4, length: 30 }, round: 3 });
+  const triangles = (out, section) => out.sections.find(x => x.section === section).positions.length / 9;
+
+  it("Rippen liegen in der Sektion Flansch – im feinen Netz wie im Entwurf beim Ziehen", () => {
+    for (const quality of ["fine", "draft"]) {
+      const plain = meshBuffers(structuredClone({ ...input, quality }));
+      const withRibs = meshBuffers(structuredClone({ ...input, flange: ribbed, quality }));
+      expect(triangles(withRibs, "flansch"), quality).toBeGreaterThan(triangles(plain, "flansch"));
+      for (const section of ["traktrix", "klothoide", "linear", "rim"]) expect(triangles(withRibs, section), `${quality} ${section}`).toBe(triangles(plain, section));
+    }
+  });
+
+  it("Dreiecke wie triangulate, auch mit Rippen (Eingabe klonbar)", () => {
+    const out = meshBuffers(structuredClone({ ...input, flange: ribbed }));
+    const surfaces = buildShellGeometry(s, RT, profile, fillet, 20, ribbed).surfaces.filter(f => f.section === "flansch");
+    expect(surfaces.some(f => f.name.startsWith("flangeRib"))).toBe(true);
+    expect(sameValues(out.sections.find(x => x.section === "flansch").positions, surfaces.flatMap(triangulate).flat(2))).toBe(true);
   });
 });
 

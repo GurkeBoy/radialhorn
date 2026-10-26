@@ -119,3 +119,41 @@ describe("Gesamtlänge und Raumecke", () => {
     expect(off.LMaxRaumecke).toBe(null);
   }, 30000);
 });
+
+describe("Rippen und Verrundung im Flansch", () => {
+  const flangeOf = over => createGeometryEngine()({ ...BASE, ...over }).values.flange;
+
+  it("ribsOn gibt die Rippenvorgabe an den Flansch, aus: keine", () => {
+    expect(flangeOf({ ribsOn: true, ribThickness: 6, ribLength: 45 }).ribs).toEqual({ thickness: 6, length: 45 });
+    expect(flangeOf({ ribsOn: false, ribThickness: 6, ribLength: 45 }).ribs).toBeNull();
+  }, 30000);
+
+  it("roundOn gibt den Verrundungsradius an den Flansch, aus: 0", () => {
+    expect(flangeOf({ roundOn: true, roundR: 3.5 }).round).toBe(3.5);
+    expect(flangeOf({ roundOn: false, roundR: 3.5 }).round).toBe(0);
+  }, 30000);
+
+  it("ohne Flansch oder ohne Wandstärke gibt es weder Flansch noch Rippen", () => {
+    expect(flangeOf({ ribsOn: true, roundOn: true, flangeOn: false })).toBeNull();
+    expect(flangeOf({ ribsOn: true, roundOn: true, showWandstaerke: false })).toBeNull();
+  }, 30000);
+
+  it("Zwischenspeicher: jeder Rippen- und Verrundungswert erneuert den Flansch, unveränderte nicht", () => {
+    const compute = createGeometryEngine();
+    const on = { ...BASE, ribsOn: true, roundOn: true };
+    let prev = compute(on);
+    const renewed = over => {
+      const next = compute({ ...on, ...over });
+      const changed = next.versions.flange !== prev.versions.flange;
+      prev = next;
+      return changed;
+    };
+    expect(renewed({})).toBe(false);
+    expect(renewed({ ribThickness: 6 })).toBe(true);
+    expect(renewed({ ribThickness: 6 })).toBe(false);
+    expect(renewed({ ribThickness: 6, ribLength: 50 })).toBe(true);
+    expect(renewed({ ribThickness: 6, ribLength: 50, roundR: 3 })).toBe(true);
+    expect(renewed({ ribThickness: 6, ribLength: 50, roundR: 3, ribsOn: false })).toBe(true);
+    expect(renewed({ ribThickness: 6, ribLength: 50, roundR: 3, ribsOn: false, roundOn: false })).toBe(true);
+  }, 120000);
+});
