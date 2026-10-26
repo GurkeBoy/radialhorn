@@ -33,7 +33,7 @@ function gridTriangles(grid) {
 export const surfaceTriangles = surfaces => surfaces.flatMap(f => f.grid ? gridTriangles(f.grid) : f.triangles ?? []);
 
 /** Strecken [[x, h], [x, h]] des Schnitts der Dreiecke mit der Ebene z. */
-function sliceSegments(tris, z) {
+export function sliceSegments(tris, z) {
   const segs = [];
   for (const tri of tris) {
     const d = tri.map(p => p[2] - z);
@@ -50,10 +50,16 @@ function sliceSegments(tris, z) {
   return segs;
 }
 
-/** Weitester Schnittpunkt des Strahls vom Ursprung (Richtung (c, s)) mit den Strecken, sonst null. */
-function rayReach(segs, c, s) {
+/**
+ * Weitester Schnittpunkt des Strahls (Richtung (c, s)) mit den Strecken, sonst null. Der Strahl
+ * beginnt im Ursprung, mit side ≠ 0 um side seitlich versetzt (senkrecht zur Richtung); der
+ * Rückgabewert ist der Abstand ρ entlang der Richtung.
+ */
+export function rayReach(segs, c, s, side = 0) {
   let best = null;
-  for (const [a, b] of segs) {
+  const ox = -s * side, oy = c * side;
+  for (const [a0, b0] of segs) {
+    const a = [a0[0] - ox, a0[1] - oy], b = [b0[0] - ox, b0[1] - oy];
     const ex = b[0] - a[0], eh = b[1] - a[1];
     const den = c * eh - s * ex;                    // d × e
     if (Math.abs(den) < 1e-12) continue;
@@ -145,8 +151,13 @@ export function flangeRibs(surfaces, layout, nRim, wall, rimRound = 0) {
     }
     const K = reach.length - 1;
     if (K < 2) { shortest = 0; continue; }
-    const e = Math.min(RIB_EMBED_WALL, 0.4 * wall);
-    const inner = reach.map((rho, k) => [rho - e, k === 0 ? th : levels[k]]);   // von der Platte nach oben
+    // Seitlich weicht die Wand zurück (gerundete Ecke): die Einbettung muss auch an den Seiten der Rippe
+    // bis in die Wand reichen. Wand in 5 Abständen quer zur Rippe messen (side = −hw … hw).
+    const hw = w / 2, sides = [-1, -0.5, 0, 0.5, 1].map(f => f * hw);
+    const wallAt = sides.map(side => reach.map((rho, k) => rayReach(slices[k], c, s, side) ?? rho));   // [Seite][Stufe]
+    const e0 = Math.min(RIB_EMBED_WALL, 0.4 * wall);
+    const embed = reach.map((rho, k) => Math.min(e0 + Math.max(0, rho - Math.min(wallAt[0][k], wallAt[4][k])), 0.95 * wall));
+    const inner = reach.map((rho, k) => [rho - embed[k], k === 0 ? th : levels[k]]);   // von der Platte nach oben
     const zb = th - dPlate;
     // gegen den Uhrzeigersinn: Ende unten, Ende oben (= Plattenfläche), Spitze, Innenkante nach unten, Boden
     const poly = [[rEnd, zb], [rEnd, th], ...inner.slice().reverse(), [inner[0][0], zb]];
@@ -154,7 +165,12 @@ export function flangeRibs(surfaces, layout, nRim, wall, rimRound = 0) {
     if (!solid) { shortest = 0; continue; }
     shapes.push({ phi, poly });
     out.push({ name: `flangeRib${i}`, section: "flansch", oriented: true, rib: true, triangles: solid.flat(), faces: solid });
-    overlap += w * (e * (levels[K] - th) + (rEnd - inner[0][0]) * dPlate);
+    // Überlapp mit Platte und Wand: Platte unter der Plattenfläche, Wand über Stufen und Breite (Trapez)
+    const widthAt = (k, j) => Math.max(0, wallAt[j][k] - inner[k][0]);
+    const across = k => hw / 2 * (widthAt(k, 0) / 2 + widthAt(k, 1) + widthAt(k, 2) + widthAt(k, 3) + widthAt(k, 4) / 2);
+    let wallOverlap = 0;
+    for (let k = 0; k < K; k++) wallOverlap += (inner[k + 1][1] - inner[k][1]) * (across(k) + across(k + 1)) / 2;
+    overlap += wallOverlap + w * (rEnd - inner[0][0]) * dPlate;
     shortest = Math.min(shortest, levels[K] - th);
   }
   return { surfaces: out, shapes, overlap, count: out.length, length: out.length ? shortest : 0 };

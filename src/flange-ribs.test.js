@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet, throatMorph } from "./horn-math.js";
 import { buildShellGeometry, flangeLayout, triangulate, boltHoleCenters } from "./horn-mesh.js";
 import { meshVolume, computeVolumes } from "./volume.js";
+import { surfaceTriangles, sliceSegments, rayReach } from "./flange-ribs.js";
 
 const RT = 25.4, WALL = 10, TH = 10;
 const math = createHornMath(140, { clothoid: 30 });
@@ -136,5 +137,28 @@ describe("Stützrippen am Flansch", () => {
     const { geo: g } = build(RIBS, { morph, edgeR: WALL });
     expect(ribsOf(g)).toHaveLength(4);
     for (const rib of ribsOf(g)) expect(edgeCheck(triangulate(rib))).toEqual({ open: 0, doubled: 0 });
+  });
+});
+
+describe("Stützrippen an der gerundeten Ecke", () => {
+  // Dicke Rippe an der gerundeten Außenkante: die Wand weicht seitlich zurück, die Einbettung muss
+  // deshalb auch an den Seiten der Rippe in die Wand reichen (sonst klafft dort ein Spalt)
+  const { geo } = build({ thickness: 10, length: 60 }, { edgeR: WALL });
+  const outer = surfaceTriangles(geo.surfaces.filter(f => f.name.startsWith("outer.")));
+
+  it("Innenkante der Rippe liegt auf der Mitte und an beiden Seiten in der Wand", () => {
+    expect(geo.ribs.count).toBe(4);
+    for (const { phi, poly } of geo.ribs.shapes) {
+      const c = Math.cos(phi), s = Math.sin(phi);
+      const chain = poly.slice(2, -1);                                   // Spitze → Platte: [ρ − Einbettung, z]
+      for (const [rho, z] of chain) {
+        const segs = sliceSegments(outer, Math.max(z, TH + 0.05));
+        for (const side of [-5, 0, 5]) {
+          const wall = rayReach(segs, c, s, side);
+          expect(wall, `z ${z.toFixed(1)}, Seite ${side}`).not.toBeNull();
+          expect(rho, `z ${z.toFixed(1)}, Seite ${side}`).toBeLessThan(wall - 0.3);   // Innenkante hinter der Wandfläche
+        }
+      }
+    }
   });
 });
