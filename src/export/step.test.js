@@ -35,6 +35,8 @@ const CASES = {
   "Schale 3 mm, Kanten, Klothoide, Verrundung": design(createHornMath(140, { clothoid: 30 }).solveHorn(500, 60, RT, 120, 100), "exponential", 40, 3, { edgeR: 3 }),
   Flansch: design(std(), "exponential", 0, 12, { flange: {} }),
   "Flansch mit Stützrippen": design(std(), "exponential", 0, 12, { flange: { ribs: { thickness: 4, length: 30 } } }),
+  "Flansch, Verrundung r = 3": design(std(), "exponential", 0, 12, { flange: { round: 3 } }),
+  "Flansch, Verrundung, Rippen": design(std(), "exponential", 0, 12, { flange: { round: 3, ribs: { thickness: 4, length: 30 } } }),
   "Flansch ohne Bohrungen": design(std(), "exponential", 0, 12, { flange: { holes: { ...BMS.holes, count: 0 } } }),
   "Flansch, runder Throat, Kanten": design(std(), "exponential", 0, 12, { morph: true, edgeR: 12, flange: {} }),
   "Flansch ohne Traktrix, 6 Bohrungen": design(solveHorn(500, 0, RT, 120, 100), "linear", 0, 12, { flange: { holes: { count: 6, circle: null, diameter: 9, angle: 15 } } }),

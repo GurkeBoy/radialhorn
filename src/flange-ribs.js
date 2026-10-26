@@ -112,19 +112,20 @@ function extrude(poly, phi, w) {
  * @param layout    flangeLayout-Ergebnis mit ribs { thickness, length }
  * @param nRim      Ecken des Flanschrands (res.flange)
  * @param wall      Wandstärke der Schale [mm]
+ * @param rimRound  Verrundung des Flanschrands auf der Hornseite [mm]: die Rippen enden davor
  * @returns {{ surfaces: object[], shapes: { phi, poly }[], overlap: number, count: number, length: number }}
  *   surfaces: je Rippe ein geschlossener Körper (section "flansch"); overlap: Volumen [mm³], das
  *   die Rippen in Platte und Wand hinein überlappen; length: kürzeste wirksame Länge entlang des
  *   Horns [mm] (0 ohne Rippen); count: erzeugte Rippen; shapes: Winkel φ [rad] und Vieleck [[ρ, z], …]
  *   je Rippe (für die Zeichnung)
  */
-export function flangeRibs(surfaces, layout, nRim, wall) {
+export function flangeRibs(surfaces, layout, nRim, wall, rimRound = 0) {
   const { ribs, holes, thickness: th } = layout;
   const none = { surfaces: [], shapes: [], overlap: 0, count: 0, length: 0 };
   const w = ribs?.thickness, count = holes?.count;
   if (!(w > 0) || !(ribs.length > RIB_START) || !(count > 0)) return none;
 
-  const rim = layout.diameter / 2 * Math.cos(Math.PI / nRim);     // Flanschrand: innen einbeschriebener Kreis
+  const rim = (layout.diameter / 2 - rimRound) * Math.cos(Math.PI / nRim);   // Flanschrand (vor der Verrundung): einbeschriebener Kreis
   const rEnd = Math.sqrt(Math.max(0, rim ** 2 - (w / 2) ** 2)) - 0.05;
   const dPlate = Math.min(RIB_EMBED_PLATE, th / 2);
   const tris = surfaceTriangles(surfaces);
