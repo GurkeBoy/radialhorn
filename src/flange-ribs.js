@@ -78,6 +78,7 @@ function oriented(a, b, c, dir) {
  * poly[1] aus sternförmig): Seitenflächen bei ±w/2 als Fächer um poly[1], Mantel je Kante.
  * Alle Ecken des Vielecks bleiben Ecken der Dreiecke (keine T-Stöße). Null, wenn der Fächer
  * nicht aufgeht (Vieleck nicht sternförmig).
+ * @returns {number[][][][] | null}  ebene Flächen, je eine Liste von Dreiecken
  */
 function extrude(poly, phi, w) {
   const u = [Math.cos(phi), Math.sin(phi)], v = [-Math.sin(phi), Math.cos(phi)];
@@ -90,18 +91,19 @@ function extrude(poly, phi, w) {
   const area = ([a, b, c]) => (poly[b][0] - poly[a][0]) * (poly[c][1] - poly[a][1]) - (poly[b][1] - poly[a][1]) * (poly[c][0] - poly[a][0]);
   if (!fan.every(f => area(f) > 1e-9)) return null;
 
-  const tris = [];
+  // ebene Flächen: die beiden Seiten (Fächer) und je Kante des Vielecks ein Rechteck
+  const faces = [[], []];
   for (const [a, b, c] of fan) {
-    tris.push(...oriented(at(poly[a], w / 2), at(poly[b], w / 2), at(poly[c], w / 2), [v[0], v[1], 0]));
-    tris.push(...oriented(at(poly[a], -w / 2), at(poly[b], -w / 2), at(poly[c], -w / 2), [-v[0], -v[1], 0]));
+    faces[0].push(...oriented(at(poly[a], w / 2), at(poly[b], w / 2), at(poly[c], w / 2), [v[0], v[1], 0]));
+    faces[1].push(...oriented(at(poly[a], -w / 2), at(poly[b], -w / 2), at(poly[c], -w / 2), [-v[0], -v[1], 0]));
   }
   for (let i = 0; i < n; i++) {
     const p = poly[i], q = poly[(i + 1) % n];
     const dir = [(q[1] - p[1]) * u[0], (q[1] - p[1]) * u[1], -(q[0] - p[0])];   // nach außen: (dz, −dρ) in (ρ, z)
     const a = at(p, w / 2), b = at(q, w / 2), c = at(q, -w / 2), d = at(p, -w / 2);
-    tris.push(...oriented(a, b, c, dir), ...oriented(a, c, d, dir));
+    faces.push([...oriented(a, b, c, dir), ...oriented(a, c, d, dir)]);
   }
-  return tris;
+  return faces;
 }
 
 /**
@@ -110,14 +112,15 @@ function extrude(poly, phi, w) {
  * @param layout    flangeLayout-Ergebnis mit ribs { thickness, length }
  * @param nRim      Ecken des Flanschrands (res.flange)
  * @param wall      Wandstärke der Schale [mm]
- * @returns {{ surfaces: object[], overlap: number, count: number, length: number }}
+ * @returns {{ surfaces: object[], shapes: { phi, poly }[], overlap: number, count: number, length: number }}
  *   surfaces: je Rippe ein geschlossener Körper (section "flansch"); overlap: Volumen [mm³], das
  *   die Rippen in Platte und Wand hinein überlappen; length: kürzeste wirksame Länge entlang des
- *   Horns [mm] (0 ohne Rippen); count: erzeugte Rippen
+ *   Horns [mm] (0 ohne Rippen); count: erzeugte Rippen; shapes: Winkel φ [rad] und Vieleck [[ρ, z], …]
+ *   je Rippe (für die Zeichnung)
  */
 export function flangeRibs(surfaces, layout, nRim, wall) {
   const { ribs, holes, thickness: th } = layout;
-  const none = { surfaces: [], overlap: 0, count: 0, length: 0 };
+  const none = { surfaces: [], shapes: [], overlap: 0, count: 0, length: 0 };
   const w = ribs?.thickness, count = holes?.count;
   if (!(w > 0) || !(ribs.length > RIB_START) || !(count > 0)) return none;
 
@@ -128,7 +131,7 @@ export function flangeRibs(surfaces, layout, nRim, wall) {
   const levels = Array.from({ length: RIB_SAMPLES + 1 }, (_, k) => th + RIB_START + (ribs.length - RIB_START) * k / RIB_SAMPLES);
   const slices = levels.map(z => sliceSegments(tris, z));
 
-  const out = [];
+  const out = [], shapes = [];
   let overlap = 0, shortest = Infinity;
   for (let i = 0; i < count; i++) {
     const phi = (holes.angle + 360 * (i + 0.5) / count) * Math.PI / 180;
@@ -148,9 +151,10 @@ export function flangeRibs(surfaces, layout, nRim, wall) {
     const poly = [[rEnd, zb], [rEnd, th], ...inner.slice().reverse(), [inner[0][0], zb]];
     const solid = extrude(poly, phi, w);
     if (!solid) { shortest = 0; continue; }
-    out.push({ name: `flangeRib${i}`, section: "flansch", oriented: true, triangles: solid });
+    shapes.push({ phi, poly });
+    out.push({ name: `flangeRib${i}`, section: "flansch", oriented: true, rib: true, triangles: solid.flat(), faces: solid });
     overlap += w * (e * (levels[K] - th) + (rEnd - inner[0][0]) * dPlate);
     shortest = Math.min(shortest, levels[K] - th);
   }
-  return { surfaces: out, overlap, count: out.length, length: out.length ? shortest : 0 };
+  return { surfaces: out, shapes, overlap, count: out.length, length: out.length ? shortest : 0 };
 }

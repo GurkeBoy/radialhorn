@@ -175,6 +175,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
     [tr("pdf.fillet"),         fillet ? "R " + fillet.R.toFixed(1) + " mm" : "–"],
     [tr("pdf.corner"),         showRaumecke ? tr("pdf.yes") : tr("pdf.no")],
     [tr("pdf.wall"),           showWandstaerke ? wandstaerke + " mm" : "–"],
+    ...(flange?.ribs ? [[tr("pdf.ribs"), tr("pdf.ribsValue", { n: flange.holes.count, w: flange.ribs.thickness, l: flange.ribs.length })]] : []),
   ];
   const kvRows = kv.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
 

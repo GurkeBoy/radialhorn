@@ -221,6 +221,8 @@ export default {
   "pdf.fillet": "Verrundung Übergang",
   "pdf.corner": "Raumecke",
   "pdf.wall": "Wandstärke",
+  "pdf.ribs": "Stützrippen",
+  "pdf.ribsValue": "{n} × {w} mm, Länge {l} mm",
   "pdf.yes": "ja",
   "pdf.no": "nein",
 };

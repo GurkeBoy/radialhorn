@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet, createHornMath, throatMorph, maxMorphLength } from "../horn-math.js";
-import { buildBrep, hornPatches, stepFile, hornStep, circleOf } from "./step.js";
+import { buildBrep, hornPatches, ribPatches, stepFile, hornStep, circleOf } from "./step.js";
 import { flangeLayout } from "../horn-mesh.js";
 
 const RT = 25.4, H = 200;
@@ -34,6 +34,7 @@ const CASES = {
   "Schale, Kanten r = t ohne Traktrix": design(solveHorn(500, 0, RT, 120, 100), "linear", 0, 12, { edgeR: 12 }),
   "Schale 3 mm, Kanten, Klothoide, Verrundung": design(createHornMath(140, { clothoid: 30 }).solveHorn(500, 60, RT, 120, 100), "exponential", 40, 3, { edgeR: 3 }),
   Flansch: design(std(), "exponential", 0, 12, { flange: {} }),
+  "Flansch mit Stützrippen": design(std(), "exponential", 0, 12, { flange: { ribs: { thickness: 4, length: 30 } } }),
   "Flansch ohne Bohrungen": design(std(), "exponential", 0, 12, { flange: { holes: { ...BMS.holes, count: 0 } } }),
   "Flansch, runder Throat, Kanten": design(std(), "exponential", 0, 12, { morph: true, edgeR: 12, flange: {} }),
   "Flansch ohne Traktrix, 6 Bohrungen": design(solveHorn(500, 0, RT, 120, 100), "linear", 0, 12, { flange: { holes: { count: 6, circle: null, diameter: 9, angle: 15 } } }),
@@ -218,5 +219,34 @@ describe("circleOf", () => {
     expect(circleOf(arc(50, 0, 3, 20).map(([x, y, z]) => [x, y, 30 + 0.9 * (z - 30)]))).toBeNull();
     expect(circleOf(arc(50, 0, 1, 4))).toBeNull();
     expect(circleOf(arc(50, 0, 3, 20).map(([x, y, z], k) => [x, y + 1e-3 * k, z]))).toBeNull();
+  });
+});
+
+describe("Stützrippen im STEP", () => {
+  const d = CASES["Flansch mit Stützrippen"];
+  const text = hornStep(d, { fileName: "test.step", date: "2026-10-13T12:00:00" });
+
+  it("Hauptkörper ohne Rippen bleibt geschlossen; je Rippe ein eigener geschlossener Körper", () => {
+    expect(buildBrep(hornPatches(d)).problems).toEqual([]);
+    expect(text.match(/MANIFOLD_SOLID_BREP/g)).toHaveLength(1 + 4);
+    expect(text.match(/CLOSED_SHELL/g)).toHaveLength(1 + 4);
+    expect(text).toContain("Radialhorn Rippe 4");
+  });
+
+  it("jede Rippe ist ein Vielflach: geschlossen, V − E + F = 2, alle Flächen eben", () => {
+    const ribs = ribPatches(d);
+    expect(ribs).toHaveLength(4);
+    for (const patches of ribs) {
+      const brep = buildBrep(patches);
+      expect(brep.problems).toEqual([]);
+      expect(brep.vertices.length - brep.edges.length + brep.faces.length).toBe(2);
+      expect(brep.faces.every(f => f.planar)).toBe(true);
+      expect(brep.faces.every(f => f.bounds.length === 1)).toBe(true);
+    }
+  });
+
+  it("ohne Rippen nur ein Körper", () => {
+    expect(hornStep(CASES.Flansch).match(/MANIFOLD_SOLID_BREP/g)).toHaveLength(1);
+    expect(ribPatches(CASES.Flansch)).toEqual([]);
   });
 });

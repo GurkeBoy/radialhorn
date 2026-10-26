@@ -131,9 +131,10 @@ function gridFace({ name, outward, direction }, grid) {
 /**
  * Ebene Dreiecksfläche (Ringe, Stirnflächen): Ränder aus den Dreieckskanten, die nur einmal
  * vorkommen – mit nach außen orientierten Dreiecken läuft der Außenrand gegen, ein Lochrand im
- * Uhrzeigersinn um die Normale. Größte Schleife = Außenrand.
+ * Uhrzeigersinn um die Normale. Größte Schleife = Außenrand. corners: jeder Randpunkt ist eine
+ * Ecke (ebene Vielecke wie die Rippen; sonst müssten Nachbarflächen ihre Ecken schon kennen).
  */
-function triangleFace({ name, triangles }) {
+function triangleFace({ name, triangles, corners = false }) {
   const tris = triangles.filter(([a, b, c]) => !same(a, b) && !same(b, c) && !same(c, a));
   const directed = new Map();
   for (const t of tris) for (let k = 0; k < 3; k++) directed.set(key(t[k]) + ";" + key(t[(k + 1) % 3]), t[k]);
@@ -158,7 +159,7 @@ function triangleFace({ name, triangles }) {
     return [s[0] + n[0], s[1] + n[1], s[2] + n[2]];
   }, [0, 0, 0]), planar.normal));
   loops.sort((x, y) => size(y) - size(x));
-  return { name, planar, outer: { loop: loops[0] }, holes: loops.slice(1).map(loop => ({ loop })) };
+  return { name, planar, corners, outer: { loop: loops[0] }, holes: loops.slice(1).map(loop => ({ loop })) };
 }
 
 /** Ebene durch die Punkte (Normale aus der Flächensumme) oder null. */
@@ -191,6 +192,7 @@ export function buildBrep(patches) {
     return vertices.get(k);
   };
   for (const f of raw) for (const { pts } of f.outer.sides ?? []) { vertex(pts[0]); vertex(pts[pts.length - 1]); }
+  for (const f of raw) if (f.corners) for (const { loop } of [f.outer, ...f.holes]) loop.forEach(vertex);
 
   // Kante mit Parametern der ersten gekrümmten Fläche daran: Randkurve der Fläche, wenn der Rand
   // ungeteilt ist, sonst nahe daran (ohne: Sehnenlänge, Abweichung zur Fläche bis ≈ 0,01 mm)
@@ -282,7 +284,12 @@ export function buildBrep(patches) {
  * Dreiecke: ihre Außenrichtung ist die Summe der Dreiecksnormalen.
  */
 export function hornPatches(design) {
-  return hornGeometry(design).surfaces.map(f => {
+  return patchesOf(hornGeometry(design).surfaces);
+}
+
+/** Flächen des Körpers ohne die Rippen (surfaces aus hornGeometry), in CAD-Achsen. */
+function patchesOf(surfaces) {
+  return surfaces.filter(f => !f.rib).map(f => {
     // nach außen orientiert; der Achsentausch spiegelt, deshalb Umlaufrichtung tauschen
     const triangles = () => triangulate(f).map(([a, b, c]) => [a, c, b].map(toCad));
     if (!f.grid) return { name: f.name, triangles: triangles() };
@@ -294,6 +301,20 @@ export function hornPatches(design) {
     }, [0, 0, 0]);
     return { name: f.name, grid, direction };
   });
+}
+
+/** Flächen der Stützrippen (ribPatchesOf) zum Entwurf. */
+export const ribPatches = design => ribPatchesOf(hornGeometry(design).surfaces);
+
+/**
+ * Stützrippen des Flanschs (flange-ribs.js): je Rippe die Flächen eines eigenen geschlossenen
+ * Körpers (ebene Vielecke), in CAD-Achsen. Sie durchdringen Platte und Wand ein Stück; das CAD
+ * verschmilzt sie bei Bedarf.
+ */
+function ribPatchesOf(surfaces) {
+  return surfaces.filter(f => f.rib).map(f => f.faces.map((tris, k) => ({
+    name: `${f.name}.${k}`, corners: true, triangles: tris.map(([a, b, c]) => [a, c, b].map(toCad)),
+  })));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -320,11 +341,13 @@ const str = s => `'${String(s).replace(/'/g, "''")}'`;
 const list = items => `(${items.join(",")})`;
 
 /**
- * STEP-Datei (AP214) aus einem B-Rep (buildBrep).
- * @param brep
+ * STEP-Datei (AP214) aus einem B-Rep (buildBrep) oder einer Liste davon (je ein geschlossener Körper;
+ * der erste trägt den Namen, die weiteren – die Rippen – "Name Rippe n").
+ * @param model  brep | brep[]
  * @param {{ name?: string, fileName?: string, date?: string, author?: string }} meta
  */
-export function stepFile(brep, { name = "Radialhorn", fileName = "radialhorn.step", date = new Date().toISOString().slice(0, 19), author = "" } = {}) {
+export function stepFile(model, { name = "Radialhorn", fileName = "radialhorn.step", date = new Date().toISOString().slice(0, 19), author = "" } = {}) {
+  const breps = Array.isArray(model) ? model : [model];
   const lines = [];
   let next = 1;
   const add = text => { const id = next++; lines.push(`#${id}=${text};`); return `#${id}`; };
@@ -346,54 +369,57 @@ export function stepFile(brep, { name = "Radialhorn", fileName = "radialhorn.ste
   const unc = add(`UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-3),${mm},'distance_accuracy_value','confusion accuracy')`);
   const gctx = add(`(GEOMETRIC_REPRESENTATION_CONTEXT(3)GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT((${unc}))GLOBAL_UNIT_ASSIGNED_CONTEXT((${mm},${rad},${sr}))REPRESENTATION_CONTEXT('',''))`);
 
-  const vertexRef = new Map(brep.vertices.map(v => [v, add(`VERTEX_POINT('',${point(v.point)})`)]));
-  const placement3 = (origin, axis, ref) => add(`AXIS2_PLACEMENT_3D('',${point(origin)},${direction(axis)},${direction(ref)})`);
-  const edgeRef = new Map(brep.edges.map(e => {
-    if (e.circle) {
-      const { center, normal, ref, r } = e.circle;
-      const curve = add(`CIRCLE('',${placement3(center, normal, ref)},${real(r)})`);
+  const writeSolid = (brep, solidName) => {
+    const vertexRef = new Map(brep.vertices.map(v => [v, add(`VERTEX_POINT('',${point(v.point)})`)]));
+    const placement3 = (origin, axis, ref) => add(`AXIS2_PLACEMENT_3D('',${point(origin)},${direction(axis)},${direction(ref)})`);
+    const edgeRef = new Map(brep.edges.map(e => {
+      if (e.circle) {
+        const { center, normal, ref, r } = e.circle;
+        const curve = add(`CIRCLE('',${placement3(center, normal, ref)},${real(r)})`);
+        return [e, add(`EDGE_CURVE('',${vertexRef.get(e.start)},${vertexRef.get(e.end)},${curve},.T.)`)];
+      }
+      const fit = fitBSpline(e.points, e.params);
+      const { knots, mults } = knotGroups(fit.knots);
+      const cps = fit.controlPoints.map(point);
+      const curve = add(`B_SPLINE_CURVE_WITH_KNOTS('',${fit.degree},${list(cps)},.UNSPECIFIED.,.F.,.F.,${list(mults)},${list(knots.map(k => real(k, 12)))},.UNSPECIFIED.)`);
       return [e, add(`EDGE_CURVE('',${vertexRef.get(e.start)},${vertexRef.get(e.end)},${curve},.T.)`)];
-    }
-    const fit = fitBSpline(e.points, e.params);
-    const { knots, mults } = knotGroups(fit.knots);
-    const cps = fit.controlPoints.map(point);
-    const curve = add(`B_SPLINE_CURVE_WITH_KNOTS('',${fit.degree},${list(cps)},.UNSPECIFIED.,.F.,.F.,${list(mults)},${list(knots.map(k => real(k, 12)))},.UNSPECIFIED.)`);
-    return [e, add(`EDGE_CURVE('',${vertexRef.get(e.start)},${vertexRef.get(e.end)},${curve},.T.)`)];
-  }));
+    }));
 
-  const faceRefs = brep.faces.map(face => {
-    let surface, sense = true;
-    if (face.cylinder) {
-      const { center, axis, ref, r, sameSense } = face.cylinder;
-      surface = add(`CYLINDRICAL_SURFACE('',${placement3(center, axis, ref)},${real(r)})`);
-      sense = sameSense;
-    } else if (face.planar) {
-      const { origin, normal } = face.planar;
-      const helper = Math.abs(normal[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
-      const ref = cross(cross(normal, helper), normal);
-      const l = Math.hypot(...ref);
-      const axis = add(`AXIS2_PLACEMENT_3D('',${point(origin)},${direction(normal)},${direction(ref.map(v => v / l))})`);
-      surface = add(`PLANE('',${axis})`);
-    } else {
-      const fit = face.fit ?? fitBSplineSurface(face.grid);
-      const ku = knotGroups(fit.knotsU), kv = knotGroups(fit.knotsV);
-      // STEP: control_points_list[u][v]
-      const cp = fit.controlPoints[0].map((_, j) => list(fit.controlPoints.map(row => point(row[j]))));
-      surface = add(`B_SPLINE_SURFACE_WITH_KNOTS('',${fit.degreeU},${fit.degreeV},${list(cp)},.UNSPECIFIED.,.F.,.F.,.F.,` +
-        `${list(ku.mults)},${list(kv.mults)},${list(ku.knots.map(k => real(k, 12)))},${list(kv.knots.map(k => real(k, 12)))},.UNSPECIFIED.)`);
-    }
-    const bounds = face.bounds.map((loop, k) => {
-      const oriented = loop.map(({ edge, forward }) => add(`ORIENTED_EDGE('',*,*,${edgeRef.get(edge)},${forward ? ".T." : ".F."})`));
-      const ref = add(`EDGE_LOOP('',${list(oriented)})`);
-      return add(`${k === 0 ? "FACE_OUTER_BOUND" : "FACE_BOUND"}('',${ref},.T.)`);
+    const faceRefs = brep.faces.map(face => {
+      let surface, sense = true;
+      if (face.cylinder) {
+        const { center, axis, ref, r, sameSense } = face.cylinder;
+        surface = add(`CYLINDRICAL_SURFACE('',${placement3(center, axis, ref)},${real(r)})`);
+        sense = sameSense;
+      } else if (face.planar) {
+        const { origin, normal } = face.planar;
+        const helper = Math.abs(normal[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+        const ref = cross(cross(normal, helper), normal);
+        const l = Math.hypot(...ref);
+        const axis = add(`AXIS2_PLACEMENT_3D('',${point(origin)},${direction(normal)},${direction(ref.map(v => v / l))})`);
+        surface = add(`PLANE('',${axis})`);
+      } else {
+        const fit = face.fit ?? fitBSplineSurface(face.grid);
+        const ku = knotGroups(fit.knotsU), kv = knotGroups(fit.knotsV);
+        // STEP: control_points_list[u][v]
+        const cp = fit.controlPoints[0].map((_, j) => list(fit.controlPoints.map(row => point(row[j]))));
+        surface = add(`B_SPLINE_SURFACE_WITH_KNOTS('',${fit.degreeU},${fit.degreeV},${list(cp)},.UNSPECIFIED.,.F.,.F.,.F.,` +
+          `${list(ku.mults)},${list(kv.mults)},${list(ku.knots.map(k => real(k, 12)))},${list(kv.knots.map(k => real(k, 12)))},.UNSPECIFIED.)`);
+      }
+      const bounds = face.bounds.map((loop, k) => {
+        const oriented = loop.map(({ edge, forward }) => add(`ORIENTED_EDGE('',*,*,${edgeRef.get(edge)},${forward ? ".T." : ".F."})`));
+        const ref = add(`EDGE_LOOP('',${list(oriented)})`);
+        return add(`${k === 0 ? "FACE_OUTER_BOUND" : "FACE_BOUND"}('',${ref},.T.)`);
+      });
+      return add(`ADVANCED_FACE(${str(face.name)},${list(bounds)},${surface},${sense ? ".T." : ".F."})`);
     });
-    return add(`ADVANCED_FACE(${str(face.name)},${list(bounds)},${surface},${sense ? ".T." : ".F."})`);
-  });
 
-  const shell = add(`CLOSED_SHELL('',${list(faceRefs)})`);
-  const solid = add(`MANIFOLD_SOLID_BREP(${str(name)},${shell})`);
+    const shell = add(`CLOSED_SHELL('',${list(faceRefs)})`);
+    return add(`MANIFOLD_SOLID_BREP(${str(solidName)},${shell})`);
+  };
+  const solids = breps.map((b, k) => writeSolid(b, k === 0 ? name : `${name} Rippe ${k}`));
   const placement = add(`AXIS2_PLACEMENT_3D('',${point([0, 0, 0])},${direction([0, 0, 1])},${direction([1, 0, 0])})`);
-  const rep = add(`ADVANCED_BREP_SHAPE_REPRESENTATION(${str(name)},(${placement},${solid}),${gctx})`);
+  const rep = add(`ADVANCED_BREP_SHAPE_REPRESENTATION(${str(name)},(${placement},${solids.join(",")}),${gctx})`);
   add(`SHAPE_DEFINITION_REPRESENTATION(${pds},${rep})`);
 
   return [
@@ -411,11 +437,22 @@ export function stepFile(brep, { name = "Radialhorn", fileName = "radialhorn.ste
   ].join("\n");
 }
 
-/** STEP-Inhalt des geschlossenen Körpers; wirft bei offenem Körper. */
+/** Körper prüfen: wirft, wenn eine Kante nicht genau zweimal vorkommt (Körper nicht geschlossen). */
+function closedBrep(patches, what) {
+  const brep = buildBrep(patches);
+  if (brep.problems.length) throw new Error(`STEP: ${what} nicht geschlossen – ${brep.problems.slice(0, 5).join("; ")}`);
+  return brep;
+}
+
+/**
+ * STEP-Inhalt: der geschlossene Körper, bei Stützrippen am Flansch dazu je Rippe ein eigener
+ * geschlossener Körper; wirft bei einem offenen Körper.
+ */
 export function hornStep(design, meta) {
-  const brep = buildBrep(hornPatches(design));
-  if (brep.problems.length) throw new Error(`STEP: Körper nicht geschlossen – ${brep.problems.slice(0, 5).join("; ")}`);
-  return stepFile(brep, meta);
+  const { surfaces } = hornGeometry(design);
+  const body = closedBrep(patchesOf(surfaces), "Körper");
+  const ribs = ribPatchesOf(surfaces).map((patches, k) => closedBrep(patches, `Rippe ${k + 1}`));
+  return stepFile([body, ...ribs], meta);
 }
 
 export function exportSTEP(design) {

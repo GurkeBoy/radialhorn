@@ -221,6 +221,8 @@ export default {
   "pdf.fillet": "Transition fillet",
   "pdf.corner": "Room corner",
   "pdf.wall": "Wall thickness",
+  "pdf.ribs": "Support ribs",
+  "pdf.ribsValue": "{n} × {w} mm, length {l} mm",
   "pdf.yes": "yes",
   "pdf.no": "no",
 };

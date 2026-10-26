@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { solveHorn, computeFillet } from "../horn-math.js";
+import { solveHorn, computeFillet, makeProfile } from "../horn-math.js";
+import { flangeLayout } from "../horn-mesh.js";
 import { buildDXF } from "./dxf.js";
 
 const RT = 25.4, H_MOUTH = 200;
@@ -100,6 +101,29 @@ describe("buildDXF", () => {
     expect(count(e, "CIRCLE", "Flansch_Konflikt")).toBe(1);
     for (const l of lines) for (const v of [...get(l, "20"), ...get(l, "30")]) expect(Math.abs(v)).toBeCloseTo(RT, 6);
     expect(count(parse(buildDXF(design(), { flansch: true })), "CIRCLE", "Flansch")).toBe(0);   // ohne Flansch
+  });
+
+  it("Stützrippen: Profil in der Rippenebene und Grundriss auf der Plattenfläche, Layer Flansch_Rippen", () => {
+    const WALL = 10, profile = makeProfile(s, RT, H_MOUTH, "exponential", 0.5);
+    const spec = ribs => ({ diameter: null, fallback: 120, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 }, ribs });
+    const withRibs = flangeLayout(s, RT, profile, null, WALL, spec({ thickness: 4, length: 30 }));
+    const e = parse(buildDXF(design({ flange: withRibs, profile, wall: WALL }), { flansch: true }));
+    const lines = e.filter(x => x.type === "LINE" && layerOf(x) === "Flansch_Rippen");
+    // 4 Rippen mit gleich vielen Linien: Profilkanten (Wand mit vielen Stützpunkten) + 4 Kanten des Grundrisses
+    expect(lines.length % 4).toBe(0);
+    expect(lines.length / 4).toBeGreaterThan(4 + 5);
+    const R = withRibs.diameter / 2;
+    for (const l of lines) {
+      for (const k of ["10", "11"]) {
+        const [x, y, z] = [get(l, k)[0], get(l, String(+k + 10))[0], get(l, String(+k + 20))[0]];
+        expect(Math.hypot(y, z)).toBeLessThanOrEqual(R);        // nie über dem Flanschrand
+        expect(x).toBeGreaterThanOrEqual(9 - 1e-9);              // X = Hornachse: ab der Plattenfläche (abzüglich Einbettung)
+      }
+    }
+    // ohne Rippenvorgabe oder ohne Schale: keine
+    const plain = flangeLayout(s, RT, profile, null, WALL, spec(null));
+    expect(count(parse(buildDXF(design({ flange: plain, profile, wall: WALL }), { flansch: true })), "LINE", "Flansch_Rippen")).toBe(0);
+    expect(count(parse(buildDXF(design({ flange: withRibs, profile, wall: 0 }), { flansch: true })), "LINE", "Flansch_Rippen")).toBe(0);
   });
 
   it("Flansch mit rundem Throat: Öffnung als Kreis Ø 2·rt statt Quadrat", () => {

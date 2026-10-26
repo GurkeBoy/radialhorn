@@ -80,6 +80,13 @@ describe("buildDatasheet", () => {
     expect(cuts(buildDatasheet(design({ wall: 37 }), { ...ALL, bemassung: false }, DATE))).toBe(4);
   });
 
+  it("Stützrippen als Kennwert: Zahl (= Bohrungen), Dicke, Länge", () => {
+    const flange = { diameter: 182, thickness: 10, holes: { count: 4 }, ribs: { thickness: 4, length: 30 } };
+    expect(row(buildDatasheet(design({ wall: 20, flange }), ALL, DATE), "Stützrippen")).toBe("4 × 4 mm, Länge 30 mm");
+    expect(row(buildDatasheet(design({ wall: 20, flange }), ALL, DATE, "en"), "Support ribs")).toBe("4 × 4 mm, length 30 mm");
+    expect(row(buildDatasheet(design({ wall: 20, flange: { ...flange, ribs: null } }), ALL, DATE), "Stützrippen")).toBeUndefined();
+  });
+
   it("mit Flansch zusätzlich dessen Schnitt", () => {
     const flange = { diameter: 182, thickness: 10 };
     const h = buildDatasheet(design({ wall: 20, flange }), ALL, DATE);

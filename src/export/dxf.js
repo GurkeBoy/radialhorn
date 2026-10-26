@@ -5,6 +5,7 @@
 // Traktrix und gekrümmte Aufweitung als SPLINE, Geraden als LINE, Kreisbögen als ARC –,
 // damit CAD-Systeme glatte Körper daraus erzeugen.
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, makeProfile } from "../horn-math.js";
+import { buildShellGeometry } from "../horn-mesh.js";
 import { linspace } from "../utils.js";
 import { fitBSpline } from "./bspline.js";
 import { downloadFile } from "./download.js";
@@ -79,10 +80,11 @@ export const dxfDocument = entities => `0\nSECTION\n2\nENTITIES\n${entities.join
 
 /**
  * Erzeugt den DXF-Text.
- * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange, morph }
+ * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange, morph, profile, wall, edgeR } (profile, wall, edgeR
+ *                nur für die Stützrippen am Flansch)
  * @param opts    Layer-Auswahl { draufsicht, mundbogen, fokus, seitenprofil, uebergang, flansch }
  */
-export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, morph = null }, opts) {
+export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, morph = null, profile = null, wall = 0, edgeR = 0 }, opts) {
   const out = [];
   const mirrored = fn => [1, -1].forEach(fn);
 
@@ -147,6 +149,17 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
     for (const [y, z] of flange.centers) out.push(dxfCircle(y, z, flange.holes.diameter / 2, "Flansch", X, 0));
     // Bohrungen im Konflikt mit der Schale: gleiches Bohrbild, eigener Layer
     for (const [y, z] of flange.conflicts ?? []) out.push(dxfCircle(y, z, flange.holes.diameter / 2, "Flansch_Konflikt", X, 0));
+    // Stützrippen: Profil in der Rippenebene (Mittelschnitt) und Grundriss auf der Plattenfläche
+    const ribs = flange.ribs && wall > 0 && profile
+      ? buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR, morph).ribs : null;
+    for (const { phi, poly } of ribs?.shapes ?? []) {
+      const u = [Math.cos(phi), Math.sin(phi)], v = [-Math.sin(phi), Math.cos(phi)], hw = ribs.thickness / 2;
+      const at = ([rho, z], side = 0) => [z, rho * u[0] + side * v[0], rho * u[1] + side * v[1]];
+      poly.forEach((p, i) => out.push(dxfLine(at(p), at(poly[(i + 1) % poly.length]), "Flansch_Rippen")));
+      const rhoIn = poly[poly.length - 1][0], rhoOut = poly[0][0], zTop = flange.thickness;
+      const foot = [[rhoIn, hw], [rhoOut, hw], [rhoOut, -hw], [rhoIn, -hw]].map(([rho, side]) => at([rho, zTop], side));
+      foot.forEach((p, i) => out.push(dxfLine(p, foot[(i + 1) % 4], "Flansch_Rippen")));
+    }
   }
   return dxfDocument(out);
 }

@@ -1213,7 +1213,7 @@ export function flangeSectionOutline(inner, R, d) {
  * aufgelöster Flansch (flangeLayout) wird direkt verwendet. edgeR > 0 rundet die vier äußeren
  * Längskanten (Seitenwand ↔ Deckel/Boden) mit diesem Radius, höchstens t. morph (throatMorph)
  * rundet den Luftkanal (innen r) und die Außenkanten mit r + edgeR (outerRows).
- * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[], ribs: { count, length, overlap } | null }}
+ * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[], ribs: { count, length, overlap, shapes, thickness } | null }}
  *   section: "traktrix" | "klothoide" | "linear" | "rim" | "flansch"; ribs: Stützrippen des Flanschs (ihr
  *   Überlapp [mm³] mit Platte und Wand steckt doppelt im Netz-Volumen)
  */
@@ -1254,7 +1254,7 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
       { name: "rimEndL", section: "rim", outward: dir(-1),
         triangles: endFace(am.top[0], am.bottom[0], om.top[0], om.bottom[0], om.cornerTopL, om.cornerBottomL) },
     ],
-    ribs: ribs && { count: ribs.count, length: ribs.length, overlap: ribs.overlap },
+    ribs: ribs && { count: ribs.count, length: ribs.length, overlap: ribs.overlap, shapes: ribs.shapes, thickness: layout.ribs.thickness },
   };
 }
 
