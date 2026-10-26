@@ -16,7 +16,7 @@ export const L_MAX = 1200;   // Obergrenze des L-Reglers [mm]; mit Raumecke gilt
 export const GEOMETRY_KEYS = [
   "throatDiam", "openingAngle", "L", "Lt", "dw", "dh", "hMouth", "curve", "hypexT", "showRaumecke", "showWandstaerke",
   "wandstaerke", "filletOn", "filletR", "clothoidOn", "clothoidLength", "morphOn", "morphLength", "flangeOn", "flangeD",
-  "flangeT", "holeCount", "holeCircle", "holeD", "holeAngle", "edgeOn", "edgeR",
+  "flangeT", "holeCount", "holeCircle", "holeD", "holeAngle", "ribsOn", "ribThickness", "ribLength", "edgeOn", "edgeR",
 ];
 
 /** Teilergebnisse mit Version (Objekte, deren Gleichheit nachgelagert zählt). */
@@ -90,9 +90,10 @@ export function createGeometryEngine() {
     const edge = wall > 0 && p.edgeOn ? Math.min(p.edgeR ?? wall, wall) : 0;
     // Flansch nur an der Schale; Ø und Lochkreis werden gegen den Außenkörper aufgelöst
     const flange = stage("flange", [profile.version, morph.version, wall, edge, p.flangeOn, p.flangeD, p.dw, p.flangeT,
-      p.holeCount, p.holeCircle, p.holeD, p.holeAngle], () => sv && wall > 0 && p.flangeOn ? flangeLayout(sv, rt, profile.value, fillet.value, wall, {
+      p.holeCount, p.holeCircle, p.holeD, p.holeAngle, p.ribsOn, p.ribThickness, p.ribLength], () => sv && wall > 0 && p.flangeOn ? flangeLayout(sv, rt, profile.value, fillet.value, wall, {
       diameter: p.flangeD, fallback: p.dw, thickness: p.flangeT,
       holes: { count: p.holeCount, circle: p.holeCircle, diameter: p.holeD, angle: p.holeAngle },
+      ribs: p.ribsOn ? { thickness: p.ribThickness, length: p.ribLength } : null,
     }, edge, morph.value) : null);
 
     // Schalen-Umrisse der Ansichten (Schnitt durch die Wand), ab der Flanschebene

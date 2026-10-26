@@ -26,6 +26,7 @@
 import { hasTraktrix, hasClothoid, entrancePoints, focusRadius, wallArcLength, cornerRadius } from "./horn-math.js";
 import { ShapeUtils, Vector2 } from "three";
 import { linspace } from "./utils.js";
+import { flangeRibs } from "./flange-ribs.js";
 
 // Auflösung: Gitter (angular, radial, axial), Viertelkreise der Rundungen (round: runder Throat und
 // gerundete Längskanten), Flanschrand und Bohrungen als Vieleck (flange, hole)
@@ -883,8 +884,9 @@ function polygonDistance([px, py], poly) {
  * plus Platz für die Bohrungen bzw. der vorgegebene Lochkreis plus Rand. Ohne Lochkreis (circle = null) liegt er mittig zwischen
  * Außenkörper und Flanschrand. Bohrungen, die nicht ganz im Flansch und außerhalb der
  * Schale liegen, entfallen.
- * @param flange  { diameter | null, fallback?, thickness, holes: { count, circle | null, diameter, angle } }
- * @returns {{ diameter, thickness, holes, centers: [x, h][], conflicts: [x, h][], minDiameter, limited, invalidHoles }}
+ * @param flange  { diameter | null, fallback?, thickness, holes: { count, circle | null, diameter, angle }, ribs?: { thickness, length } | null }
+ * @returns {{ diameter, thickness, holes, ribs, centers: [x, h][], conflicts: [x, h][], minDiameter, limited, invalidHoles }}
+ *   ribs: Rippenvorgabe unverändert (flange-ribs.js baut sie erst mit der Schale)
  *   centers: gebohrte Löcher; conflicts: Bohrbild-Positionen, die nicht gebohrt werden können
  *   (in der Schale oder über den Rand) – nur zur Anzeige
  */
@@ -909,7 +911,7 @@ export function flangeLayout(s, rt, profile, fillet, t, flange, edgeR = 0, morph
   };
   const centers = all.filter(fits), conflicts = all.filter(c => !fits(c));
   return {
-    diameter, thickness: flange.thickness, holes, centers, conflicts,
+    diameter, thickness: flange.thickness, holes, ribs: flange.ribs ?? null, centers, conflicts,
     minDiameter, limited: wanted < minDiameter, invalidHoles: all.length - centers.length,
   };
 }
@@ -1211,7 +1213,9 @@ export function flangeSectionOutline(inner, R, d) {
  * aufgelöster Flansch (flangeLayout) wird direkt verwendet. edgeR > 0 rundet die vier äußeren
  * Längskanten (Seitenwand ↔ Deckel/Boden) mit diesem Radius, höchstens t. morph (throatMorph)
  * rundet den Luftkanal (innen r) und die Außenkanten mit r + edgeR (outerRows).
- * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[] }}  section: "traktrix" | "klothoide" | "linear" | "rim" | "flansch"
+ * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[], ribs: { count, length, overlap } | null }}
+ *   section: "traktrix" | "klothoide" | "linear" | "rim" | "flansch"; ribs: Stützrippen des Flanschs (ihr
+ *   Überlapp [mm³] mit Platte und Wand steckt doppelt im Netz-Volumen)
  */
 export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edgeR = 0, morph = null, res = DEFAULT_RES) {
   const hAt = r => profile(s.zFocus + r);
@@ -1223,9 +1227,10 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
   const rimThroat = air.capThroatFan
     ? { name: "rimThroat", section: "rim", oriented: true, triangles: planarFace(open(outer.throatLoop), [open(air.throatLoop)], -1) }
     : { name: "rimThroat", section: "rim", triangles: zipper(air.throatLoop, outer.throatLoop), outward: () => [0, 0, -1] };
-  const throatEnd = flange
-    ? flangeSurfaces(flange.centers ? flange : flangeLayout(s, rt, profile, fillet, t, flange, edgeR, morph, res), air.throatLoop, outer.throatLoop, res)
-    : [rimThroat];
+  const layout = flange && (flange.centers ? flange : flangeLayout(s, rt, profile, fillet, t, flange, edgeR, morph, res));
+  const throatEnd = layout ? flangeSurfaces(layout, air.throatLoop, outer.throatLoop, res) : [rimThroat];
+  // Stützrippen: eigene geschlossene Körper, im Außenkörper verankert (flange-ribs.js)
+  const ribs = layout?.ribs ? flangeRibs(surfacesOf(outer), layout, resOf(res).flange, t) : null;
 
   const radialOut = ([x, , z]) => [x, 0, z - s.zFocus];
   const am = air.mouth, om = outer.mouth;
@@ -1241,6 +1246,7 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
       ...surfacesOf(outer).map(f => ({ ...f, name: "outer." + f.name })),
       ...surfacesOf(air, true).map(f => ({ ...f, name: "inner." + f.name })),
       ...throatEnd,
+      ...(ribs?.surfaces ?? []),
       { name: "rimMouthTop",    section: "rim", grid: [am.top, om.top],       outward: radialOut },
       { name: "rimMouthBottom", section: "rim", grid: [am.bottom, om.bottom], outward: radialOut },
       { name: "rimEndR", section: "rim", outward: dir(1),
@@ -1248,6 +1254,7 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
       { name: "rimEndL", section: "rim", outward: dir(-1),
         triangles: endFace(am.top[0], am.bottom[0], om.top[0], om.bottom[0], om.cornerTopL, om.cornerBottomL) },
     ],
+    ribs: ribs && { count: ribs.count, length: ribs.length, overlap: ribs.overlap },
   };
 }
 

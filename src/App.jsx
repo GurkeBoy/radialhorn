@@ -81,6 +81,9 @@ export default function App() {
   const [holeCircle,      setHoleCircle]      = usePersistentState("holeCircle", D.holeCircle);
   const [holeD,           setHoleD]           = usePersistentState("holeD", D.holeD);
   const [holeAngle,       setHoleAngle]       = usePersistentState("holeAngle", D.holeAngle);
+  const [ribsOn,          setRibsOn]          = usePersistentState("ribsOn", D.ribsOn);
+  const [ribThickness,    setRibThickness]    = usePersistentState("ribThickness", D.ribThickness);
+  const [ribLength,       setRibLength]       = usePersistentState("ribLength", D.ribLength);
   const [pdfDimensions,   setPdfDimensions]   = usePersistentState("pdfBemassung", true);
   const [simOn,           setSimOn]           = usePersistentState("simOn", false);
   // Abstrahlung: "auto" = π in der Raumecke (zwei Wände; Boden/Decke bei Ohrhöhe im Arbeitsbereich
@@ -103,7 +106,7 @@ export default function App() {
   const designValues = {
     throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
-    flangeT, holeCount, holeCircle, holeD, holeAngle, abstrahlung: simMouth, simTemp, driver,
+    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
     throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength,
@@ -112,7 +115,8 @@ export default function App() {
     showWandstaerke: setShowWandstaerke, wandstaerke: setWandstaerke, filletOn: setFilletOn, filletR: setFilletR,
     clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, edgeOn: setEdgeOn, edgeR: setEdgeR,
     flangeOn: setFlangeOn, flangeD: setFlangeD, flangeT: setFlangeT, holeCount: setHoleCount,
-    holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, abstrahlung: setSimMouth,
+    holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, ribsOn: setRibsOn, ribThickness: setRibThickness,
+    ribLength: setRibLength, abstrahlung: setSimMouth,
     simTemp: setSimTemp, driver: setDriver,
   };
   const applyDesign = design => { for (const [key, value] of Object.entries(design)) designSetters[key](value); };
@@ -176,10 +180,10 @@ export default function App() {
   // nur, wenn sich p auswirkt.
   const live = useMemo(() => ({
     throatDiam, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
-    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
+    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength,
     edgeOn, edgeR, simOn, mouth, simTemp, driver,
   }), [throatDiam, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
-    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle,
+    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength,
     edgeOn, edgeR, simOn, mouth, simTemp, driver]);
   const p = useThrottledValue(live);
   // Abgeleitete Geometrie im Web Worker (geometry.js, useGeometry): beim Ziehen rechnet der
@@ -311,6 +315,11 @@ export default function App() {
               <Slider label={t("flange.holeDiameter")} value={holeD} min={2} max={20} step={0.1} unit="mm" onChange={setHoleD} />
               <Slider label={t("flange.angle")} value={holeAngle} min={0} max={Math.round(360 / holeCount)} step={1} unit="°" onChange={setHoleAngle} />
               {flange.invalidHoles > 0 && <Warn>{flange.invalidHoles === 1 ? t("warn.holeConflictOne") : t("warn.holeConflictMany", { n: flange.invalidHoles })}</Warn>}
+              <Toggle label={t("flange.ribs")} checked={ribsOn} onChange={setRibsOn} hint={ribsOn ? t("flange.ribsHint", { n: holeCount }) : null} />
+              {ribsOn && <>
+                <Slider label={t("flange.ribThickness")} value={ribThickness} min={1} max={20} step={0.5} unit="mm" onChange={setRibThickness} />
+                <Slider label={t("flange.ribLength")} value={ribLength} min={5} max={150} step={1} unit="mm" onChange={setRibLength} />
+              </>}
             </>}
           </Group>}
         </Card>

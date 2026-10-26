@@ -11,7 +11,7 @@ const BASE = {
   throatDiam: 50.8, openingAngle: 140, L: 700, Lt: 132.3, dw: 182, dh: 90, hMouth: 200, curve: "hypex", hypexT: 0.7,
   showRaumecke: true, showWandstaerke: true, wandstaerke: 10, filletOn: true, filletR: 477, clothoidOn: true, clothoidLength: 30,
   morphOn: true, morphLength: 473, flangeOn: true, flangeD: 120, flangeT: 10, holeCount: 4, holeCircle: 101.6, holeD: 6.6,
-  holeAngle: 0, edgeOn: true, edgeR: 10,
+  holeAngle: 0, ribsOn: false, ribThickness: 4, ribLength: 30, edgeOn: true, edgeR: 10,
 };
 
 describe("createGeometryEngine", () => {

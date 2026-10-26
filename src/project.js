@@ -65,6 +65,9 @@ export const DESIGN_DEFAULTS = {
   holeCircle: 101.6,       // Bohrbild BMS 4591: 4 × M6 auf Ø 101,6 mm; null: mittig im Flanschring
   holeD: 6.6,
   holeAngle: 0,            // 0°: Bohrungen auf 3, 12, 9, 6 Uhr
+  ribsOn: false,           // Stützrippen am Flansch, mittig zwischen den Bohrungen (so viele wie Bohrungen)
+  ribThickness: 4,
+  ribLength: 30,           // entlang des Horns ab der Plattenfläche, soweit die Wand unter dem Flanschrand bleibt
   abstrahlung: "auto",
   simTemp: 20,
   driver: PLACEHOLDER_DRIVER,
@@ -74,7 +77,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-const ADDED_LATER = new Set(["morphOn", "morphLength"]);
+const ADDED_LATER = new Set(["morphOn", "morphLength", "ribsOn", "ribThickness", "ribLength"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);

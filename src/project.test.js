@@ -52,7 +52,7 @@ describe("Projektdateien", () => {
     const { design, missing, invalid } = parseProject(fileWith(partial));
     expect(design.openingAngle).toBe(100);
     expect(design).not.toHaveProperty("unbekannt");
-    expect(missing.length).toBe(Object.keys(DESIGN_DEFAULTS).length - 1 - 2);   // ohne die später dazugekommenen
+    expect(missing.length).toBe(Object.keys(DESIGN_DEFAULTS).length - 1 - 5);   // ohne die später dazugekommenen
     expect(invalid).toEqual([]);
   });
 
@@ -64,6 +64,18 @@ describe("Projektdateien", () => {
     expect([missing, invalid]).toEqual([[], []]);
     expect(design.morphOn).toBe(false);
     expect(design.morphLength).toBeNull();
+  });
+
+  it("Datei von vor den Stützrippen: still ergänzt (Rippen aus), keine Meldung", () => {
+    const old = { ...sample };
+    delete old.ribsOn;
+    delete old.ribThickness;
+    delete old.ribLength;
+    const { design, missing, invalid } = parseProject(fileWith(old));
+    expect([missing, invalid]).toEqual([[], []]);
+    expect(design.ribsOn).toBe(false);
+    expect(design.ribThickness).toBe(DESIGN_DEFAULTS.ribThickness);
+    expect(design.ribLength).toBe(DESIGN_DEFAULTS.ribLength);
   });
 
   it("null nur bei automatischen Werten (Kantenradius, Flansch-Ø, Lochkreis), sonst ungültig", () => {
