@@ -41,6 +41,13 @@ describe("Projektdateien", () => {
     expect(design.driver.Re).toBe(6.4);   // gültige Felder bleiben
   });
 
+  it("Werkstoff der Wandstärke-Empfehlung: nur bekannte Vorgaben, sonst Standard mit Meldung", () => {
+    const { design, invalid } = parseProject(fileWith({ ...sample, wallMaterial: "unobtainium" }));
+    expect(invalid).toEqual(["wallMaterial"]);
+    expect(design.wallMaterial).toBe(DESIGN_DEFAULTS.wallMaterial);
+    expect(parseProject(fileWith({ ...sample, wallMaterial: "custom", wallE: 4.2 })).design).toMatchObject({ wallMaterial: "custom", wallE: 4.2 });
+  });
+
   it("Treiber ist kein Objekt → ganzer Treiber Standard, eine Meldung", () => {
     const { design, invalid } = parseProject(fileWith({ ...sample, driver: 5 }));
     expect(invalid).toEqual(["driver"]);

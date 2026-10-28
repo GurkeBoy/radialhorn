@@ -25,7 +25,8 @@ import { exportPDF } from "./export/pdf.js";
 import { exportSTL } from "./export/stl.js";
 import { exportSTEP } from "./export/step.js";
 import { exportCSV } from "./export/csv.js";
-import { logFrequencies, PLACEHOLDER_DRIVER, phaseWithoutDelay } from "./simulation.js";
+import { airAt, logFrequencies, PLACEHOLDER_DRIVER, phaseWithoutDelay } from "./simulation.js";
+import { CUSTOM, MATERIAL_KEYS, materialOf, wallAdvice } from "./wall-advice.js";
 
 // Gängige Austrittsdurchmesser von Kompressionstreibern; 1,4" wird mit 35,5 mm angegeben (Herstellerangabe)
 const THROAT_SIZES = [
@@ -86,6 +87,10 @@ export default function App() {
   const [ribLength,       setRibLength]       = usePersistentState("ribLength", D.ribLength);
   const [roundOn,         setRoundOn]         = usePersistentState("roundOn", D.roundOn);
   const [roundR,          setRoundR]          = usePersistentState("roundR", D.roundR);
+  const [wallMaterial,    setWallMaterial]    = usePersistentState("wallMaterial", D.wallMaterial);
+  const [wallE,           setWallE]           = usePersistentState("wallE", D.wallE);
+  const [wallRho,         setWallRho]         = usePersistentState("wallRho", D.wallRho);
+  const [wallLimit,       setWallLimit]       = usePersistentState("wallLimit", D.wallLimit);
   const [pdfDimensions,   setPdfDimensions]   = usePersistentState("pdfBemassung", true);
   const [simOn,           setSimOn]           = usePersistentState("simOn", false);
   // Abstrahlung: "auto" = π in der Raumecke (zwei Wände; Boden/Decke bei Ohrhöhe im Arbeitsbereich
@@ -108,7 +113,7 @@ export default function App() {
   const designValues = {
     throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
-    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, abstrahlung: simMouth, simTemp, driver,
+    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
     throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength,
@@ -118,7 +123,8 @@ export default function App() {
     clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, edgeOn: setEdgeOn, edgeR: setEdgeR,
     flangeOn: setFlangeOn, flangeD: setFlangeD, flangeT: setFlangeT, holeCount: setHoleCount,
     holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, ribsOn: setRibsOn, ribThickness: setRibThickness,
-    ribLength: setRibLength, roundOn: setRoundOn, roundR: setRoundR, abstrahlung: setSimMouth,
+    ribLength: setRibLength, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
+    wallLimit: setWallLimit, abstrahlung: setSimMouth,
     simTemp: setSimTemp, driver: setDriver,
   };
   const applyDesign = design => { for (const [key, value] of Object.entries(design)) designSetters[key](value); };
@@ -225,6 +231,12 @@ export default function App() {
     s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph, wall, flange, edgeR: edge,
   } : null, [volKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- Geometrie über volKey
   const volumes = useVolumes(volInput);
+  // Wandstärke-Empfehlung: reine Rechnung (wall-advice.js, ≈ 3 ms), gilt für die Schale; Luftsteifigkeit bei der Simulationstemperatur
+  const airK = useMemo(() => { const air = airAt(p.simTemp); return air.rho * air.c ** 2; }, [p.simTemp]);
+  const advice = useMemo(() => s && profile
+    ? wallAdvice({ s, profile, morph, material: materialOf(wallMaterial, wallE, wallRho), K: airK, tMM: wall > 0 ? wall : null, nuMax: wallLimit })
+    : null, [s, profile, morph, wallMaterial, wallE, wallRho, airK, wall, wallLimit]);
+  const applyWallAdvice = () => { if (advice) { setShowWandstaerke(true); setWandstaerke(advice.tRecommended); } };
 
   const flangeOverRaumecke = flange && g.showRaumecke && flange.diameter / 2 > g.dw / 2 + g.dh;
   const design = {
@@ -370,6 +382,9 @@ export default function App() {
         {s && <>
           <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={!!morph} t={t} />
           <Volumes volumes={volumes} t={t} />
+          <WallAdvice advice={advice} wall={wall} t={t} onApply={applyWallAdvice}
+            material={wallMaterial} onMaterial={setWallMaterial} customE={wallE} onCustomE={setWallE}
+            customRho={wallRho} onCustomRho={setWallRho} limit={wallLimit} onLimit={setWallLimit} />
           <Card title={t("card.crossSection")} id="querschnitt">
             <Querschnitt s={s} profile={profile} morph={morph} />
           </Card>
@@ -454,6 +469,43 @@ const Volumes = memo(function Volumes({ volumes, t }) {
         <Stat label={t("volume.outer")} value={litres(volumes?.outer)} />
       </div>
       <Note>{volumes?.shell == null ? t("volume.noWall") : t("volume.hint")}</Note>
+    </Card>
+  );
+});
+
+/**
+ * Wandstärke-Empfehlung (wall-advice.js): wie dick die Schale mindestens sein soll, damit die Wand unter dem
+ * Schalldruck nur wenig nachgibt, dazu die tiefste Wandmode zur Information. Ampel für die aktuelle Wandstärke.
+ */
+const WallAdvice = memo(function WallAdvice({
+  advice, wall, material, onMaterial, customE, onCustomE, customRho, onCustomRho, limit, onLimit, onApply, t,
+}) {
+  const labels = Object.fromEntries(MATERIAL_KEYS.map(k => [k, t(`material.${k}`)]));
+  const mm = v => v.toFixed(1);
+  const color = { ok: UI.ok, tight: UI.warn, thin: UI.error }[advice?.status];
+  return (
+    <Card title={t("card.wallAdvice")} id="wandempfehlung">
+      <SegmentedButtons options={MATERIAL_KEYS} labels={labels} value={material} onChange={onMaterial} />
+      {material === CUSTOM && <>
+        <Slider label={t("wall.modulus")} value={customE} min={0.5} max={200} step={0.1} unit="GPa" onChange={onCustomE} />
+        <Slider label={t("wall.density")} value={customRho} min={300} max={8000} step={10} unit="kg/m³" onChange={onCustomRho} />
+      </>}
+      <Slider label={t("wall.limit")} value={limit} min={1} max={20} step={0.5} unit="%" onChange={onLimit} />
+      {advice && <>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
+          <Stat label={t("wall.recommended")} value={mm(advice.tRecommended) + " mm"} />
+          <Stat label={t("wall.current")} value={wall > 0 ? mm(wall) + " mm" : "–"} />
+          <Stat label={t("wall.compliance")} value={advice.compliance === null ? "–" : (advice.compliance * 100).toFixed(1) + " %"} />
+          <Stat label={t("wall.mode")} value={Math.round(advice.fMode) + " Hz"} />
+        </div>
+        {advice.status
+          ? <div role="status" style={{ display: "flex", gap: 6, alignItems: "baseline", fontSize: 11, color, fontFamily: FONT, marginBottom: 8 }}>
+              <span aria-hidden>●</span><span>{t(`wall.status.${advice.status}`)}</span>
+            </div>
+          : <Note>{t("wall.wallOff")}</Note>}
+        <Button onClick={onApply}>{t("wall.apply")}</Button>
+        <Note>{t("wall.note", { z: Math.round(advice.zoneEnd), B: Math.round(advice.worst.B) })}</Note>
+      </>}
     </Card>
   );
 });

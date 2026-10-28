@@ -28,6 +28,8 @@ export const UI = {
   overlay:       "rgba(20,20,20,0.85)",
   error:         "#fca5a5",
   errorSoft:     "rgba(252,165,165,0.07)",
+  ok:            "#8fd3a8",
+  warn:          "#e6c07b",
   scrollThumb:   "#2e2e2e",
   scrollThumbHover: "#3c3c3c",
 };
