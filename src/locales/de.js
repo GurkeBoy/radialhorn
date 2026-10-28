@@ -34,6 +34,7 @@ export default {
   "card.construction": "AUSFÜHRUNG",
   "card.simulation": "SIMULATION (1D)",
   "card.keyFigures": "KENNWERTE",
+  "card.volume": "VOLUMEN",
   "card.crossSection": "QUERSCHNITT A(z)",
   "card.export": "EXPORT",
 
@@ -123,6 +124,11 @@ export default {
   "key.fcLow": "fc_low — Mund (Umfang = λ)",
   "key.fcCut": "fc_cut — Horn-Cutoff",
   "key.fcHigh": "fc_high — Throat (λ = 2r)",
+  "volume.air": "Luftvolumen",
+  "volume.shell": "Wandmaterial",
+  "volume.outer": "Außenkörper",
+  "volume.hint": "Aus dem 3D-Netz: Luftvolumen ab Throat ohne Treiberkammer; Wandmaterial inkl. Flansch",
+  "volume.noWall": "Ohne Wandstärke nur das Luftvolumen (ab Throat, ohne Treiberkammer)",
 
   // Export
   "export.dimensions": "Bemaßungen",

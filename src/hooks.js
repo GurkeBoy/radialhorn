@@ -163,6 +163,36 @@ export function useSimulation(input) {
   return input ? output : null;
 }
 
+/**
+ * Volumen zu input (computeVolumes), gerechnet im Web Worker (volume.worker.js). Es läuft höchstens
+ * eine Berechnung; Eingaben, die währenddessen kommen, ersetzen einander, nur die neueste wird
+ * danach gerechnet. Liefert das zuletzt fertige Ergebnis, null bis das erste da ist.
+ */
+export function useVolumes(input) {
+  const [output, setOutput] = useState(null);
+  const ref = useRef(null);
+  useEffect(() => {
+    const worker = new Worker(new URL("./volume.worker.js", import.meta.url), { type: "module" });
+    const st = { busy: false, pending: null };
+    st.send = inp => { st.busy = true; worker.postMessage({ input: inp }); };
+    worker.onmessage = ({ data }) => {
+      st.busy = false;
+      if (st.pending) { const next = st.pending; st.pending = null; st.send(next); }
+      if (data.error) { console.error("Volumen:", data.error); return; }
+      setOutput(data.output);
+    };
+    ref.current = st;
+    return () => { worker.terminate(); ref.current = null; };
+  }, []);
+  useEffect(() => {
+    const st = ref.current;
+    if (!st || !input) return;
+    if (st.busy) st.pending = input;
+    else st.send(input);
+  }, [input]);
+  return output;
+}
+
 /** useState, dessen Wert gespeichert wird und beim nächsten Start wieder da ist (settings.js). */
 export function usePersistentState(key, initial) {
   const [value, setValue] = useState(() => readSetting(key, initial));

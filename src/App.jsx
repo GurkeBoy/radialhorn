@@ -13,7 +13,7 @@ import { Seitenriss } from "./components/Seitenriss.jsx";
 import { Querschnitt } from "./components/Querschnitt.jsx";
 import { Ansicht3D } from "./components/Ansicht3D.jsx";
 import { Frequenzgang } from "./components/Frequenzgang.jsx";
-import { useGeometry, usePersistentState, useSimulation, useThrottledValue, useUndo } from "./hooks.js";
+import { useGeometry, usePersistentState, useSimulation, useThrottledValue, useUndo, useVolumes } from "./hooks.js";
 import { GEOMETRY_KEYS } from "./geometry.js";
 import { LANGUAGES, LanguageContext, detectLanguage, translate } from "./i18n.js";
 import { clearSettings } from "./settings.js";
@@ -213,6 +213,13 @@ export default function App() {
     ? { ...sim.result, phase: phaseWithoutDelay(sim.result.f, sim.result.phase, sim.delay) }
     : sim.result), [sim, simNoDelay]);
 
+  // Volumen aus den geschlossenen 3D-Netzen, im Web Worker (useVolumes); hängt nur an der Geometrie
+  const volKey = JSON.stringify([geo.versions.s, geo.versions.fillet, geo.versions.morph, geo.versions.flange, rt, g.hMouth, g.curve, g.hypexT, wall, edge]);
+  const volInput = useMemo(() => s ? {
+    s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph, wall, flange, edgeR: edge,
+  } : null, [volKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- Geometrie über volKey
+  const volumes = useVolumes(volInput);
+
   const flangeOverRaumecke = flange && g.showRaumecke && flange.diameter / 2 > g.dw / 2 + g.dh;
   const design = {
     s, rt, L: LClamped, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, profile, wall, flange,
@@ -349,6 +356,7 @@ export default function App() {
 
         {s && <>
           <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={!!morph} t={t} />
+          <Volumes volumes={volumes} t={t} />
           <Card title={t("card.crossSection")} id="querschnitt">
             <Querschnitt s={s} profile={profile} morph={morph} />
           </Card>
@@ -418,6 +426,21 @@ const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroa
         <FrequencyRow label={t("key.fcCut")}  value={fcCut} />
         <FrequencyRow label={t("key.fcHigh")} value={fcHigh} />
       </Group>
+    </Card>
+  );
+});
+
+/** Volumen des Horns: Luftvolumen (Innenform), Wandmaterial der Schale und Außenkörper insgesamt. */
+const Volumes = memo(function Volumes({ volumes, t }) {
+  const litres = v => v === null || v === undefined ? "–" : (v / 1e6).toFixed(2) + " L";
+  return (
+    <Card title={t("card.volume")} id="volumen">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        <Stat label={t("volume.air")} value={litres(volumes?.air)} />
+        <Stat label={t("volume.shell")} value={litres(volumes?.shell)} />
+        <Stat label={t("volume.outer")} value={litres(volumes?.outer)} />
+      </div>
+      <Note>{volumes?.shell == null ? t("volume.noWall") : t("volume.hint")}</Note>
     </Card>
   );
 });
