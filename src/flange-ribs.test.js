@@ -134,11 +134,13 @@ describe("Stützrippen an der gerundeten Ecke", () => {
 
   it("Innenkante der Rippe liegt auf der Mitte und an beiden Seiten in der Wand", () => {
     expect(geo.ribs.count).toBe(4);
+    const slices = new Map();                                            // Schnitt je Höhe nur einmal (gilt für alle Rippen und Seiten)
+    const sliceAt = z => { if (!slices.has(z)) slices.set(z, sliceSegments(outer, z)); return slices.get(z); };
     for (const { phi, poly } of geo.ribs.shapes) {
       const c = Math.cos(phi), s = Math.sin(phi);
       const chain = poly.slice(2, -1);                                   // Spitze → Platte: [ρ − Einbettung, z]
       for (const [rho, z] of chain) {
-        const segs = sliceSegments(outer, Math.max(z, TH + 0.05));
+        const segs = sliceAt(Math.max(z, TH + 0.05));
         for (const side of [-5, 0, 5]) {
           const wall = rayReach(segs, c, s, side);
           expect(wall, `z ${z.toFixed(1)}, Seite ${side}`).not.toBeNull();

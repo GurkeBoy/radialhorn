@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, throatMorph } from "../horn-math.js";
-import { flangeLayout, EXPORT_RES } from "../horn-mesh.js";
+import { flangeLayout, triangulate, EXPORT_RES } from "../horn-mesh.js";
 import { buildHornGeometry } from "../horn-mesh.js";
 import { hornGeometry, hornTriangles, stlBinary } from "./stl.js";
 import { openEdges, trianglesOf, signedVolume, cross } from "../test-helpers.js";
@@ -41,10 +41,15 @@ describe("STL mit Stützrippen und Verrundung", () => {
   };
 
   it("die Rippen sind im Netz, jede ein eigener geschlossener Körper, das Gesamtnetz bleibt geschlossen", () => {
-    const ribs = hornGeometry(ribbed, EXPORT_RES).surfaces.filter(f => f.rib);
+    const geometry = hornGeometry(ribbed, EXPORT_RES);                       // einmal bauen, daraus alles ableiten
+    const ribs = geometry.surfaces.filter(f => f.rib);
     expect(ribs).toHaveLength(4);
-    expect(hornTriangles(ribbed).length).toBeGreaterThan(hornTriangles({ ...shell, flange: flangeLayout(s, RT, profile, null, 12, { ...FLANGE, diameter: 160 }, 12, morph) }).length);
-    expect(openEdges(hornTriangles(ribbed, EXPORT_RES))).toBe(0);
+    const all = geometry.surfaces.flatMap(triangulate), ribTriangles = ribs.flatMap(triangulate);
+    expect(ribTriangles.length).toBeGreaterThan(4 * 12);                      // je Rippe mehrere Dreiecke
+    expect(all.length).toBeGreaterThan(ribTriangles.length);
+    expect(openEdges(ribTriangles)).toBe(0);                                  // die Rippen allein: geschlossen
+    expect(openEdges(all)).toBe(0);                                           // und im Gesamtnetz
+    expect(hornTriangles(ribbed, EXPORT_RES).length).toBe(all.length);       // der STL-Export schreibt genau diese Dreiecke
   });
 
   it("ohne Rippenvorgabe keine Rippenflächen", () => {

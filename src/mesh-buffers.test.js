@@ -24,10 +24,10 @@ function sameValues(buffer, values) {
   return true;
 }
 
-describe("meshBuffers", () => {
-  // Eingaben gehen per postMessage an den Worker: nur Daten, keine Funktionen
-  const out = meshBuffers(structuredClone(input));
+// Eingaben gehen per postMessage an den Worker: nur Daten, keine Funktionen
+const out = meshBuffers(structuredClone(input));
 
+describe("meshBuffers", () => {
   it("je Sektion dieselben Dreiecke wie triangulate (Profil im Worker nachgebaut)", () => {
     const geo = buildShellGeometry(s, RT, profile, fillet, 20, flange);
     expect(out.sections.map(x => x.section)).toEqual(SECTIONS);
@@ -90,7 +90,7 @@ describe("meshBuffers mit Stützrippen", () => {
 
   it("Rippen liegen in der Sektion Flansch – im feinen Netz wie im Entwurf beim Ziehen", () => {
     for (const quality of ["fine", "draft"]) {
-      const plain = meshBuffers(structuredClone({ ...input, quality }));
+      const plain = quality === "fine" ? out : meshBuffers(structuredClone({ ...input, quality }));   // out: das feine Netz ohne Rippen (oben)
       const withRibs = meshBuffers(structuredClone({ ...input, flange: ribbed, quality }));
       expect(triangles(withRibs, "flansch"), quality).toBeGreaterThan(triangles(plain, "flansch"));
       for (const section of ["traktrix", "klothoide", "linear", "rim"]) expect(triangles(withRibs, section), `${quality} ${section}`).toBe(triangles(plain, section));
