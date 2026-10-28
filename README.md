@@ -26,7 +26,7 @@ each [release](https://github.com/GurkeBoy/radialhorn/releases). They are not co
   point; optional curvature-continuous transition (clothoid) between tractrix and wall. Opening angle, total length,
   tractrix length, throat (1", 1.4", 2" or custom) and driver dimensions are adjustable.
 - **Vertical profile:** linear, exponential or hypex flare; optional fillet at the transition throat → flare; optional
-  rounded mouth corners, with the corner radius growing smoothly from the throat to the mouth.
+  rounded mouth corners, with the corner radius growing evenly from the throat to the mouth.
 - **Room corner:** limits the horn width to the 45° diagonal of a room corner, optionally including wall thickness.
 - **Views:** top view and side view with dimensions, zoom (mouse wheel), pan (drag) and fullscreen; cross-section
   area A(z) as a chart.

@@ -54,6 +54,9 @@ describe("Eckradius (cornerRadius)", () => {
     expect(cornerRadius(80, morph)).toBe(0);
     expect(cornerRadius(10, null)).toBe(0);
   });
+  it("fällt linear mit der Bogenlänge", () => {
+    for (let sw = 0; sw <= 50; sw += 5) expect(cornerRadius(sw, morph)).toBeCloseTo(RT * (1 - sw / 50), 12);
+  });
   it("fällt monoton", () => {
     let prev = Infinity;
     for (let sw = 0; sw <= 50; sw += 0.5) {
@@ -132,20 +135,12 @@ describe("Querschnitt mit rundem Throat", () => {
 describe("Mundverrundung (mouthRounding)", () => {
   const s = solve(60), profile = profileOf(s), S = maxMorphLength(s);
 
-  it("Radius steigt weich von 0 am Throat auf R am Mund (Cosinus, waagerechte Tangenten)", () => {
+  it("Radius steigt gleichmäßig von 0 am Throat auf R am Mund (linear in der Bogenlänge)", () => {
     const morph = mouthRounding(s, profile, null, 30);
     expect(cornerRadius(0, morph)).toBe(0);
     expect(cornerRadius(S / 2, morph)).toBeCloseTo(15, 6);
     expect(cornerRadius(S, morph)).toBeCloseTo(30, 6);
-    let prev = 0;
-    for (let k = 1; k <= 50; k++) {
-      const r = cornerRadius(S * k / 50, morph);
-      expect(r).toBeGreaterThanOrEqual(prev);
-      prev = r;
-    }
-    // Tangenten: die Steigung am Throat und am Mund ist (fast) 0
-    expect(cornerRadius(0.5, morph)).toBeLessThan(1e-3);
-    expect(30 - cornerRadius(S - 0.5, morph)).toBeLessThan(1e-3);
+    for (let k = 1; k <= 50; k++) expect(cornerRadius(S * k / 50, morph)).toBeCloseTo(30 * k / 50, 6);   // gleichbleibende Steigung
   });
 
   it("nie größer als fast die halbe Höhe an der Stelle; R wird auf maxMouthRound begrenzt", () => {

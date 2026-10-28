@@ -61,7 +61,7 @@ export default {
   "profile.hypex": "Hypex",
   "profile.hypexT": "Hypex T",
   "profile.mouthRound": "Mundecken verrunden",
-  "profile.mouthRoundHint": "Der Eckradius wächst weich vom Throat bis zum Mund",
+  "profile.mouthRoundHint": "Der Eckradius wächst gleichmäßig vom Throat bis zum Mund",
   "profile.mouthRoundRadius": "Radius am Mund",
   "profile.fillet": "Verrundung Übergang",
   "profile.filletRadius": "Radius r",

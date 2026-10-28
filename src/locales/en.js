@@ -61,7 +61,7 @@ export default {
   "profile.hypex": "Hypex",
   "profile.hypexT": "Hypex T",
   "profile.mouthRound": "Round the mouth corners",
-  "profile.mouthRoundHint": "The corner radius grows smoothly from the throat to the mouth",
+  "profile.mouthRoundHint": "The corner radius grows evenly from the throat to the mouth",
   "profile.mouthRoundRadius": "Radius at the mouth",
   "profile.fillet": "Transition fillet",
   "profile.filletRadius": "Radius r",

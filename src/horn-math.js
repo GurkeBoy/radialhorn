@@ -622,23 +622,24 @@ export function wallPoint(s, profile, zWall) {
 // auf der Wand) endet an ihrem eigenen Wandpunkt, der hinter ihrer Lage auf der Achse liegt.
 
 /**
- * Eckradius [mm] an der Bogenlänge sWall: rt·(1 + cos(π·s/Länge))/2 – an beiden Enden ohne Knick
- * (am Throat läuft die Ecke rund aus dem Treiber heraus, am Ende tangential ins scharfe Rechteck).
+ * Eckradius [mm] an der Bogenlänge sWall: rt·(1 − s/Länge) – gleichmäßig vom Kreis des Treiberausgangs
+ * (am Throat r = rt) auf 0 im scharfen Rechteck (am Ende des Übergangs).
  * @param morph  { r, length } (r = rt) oder null
  */
 export function cornerRadius(sWall, morph) {
   if (!morph) return 0;
-  const throat = sWall < morph.length ? morph.r * (1 + Math.cos(Math.PI * Math.max(0, sWall) / morph.length)) / 2 : 0;
+  const throat = sWall < morph.length ? morph.r * (1 - Math.max(0, sWall) / morph.length) : 0;
   return morph.mouth ? Math.max(throat, mouthCornerRadius(sWall, morph.mouth)) : throat;
 }
 
 /**
- * Eckradius der Mundverrundung an der Bogenlänge sWall: R·(1 − cos(π·s/S))/2 – vom Throat (Radius 0,
- * waagerechte Tangente) weich ansteigend bis R am Mund (S = Wandlänge bis zum Mund), nirgends höher als
- * die halbe Höhe an dieser Stelle (heights: Stützstellen der Wand, aufsteigend in s).
+ * Eckradius der Mundverrundung an der Bogenlänge sWall: R·s/S – gleichmäßig ansteigend von 0 am Throat bis R
+ * am Mund (S = Wandlänge bis zum Mund), nirgends höher als die halbe Höhe an dieser Stelle (sampled: Stützstellen
+ * der Wand, aufsteigend in s). Die Enden liegen am Rand der Fläche (Throat, offener Mund): ein Knick im Radius
+ * ist dort nicht zu sehen, ein tangentiales Auslaufen wie beim Cosinus nicht nötig.
  */
 function mouthCornerRadius(sWall, { R, S, sampled }) {
-  const r = R * (1 - Math.cos(Math.PI * Math.min(1, Math.max(0, sWall / S)))) / 2, cap = MOUTH_CAP;
+  const r = R * Math.min(1, Math.max(0, sWall / S)), cap = MOUTH_CAP;
   const { s: ss, h } = sampled;
   if (sWall <= ss[0]) return Math.min(r, cap * h[0]);
   if (sWall >= ss[ss.length - 1]) return Math.min(r, cap * h[h.length - 1]);
@@ -654,7 +655,7 @@ const MOUTH_CAP = 0.95;   // Eckradius höchstens dieser Anteil der halben Höhe
 export const maxMouthRound = hMouthHalf => MOUTH_CAP * hMouthHalf;
 
 /**
- * Ecken am Mund gerundet: ein Eckradius, der von 0 am Throat weich auf R am Mund ansteigt (cornerRadius),
+ * Ecken am Mund gerundet: ein Eckradius, der von 0 am Throat gleichmäßig auf R am Mund ansteigt (cornerRadius),
  * zusätzlich zum runden Throat (throatMorph; null = ohne). Das Ergebnis ersetzt das morph-Objekt überall
  * (Netz, Querschnitt, Simulation). null, wenn R < 0,5 mm ist und es keinen Übergang am Throat gibt.
  * @param morph  Übergang am Throat (throatMorph) oder null
