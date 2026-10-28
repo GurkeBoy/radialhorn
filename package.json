@@ -1,7 +1,7 @@
 {
   "name": "radialhorn",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Radial horn configurator: geometry, drawings, CAD export and 1D acoustic simulation of radial horns with a tractrix entrance",
   "license": "MIT",
   "author": "Julius Schirmer",
