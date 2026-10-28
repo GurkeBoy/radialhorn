@@ -6,7 +6,7 @@
 
 Desktop-App zur Auslegung von **Radialhörnern mit Traktrix-Eingang** für den Lautsprecher-Eigenbau. Aus wenigen
 Parametern berechnet sie die Horngeometrie, zeichnet maßstäbliche Draufsicht und Seitenriss mit Bemaßung, zeigt das
-Horn in 3D, simuliert den Frequenzgang und exportiert DXF für CAD, STL für den 3D-Druck und ein PDF-Datenblatt.
+Horn in 3D, simuliert den Frequenzgang und exportiert DXF und STEP für CAD, STL für den 3D-Druck und ein PDF-Datenblatt.
 
 ![Radialhorn: Eingabespalte, Draufsicht, 3D-Schale, Seitenriss und Frequenzgang](docs/images/app-de.png)
 
@@ -33,13 +33,17 @@ Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.
 - **3D-Ansicht:** das Luftvolumen oder – mit Wandstärke – die Schale des Horns zum Drehen und Zoomen, als Fläche oder
   Gitter, mit Treiber und Raumecke als Bezug.
 - **Ausführung:** Wandstärke, gerundete Außenkanten und ein runder Flansch am Throat mit Bohrbild zum Anschrauben des
-  Treibers.
+  Treibers – optional mit Stützrippen zwischen den Bohrungen (so viele wie Bohrungen, auf der Hornseite) und
+  gerundetem Flanschrand.
 - **Frequenzgang (1D-Simulation):** Webster-Horngleichung per Transfermatrizen aus der Wellenfrontfläche S(x);
   Treiber mit Thiele-Small-Parametern und Kompressionskammer; Abstrahlung in 2π (exakt) oder 4π / π / π/2 (Näherung).
   SPL bei 1 m / 2,83 V und elektrische Impedanz als Diagramm, Export als CSV.
 - **Kennwerte:** Mundfläche, vertikaler Öffnungswinkel, Grenzfrequenzen (Näherung).
-- **Export:** DXF mit exakten Kurven (SPLINE/ARC/LINE statt Polylinien, damit CAD glatte Körper erzeugt), STL der
-  Schale bzw. des Luftvolumens und PDF-Datenblatt mit maßstäblichen Zeichnungen.
+- **Volumen:** Luftvolumen, Wandmaterial (mit Flansch und Rippen) und Außenkörper in Litern, aus denselben
+  geschlossenen 3D-Netzen wie die Exporte.
+- **Export:** DXF mit exakten Kurven (SPLINE/ARC/LINE statt Polylinien, damit CAD glatte Körper erzeugt), STEP des
+  Körpers aus glatten Flächen (in CAD bearbeitbar), STL der Schale bzw. des Luftvolumens und PDF-Datenblatt mit
+  maßstäblichen Zeichnungen.
 - **Projektdateien:** Entwurf als `*.radialhorn.json` speichern, wieder öffnen oder weitergeben; beim Öffnen wird jeder Wert geprüft.
 - **Deutsch und Englisch** umschaltbar; Einstellungen bleiben zwischen den Sitzungen erhalten (Desktop-App: zusätzlich
   als Datei, unter Windows `%APPDATA%\com.pilch.radialhorn\einstellungen.json`).
