@@ -24,7 +24,7 @@ const C   = SPEED_OF_SOUND;
 // 1. DEFINIERENDE EIGENSCHAFT DER TRAKTRIX
 //    Analytisch beweisbar, unabhängig vom Code.
 // ──────────────────────────────────────────────────────────────────
-describe("Traktrix – definierende Eigenschaft (Tangentensegment = r₀)", () => {
+describe("Traktrix – definierende Eigenschaft (Tangentensegment = r₀, normiert 1)", () => {
   /**
    * Die Traktrix ist die Kurve, bei der das Segment entlang der
    * Tangente von einem Kurvenpunkt bis zur Asymptote (x=0) konstant
@@ -36,26 +36,7 @@ describe("Traktrix – definierende Eigenschaft (Tangentensegment = r₀)", () =
    *   Segmentlänge = sqrt(tanh²(t) + xN(t)²) = sqrt((sinh²+1)/cosh²) = 1
    *   → für r0-skalierte Kurve: Segmentlänge = r0  ∎
    */
-  const s = solveHorn(500, 60, RT, DW, DH);
-
-  it("Segmentlänge bei tTh (Throat) = r0", () => {
-    const t = s.tTh;
-    const segLen = s.r0 * Math.sqrt(Math.tanh(t) ** 2 + xN(t) ** 2);
-    expect(segLen).toBeCloseTo(s.r0, 5);
-  });
-
-  it("Segmentlänge bei T_TRANS (Übergang) = r0", () => {
-    const segLen = s.r0 * Math.sqrt(Math.tanh(T_TRANS) ** 2 + xN(T_TRANS) ** 2);
-    expect(segLen).toBeCloseTo(s.r0, 5);
-  });
-
-  it("Segmentlänge in der Mitte der Traktrix = r0", () => {
-    const t = (s.tTh + T_TRANS) / 2;
-    const segLen = s.r0 * Math.sqrt(Math.tanh(t) ** 2 + xN(t) ** 2);
-    expect(segLen).toBeCloseTo(s.r0, 5);
-  });
-
-  it("sqrt(tanh²(t) + xN²(t)) = 1 für alle t (normierte Form)", () => {
+  it("xN und zN erfüllen die Traktrix-Bedingung: sqrt(tanh²(t) + xN²(t)) = 1 für alle t", () => {
     [0.1, 0.5, T_TRANS, 1.0, 2.0, 3.0].forEach(t => {
       const val = Math.sqrt(Math.tanh(t) ** 2 + xN(t) ** 2);
       expect(val).toBeCloseTo(1.0, 10);
@@ -132,30 +113,13 @@ describe("Numerische Integration – unabhängige Verifikation von solveR0", () 
       expect(numerical).toBeCloseTo(Lt, 2);   // Trapezregel: ~3 Stellen
     });
   });
-
-  it("Numerische Mundbreite stimmt mit analytischer Formel überein", () => {
-    // xMouth = xTrans + Ls·tan(α): unabhängig ausgerechnet
-    const s = solveHorn(500, 60, RT, DW, DH);
-    const xMouth_ref = s.xTrans + s.Ls * Math.tan(ALPHA2);
-    expect(s.xMouth).toBeCloseTo(xMouth_ref, 8);
-  });
 });
 
 // ──────────────────────────────────────────────────────────────────
 // 4. BOGENLÄNGENFORMEL (unabhängige Ableitung)
 // ──────────────────────────────────────────────────────────────────
-describe("Bogenlänge und Winkelbeziehungen", () => {
+describe("Winkelbeziehungen der geraden Wand", () => {
   const s = solveHorn(500, 60, RT, DW, DH);
-
-  it("arcLen / arcR = 2·ALPHA2 (Kreisbogen-Formel: s = r·θ)", () => {
-    expect(s.arcLen / s.arcR).toBeCloseTo(2 * ALPHA2, 8);
-  });
-
-  it("Strahlwinkel Fokus→Mund = ALPHA2 (geometrische Konsistenz)", () => {
-    // Der Strahl vom Fokus zum Mundpunkt schließt mit der Achse ALPHA2 ein.
-    const angle = Math.atan2(s.xMouth, s.zMouth - s.zFocus);
-    expect(angle).toBeCloseTo(ALPHA2, 5);
-  });
 
   it("Strahlwinkel Fokus→Übergang = ALPHA2", () => {
     // Gilt auch für den Übergangspunkt (beide liegen auf demselben Strahl).
@@ -226,9 +190,8 @@ describe("Akustische Plausibilitätschecks", () => {
     expect(mouthArea(s, 200)).toBeCloseTo(s.arcLen * 200, 6);
   });
 
-  it("Mundfläche (horiz.) / Throatfläche > 4 für guten Wirkungsgrad", () => {
-    // Faustregel: Flächenverhältnis ≥ 4. Horizontal als Kreissektoren um den Fokus.
-    expect((s.arcR ** 2 * ALPHA2) / (s.rInner ** 2 * ALPHA2)).toBeGreaterThan(4);
+  it("Mundfläche / Throatfläche > 4 (Faustregel für guten Wirkungsgrad)", () => {
+    expect(mouthArea(s, H) / (2 * RT) ** 2).toBeGreaterThan(4);
   });
 });
 

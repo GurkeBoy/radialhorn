@@ -124,7 +124,7 @@ describe("Bemaßungsregeln in Draufsicht und Seitenriss", () => {
       for (const [name, view] of Object.entries(v)) for (const msg of violations(view)) all.push(`${name} ${JSON.stringify(over)} ×${scale}: ${msg}`);
     }
     expect(all).toEqual([]);
-  }, 60000);
+  });
 
   it("ohne Raumecke: Maße am Treiber, nicht an der unsichtbaren Hut-Spitze", () => {
     const { top, side } = views({ showRaumecke: false }, 1);
@@ -133,18 +133,18 @@ describe("Bemaßungsregeln in Draufsicht und Seitenriss", () => {
     expect(side.edges.left).toBe(300 - p.dh);
     expect(top.dims.find(d => d.id === "hat")).toBeUndefined();
     expect(side.dims.find(d => d.id === "L").lo).toBe(300 - p.dh);
-  }, 30000);
+  });
 
   it("die Prüfung erkennt den alten Fehler: Flanschdicke außen, L innen", () => {
     const { side } = views({ showWandstaerke: true, flangeOn: true }, 1);
     const swapped = side.dims.map(d => d.id === "L" ? { ...d, layer: 0 } : d.id === "flangeT" ? { ...d, layer: 1 } : d);
     expect(violations({ ...side, dims: swapped }).join(" ")).toMatch(/flangeT: Hilfslinie kreuzt die Maßlinie von L/);
-  }, 30000);
+  });
 
   it("Flanschdicke innen, L außen; ohne Flansch L in der 1. Lage", () => {
     const withFlange = views({ showWandstaerke: true, flangeOn: true }, 1).side.dims;
     expect(layerOf(withFlange, "flangeT")).toBe(0);
     expect(layerOf(withFlange, "L")).toBe(1);
     expect(layerOf(views({}, 1).side.dims, "L")).toBe(0);
-  }, 30000);
+  });
 });

@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet, solveHorn } from "./horn-math.js";
 import { buildShellGeometry, flangeLayout, triangulate } from "./horn-mesh.js";
+import { edgeCheck, signedVolume as volume } from "./test-helpers.js";
 
 const RT = 25.4, T = 20;
 const s = solveHorn(500, 60, RT, 182, 90);
@@ -12,43 +13,33 @@ const profile = makeProfile(s, RT, 200, "exponential", 0.5);
 const hAt = r => profile(s.zFocus + r);
 const FLANGE = { diameter: null, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
 const tris = geo => geo.surfaces.flatMap(triangulate);
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const volume = ts => ts.reduce((V, [a, b, c]) => { const n = cross(b, c); return V + (a[0] * n[0] + a[1] * n[1] + a[2] * n[2]) / 6; }, 0);
-function edgeCheck(ts) {
-  const directed = new Map();
-  for (const t of ts) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, flipped = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) flipped++;
-  }
-  return { open, flipped };
-}
 const grid = (geo, name) => geo.surfaces.find(f => f.name === name).grid;
 
 describe("gerundete Längskanten", () => {
-  it("geschlossen und einheitlich orientiert – auch ohne Traktrix, mit Klothoide, lang, dick, mit Flansch", () => {
-    const cases = [
-      [s, profile, null, T, T / 2], [s, profile, null, T, T], [s, profile, null, 60, 30],
-      [solveHorn(500, 0, RT, 182, 90), null, null, T, T],
-      [createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 182, 90), null, null, T, 8],
-      [createHornMath(140).solveHorn(700, 250, RT, 182, 90), null, 150, 10, 10],
-      [createHornMath(160).solveHorn(500, 120, RT, 182, 90), null, null, 80, 80],
-    ];
-    for (const [sol, prof, R, t, r] of cases) {
-      const fillet = R ? computeFillet(sol, RT, 200, "hypex", 0.7, R) : null;
-      const p = prof ?? makeProfile(sol, RT, 200, fillet ? "hypex" : "exponential", fillet ? 0.7 : 0.5, fillet);
+  // [Name, Lösung, Profil (null: aus Lösung und Verrundung), Verrundungsradius R des Übergangs, Wandstärke t, Kantenradius r]
+  const CASES = [
+    ["r = t/2", s, profile, null, T, T / 2],
+    ["r = t", s, profile, null, T, T],
+    ["dick: t = 60, r = 30", s, profile, null, 60, 30],
+    ["ohne Traktrix", solveHorn(500, 0, RT, 182, 90), null, null, T, T],
+    ["mit Klothoide", createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 182, 90), null, null, T, 8],
+    ["lange Traktrix mit Verrundung R = 150", createHornMath(140).solveHorn(700, 250, RT, 182, 90), null, 150, 10, 10],
+    ["160°, t = r = 80", createHornMath(160).solveHorn(500, 120, RT, 182, 90), null, null, 80, 80],
+  ];
+  for (const [name, sol, prof, R, t, r] of CASES) {
+    const fillet = R ? computeFillet(sol, RT, 200, "hypex", 0.7, R) : null;
+    const p = prof ?? makeProfile(sol, RT, 200, fillet ? "hypex" : "exponential", fillet ? 0.7 : 0.5, fillet);
+
+    it(`${name}: geschlossen und einheitlich orientiert`, () => {
       expect(edgeCheck(tris(buildShellGeometry(sol, RT, p, fillet, t, null, r)))).toEqual({ open: 0, flipped: 0 });
+    });
+
+    it(`${name}: auch mit Flansch`, () => {
       const flange = flangeLayout(sol, RT, p, fillet, t, FLANGE, r);
       expect(edgeCheck(tris(buildShellGeometry(sol, RT, p, fillet, t, flange, r)))).toEqual({ open: 0, flipped: 0 });
-    }
-  }, 120000);   // 14 vollständige Schalen
+    });
+  }
 
   it("ohne Radius genau die scharfkantige Schale", () => {
     const sharp = buildShellGeometry(s, RT, profile, null, T), zero = buildShellGeometry(s, RT, profile, null, T, null, 0);

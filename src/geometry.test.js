@@ -11,7 +11,7 @@ const BASE = {
   throatDiam: 50.8, openingAngle: 140, L: 700, Lt: 132.3, dw: 182, dh: 90, hMouth: 200, curve: "hypex", hypexT: 0.7,
   showRaumecke: true, showWandstaerke: true, wandstaerke: 10, filletOn: true, filletR: 477, clothoidOn: true, clothoidLength: 30,
   morphOn: true, morphLength: 473, flangeOn: true, flangeD: 120, flangeT: 10, holeCount: 4, holeCircle: 101.6, holeD: 6.6,
-  holeAngle: 0, edgeOn: true, edgeR: 10,
+  holeAngle: 0, ribsOn: false, ribThickness: 4, ribLength: 30, roundOn: false, roundR: 2, edgeOn: true, edgeR: 10,
 };
 
 describe("createGeometryEngine", () => {
@@ -40,7 +40,7 @@ describe("createGeometryEngine", () => {
       diameter: 120, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 },
     }, 10, morph));
     expect(v.shellOuter).toEqual(shellPlanOutline(s, rt, 10, 10));
-  }, 30000);
+  });
 
   it("nur betroffene Stufen rechnen neu", () => {
     const compute = createGeometryEngine();
@@ -58,12 +58,12 @@ describe("createGeometryEngine", () => {
     // Mundhöhe: Verrundung, Profil und alles daran – nicht die Lösung, nicht der Übergang, nicht der Grundriss
     expect(step({ ...BASE, flangeD: 140, hMouth: 210 })).toEqual(["fillet", "flange", "shellCut"]);
     expect(step({ ...BASE, flangeD: 140, hMouth: 210, L: 650 })).toContain("s");
-  }, 30000);
+  });
 
   it("Ergebnis ist übertragbar (structuredClone, wie postMessage)", () => {
     const r = createGeometryEngine()(BASE);
     expect(structuredClone(r.values)).toEqual(r.values);
-  }, 30000);
+  });
 });
 
 describe("adoptGeometry", () => {
@@ -77,12 +77,12 @@ describe("adoptGeometry", () => {
     expect(next.values.flange).toBe(copy.values.flange);
     expect(next.values.flange.diameter).toBe(140);
     expect(next.params.flangeD).toBe(140);
-  }, 30000);
+  });
 
   it("Versionen verschiedener Kerne verwechseln sich nicht", () => {
     const a = createGeometryEngine()(BASE), b = createGeometryEngine()(BASE);
     expect(adoptGeometry(a, b).values.s).toBe(b.values.s);
-  }, 30000);
+  });
 });
 
 describe("Gesamtlänge und Raumecke", () => {
@@ -99,7 +99,7 @@ describe("Gesamtlänge und Raumecke", () => {
     expect(v.warnings.raumecke).toBe(false);
     expect(v.Lmax).toBe(1200);                                   // Regler bis ans Ende, nicht bis zum heutigen L
     expect(math.maxLforRaumecke(v.LtClamped, rt, 182, 90)).toBeGreaterThanOrEqual(700);
-  }, 30000);
+  });
 
   it("eingestelltes Lₜ gilt wieder, sobald L kleiner wird; Lₜ ändert L nicht", () => {
     const compute = createGeometryEngine();
@@ -108,7 +108,7 @@ describe("Gesamtlänge und Raumecke", () => {
     expect(back.LtClamped).toBe(60);
     expect(back.warnings.ltFollows).toBe(false);
     for (const Lt of [10, 60, 150]) expect(compute({ ...SIMPLE, L: 700, Lt }).values.LClamped).toBe(700);
-  }, 30000);
+  });
 
   it("ohne Raumecke zählt L ab der Treiberrückseite – dasselbe Horn wie L + dw/2 ab der Hut-Spitze", () => {
     const off = createGeometryEngine()({ ...SIMPLE, showRaumecke: false, L: 409 }).values;
@@ -117,5 +117,43 @@ describe("Gesamtlänge und Raumecke", () => {
     expect(off.s.zApex - -90).toBeCloseTo(409, 9);             // Treiberrückseite (z = −dh) bis Mundscheitel
     expect(off.Lmin).toBe(math.minL(60, rt, 182, 90) - 91);
     expect(off.LMaxRaumecke).toBe(null);
-  }, 30000);
+  });
+});
+
+describe("Rippen und Verrundung im Flansch", () => {
+  const flangeOf = over => createGeometryEngine()({ ...BASE, ...over }).values.flange;
+
+  it("ribsOn gibt die Rippenvorgabe an den Flansch, aus: keine", () => {
+    expect(flangeOf({ ribsOn: true, ribThickness: 6, ribLength: 45 }).ribs).toEqual({ thickness: 6, length: 45 });
+    expect(flangeOf({ ribsOn: false, ribThickness: 6, ribLength: 45 }).ribs).toBeNull();
+  });
+
+  it("roundOn gibt den Verrundungsradius an den Flansch, aus: 0", () => {
+    expect(flangeOf({ roundOn: true, roundR: 3.5 }).round).toBe(3.5);
+    expect(flangeOf({ roundOn: false, roundR: 3.5 }).round).toBe(0);
+  });
+
+  it("ohne Flansch oder ohne Wandstärke gibt es weder Flansch noch Rippen", () => {
+    expect(flangeOf({ ribsOn: true, roundOn: true, flangeOn: false })).toBeNull();
+    expect(flangeOf({ ribsOn: true, roundOn: true, showWandstaerke: false })).toBeNull();
+  });
+
+  it("Zwischenspeicher: jeder Rippen- und Verrundungswert erneuert den Flansch, unveränderte nicht", () => {
+    const compute = createGeometryEngine();
+    const on = { ...BASE, ribsOn: true, roundOn: true };
+    let prev = compute(on);
+    const renewed = over => {
+      const next = compute({ ...on, ...over });
+      const changed = next.versions.flange !== prev.versions.flange;
+      prev = next;
+      return changed;
+    };
+    expect(renewed({})).toBe(false);
+    expect(renewed({ ribThickness: 6 })).toBe(true);
+    expect(renewed({ ribThickness: 6 })).toBe(false);
+    expect(renewed({ ribThickness: 6, ribLength: 50 })).toBe(true);
+    expect(renewed({ ribThickness: 6, ribLength: 50, roundR: 3 })).toBe(true);
+    expect(renewed({ ribThickness: 6, ribLength: 50, roundR: 3, ribsOn: false })).toBe(true);
+    expect(renewed({ ribThickness: 6, ribLength: 50, roundR: 3, ribsOn: false, roundOn: false })).toBe(true);
+  }, 120000);
 });

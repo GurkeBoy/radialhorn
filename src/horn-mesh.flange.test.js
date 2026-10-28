@@ -3,7 +3,8 @@
  */
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, createHornMath, throatMorph } from "./horn-math.js";
-import { buildShellGeometry, flangeLayout, boltHoleCenters, triangulate } from "./horn-mesh.js";
+import { DEFAULT_RES, buildShellGeometry, flangeLayout, boltHoleCenters, triangulate } from "./horn-mesh.js";
+import { edgeCheck, cross, signedVolume as volume } from "./test-helpers.js";
 
 const RT = 25.4, T = 15;
 const s = solveHorn(500, 60, RT, 120, 100);
@@ -14,23 +15,6 @@ const flange = (over = {}) => ({
   ...over,
 });
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const volume = tris => tris.reduce((V, [a, b, c]) => { const n = cross(b, c); return V + (a[0] * n[0] + a[1] * n[1] + a[2] * n[2]) / 6; }, 0);
-function edgeCheck(tris) {
-  const directed = new Map();
-  for (const t of tris) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, flipped = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) flipped++;
-  }
-  return { open, flipped };
-}
 const tris = geo => geo.surfaces.flatMap(triangulate);
 
 describe("Flansch", () => {
@@ -46,7 +30,7 @@ describe("Flansch", () => {
     for (const f of [flange(), flange({ holes: { count: 0, circle: 150, diameter: 6.5, angle: 0 } }), flange({ thickness: 25 })]) {
       expect(edgeCheck(tris(buildShellGeometry(s, RT, profile, null, T, f)))).toEqual({ open: 0, flipped: 0 });
     }
-  }, 30000);   // 3 vollständige Schalen – im Gesamtlauf unter Last über 5 s
+  });
 
   it("auch mit Klothoide und ohne Traktrix geschlossen", () => {
     const sk = createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 120, 100);
@@ -114,7 +98,7 @@ describe("Flansch", () => {
       for (const f of geo.surfaces.filter(x => x.name.startsWith("outer.") && x.grid)) {
         for (const row of f.grid) for (const [x, h, z] of row) if (Math.abs(z - layout.thickness) < 1e-9) max = Math.max(max, Math.hypot(x, h));
       }
-      expect(layout.minDiameter).toBeCloseTo(2 * (max + 1) / Math.cos(Math.PI / 96), 9);
+      expect(layout.minDiameter).toBeCloseTo(2 * (max + 1) / Math.cos(Math.PI / DEFAULT_RES.flange), 9);
     }
-  }, 30000);
+  });
 });

@@ -6,7 +6,7 @@
 
 A desktop app for designing **radial horns with a tractrix entrance** for DIY loudspeakers. From a handful of
 parameters it computes the horn geometry, draws scaled top and side views with dimensions, shows the horn in 3D,
-simulates its frequency response, and exports DXF for CAD, STL for 3D printing and a PDF datasheet.
+simulates its frequency response, and exports DXF and STEP for CAD, STL for 3D printing and a PDF datasheet.
 
 ![Radialhorn: input column, top view, 3D shell, side view and frequency response](docs/images/app-en.png)
 
@@ -32,13 +32,16 @@ each [release](https://github.com/GurkeBoy/radialhorn/releases). They are not co
 - **3D view:** the air volume or – with wall thickness – the horn shell, to rotate and zoom, as surfaces or wireframe,
   with driver and room corner as reference.
 - **Construction:** wall thickness, rounded outer edges, and a round throat flange with a bolt pattern for mounting
-  the driver.
+  the driver – optionally with support ribs between the bolt holes (as many as holes, on the horn side) and a rounded
+  flange rim.
 - **Frequency response (1D simulation):** Webster horn equation solved by transfer matrices from the wavefront area
   S(x); driver from Thiele-Small parameters with throat (compression) chamber; radiation into 2π (exact) or 4π / π /
   π/2 (approximation). SPL at 1 m / 2.83 V and electrical impedance as a chart, export as CSV.
 - **Key figures:** mouth area, vertical opening angle, approximate cutoff frequencies.
-- **Export:** DXF with exact curves (SPLINE/ARC/LINE instead of polylines, so CAD builds smooth solids), STL of the
-  shell or air volume, and a PDF datasheet with scaled drawings.
+- **Volume:** air volume, wall material (including flange and ribs) and outer body in litres, computed from the same
+  closed 3D meshes as the exports.
+- **Export:** DXF with exact curves (SPLINE/ARC/LINE instead of polylines, so CAD builds smooth solids), STEP of the
+  body as smooth faces (editable in CAD), STL of the shell or air volume, and a PDF datasheet with scaled drawings.
 - **Project files:** save a design as `*.radialhorn.json`, open it again or share it; values are checked on opening.
 - **English and German**, switchable; settings are kept between sessions (desktop app: also saved as a file,
   on Windows `%APPDATA%\com.pilch.radialhorn\einstellungen.json`).

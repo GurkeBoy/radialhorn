@@ -6,28 +6,14 @@
 import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet, throatMorph, crossSection } from "./horn-math.js";
 import { buildHornGeometry, buildShellGeometry, flangeLayout, triangulate } from "./horn-mesh.js";
+import { edgeCheck } from "./test-helpers.js";
 
 const RT = 25.4;
 const solve = (Lt, { clothoid = 0, rt = RT, angle = 140 } = {}) => createHornMath(angle, { clothoid }).solveHorn(500, Lt, rt, 182, 90);
 const profileOf = (s, rt = RT, fillet = null) => makeProfile(s, rt, 200, "exponential", 0.5, fillet);
 const FLANGE = { diameter: null, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
 const tris = geo => geo.surfaces.flatMap(triangulate);
-function edgeCheck(ts) {
-  const directed = new Map();
-  for (const t of ts) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, flipped = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) flipped++;
-  }
-  return { open, flipped };
-}
 const surface = (geo, name) => geo.surfaces.find(f => f.name === name);
 
 const CASES = [
@@ -51,15 +37,17 @@ describe("runder Throat im 3D-Netz", () => {
     const fillet = R ? computeFillet(s, rt, 200, "exponential", 0.5, R) : null;
     const profile = profileOf(s, rt, fillet);
     const morph = throatMorph(s, rt, length);
+    let airCache;                                              // das Luftvolumen je Fall nur einmal bauen
+    const air = () => airCache ??= buildHornGeometry(s, rt, profile, fillet, morph);
 
     it(`${name}: Luftvolumen und Schale geschlossen, einheitlich orientiert`, () => {
       expect(morph).not.toBeNull();
-      expect(edgeCheck(tris(buildHornGeometry(s, rt, profile, fillet, morph)))).toEqual({ open: 0, flipped: 0 });
+      expect(edgeCheck(tris(air()))).toEqual({ open: 0, flipped: 0 });
       expect(edgeCheck(tris(buildShellGeometry(s, rt, profile, fillet, 20, null, 0, morph)))).toEqual({ open: 0, flipped: 0 });
     });
 
     it(`${name}: Throat = Kreis mit Radius rt in der Ebene z = 0`, () => {
-      const cap = surface(buildHornGeometry(s, rt, profile, fillet, morph), "capThroat");
+      const cap = surface(air(), "capThroat");
       const pts = cap.triangles.flat();
       for (const [x, h, z] of pts) {
         expect(z).toBeCloseTo(0, 9);
@@ -68,7 +56,7 @@ describe("runder Throat im 3D-Netz", () => {
     });
 
     it(`${name}: Deckel faltet nicht (im Grundriss alle Zellen gleich orientiert)`, () => {
-      const geo = buildHornGeometry(s, rt, profile, fillet, morph);
+      const geo = air();
       for (const name of ["trakTop", "kloTop", "linTop"]) {
         const grid = surface(geo, name)?.grid;
         if (!grid) continue;

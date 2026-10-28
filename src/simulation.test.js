@@ -6,7 +6,6 @@ import {
   curveLevels, GEOMETRY_STEP_MM, MAX_SEGMENT, hornDelay, phaseWithoutDelay, createSimulationEngine,
 } from "./simulation.js";
 import { createHornMath, makeProfile, computeFillet, mouthArea, crossSection } from "./horn-math.js";
-import { buildCSV } from "./export/csv.js";
 
 const AIR = airAt(20);
 const RHOC = AIR.rho * AIR.c;
@@ -396,15 +395,6 @@ describe("simulate", () => {
     for (let i = 0; i < freqs.length; i++) expect(r2.spl[i] - r.spl[i]).toBeCloseTo(6.0206, 3);
   });
 
-  it("CSV: Kopfzeile und eine Zeile je Frequenz", () => {
-    const lines = buildCSV(r).trim().split("\n");
-    expect(lines[0]).toMatch(/^f_Hz,SPL_dB,/);
-    expect(lines).toHaveLength(freqs.length + 1);
-    const cols = lines[1].split(",").map(Number);
-    expect(cols).toHaveLength(9);
-    expect(cols.every(Number.isFinite)).toBe(true);
-    expect(cols[0]).toBeCloseTo(20, 3);
-  });
 });
 
 describe("Laufzeit (hornDelay, phaseWithoutDelay)", () => {

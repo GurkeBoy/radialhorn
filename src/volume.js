@@ -27,6 +27,7 @@ export function computeVolumes({ s, rt, hMouth, curve, hypexT, fillet, morph = n
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
   const air = volumeOf(buildHornGeometry(s, rt, profile, fillet, morph));
   if (!(wall > 0)) return { air, shell: null, outer: null };
-  const shell = volumeOf(buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR, morph));
+  const geometry = buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR, morph);
+  const shell = volumeOf(geometry) - (geometry.ribs?.overlap ?? 0);   // Rippen reichen in Platte und Wand hinein
   return { air, shell, outer: air + shell };
 }

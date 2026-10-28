@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, throatMorph } from "../horn-math.js";
-import { flangeLayout, EXPORT_RES } from "../horn-mesh.js";
-import { hornGeometry, hornTriangles } from "./stl.js";
+import { flangeLayout, triangulate, EXPORT_RES } from "../horn-mesh.js";
+import { buildHornGeometry } from "../horn-mesh.js";
+import { hornGeometry, hornTriangles, stlBinary } from "./stl.js";
+import { openEdges, trianglesOf, signedVolume, cross } from "../test-helpers.js";
 
 const RT = 25.4;
 const s = solveHorn(500, 60, RT, 120, 100);
@@ -11,18 +13,12 @@ const FLANGE = { diameter: null, fallback: 120, thickness: 10, holes: { count: 4
 const shell = { s, rt: RT, profile, fillet: null, wall: 12, edgeR: 12, morph, flange: flangeLayout(s, RT, profile, null, 12, FLANGE, 12, morph) };
 const air = { s, rt: RT, profile, fillet: null, morph };
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
-function openEdges(tris) {
-  const directed = new Set();
-  for (const t of tris) for (let k = 0; k < 3; k++) directed.add(key(t[k]) + ">" + key(t[(k + 1) % 3]));
-  return [...directed].filter(e => { const [a, b] = e.split(">"); return !directed.has(b + ">" + a); }).length;
-}
 
 describe("STL-Export mit doppelter Auflösung (EXPORT_RES)", () => {
   it("geschlossen: Luftvolumen mit rundem Throat, Schale mit rundem Throat, Kanten r = t und Flansch", () => {
     expect(openEdges(hornTriangles(air, EXPORT_RES))).toBe(0);
     expect(openEdges(hornTriangles(shell, EXPORT_RES))).toBe(0);
-  }, 30000);
+  });
 
   it("feiner als die Ansicht: Gitter, Viertelkreise der Rundungen, Flanschrand und Bohrungen", () => {
     expect(hornTriangles(shell, EXPORT_RES).length).toBeGreaterThan(3 * hornTriangles(shell).length);
@@ -35,5 +31,56 @@ describe("STL-Export mit doppelter Auflösung (EXPORT_RES)", () => {
     const arcPoints = list => list.find(f => f.name === "inner.roundTrakTopR").grid[0].length;
     expect(arcPoints(fine)).toBe(32 + 1);
     expect(arcPoints(coarse)).toBe(16 + 1);
-  }, 30000);
+  });
+});
+
+describe("STL mit Stützrippen und Verrundung", () => {
+  const ribbed = {
+    ...shell,
+    flange: flangeLayout(s, RT, profile, null, 12, { ...FLANGE, diameter: 160, ribs: { thickness: 4, length: 30 }, round: 3 }, 12, morph),
+  };
+
+  it("die Rippen sind im Netz, jede ein eigener geschlossener Körper, das Gesamtnetz bleibt geschlossen", () => {
+    const geometry = hornGeometry(ribbed, EXPORT_RES);                       // einmal bauen, daraus alles ableiten
+    const ribs = geometry.surfaces.filter(f => f.rib);
+    expect(ribs).toHaveLength(4);
+    const all = geometry.surfaces.flatMap(triangulate), ribTriangles = ribs.flatMap(triangulate);
+    expect(ribTriangles.length).toBeGreaterThan(4 * 12);                      // je Rippe mehrere Dreiecke
+    expect(all.length).toBeGreaterThan(ribTriangles.length);
+    expect(openEdges(ribTriangles)).toBe(0);                                  // die Rippen allein: geschlossen
+    expect(openEdges(all)).toBe(0);                                           // und im Gesamtnetz
+    expect(hornTriangles(ribbed, EXPORT_RES).length).toBe(all.length);       // der STL-Export schreibt genau diese Dreiecke
+  });
+
+  it("ohne Rippenvorgabe keine Rippenflächen", () => {
+    expect(hornGeometry(shell).surfaces.some(f => f.rib)).toBe(false);
+  });
+});
+
+describe("stlBinary (Luftvolumen, Standardhorn)", () => {
+  const H_MOUTH = 200;
+  const tris = trianglesOf(buildHornGeometry(s, RT, profile));
+  const buf = stlBinary(tris);
+  const view = new DataView(buf);
+
+  it("Größe und Dreiecksanzahl", () => {
+    expect(buf.byteLength).toBe(84 + 50 * tris.length);
+    expect(view.getUint32(80, true)).toBe(tris.length);
+  });
+
+  it("Normalen zeigen nach außen (positives Volumen in STL-Koordinaten)", () => {
+    let V = 0;
+    for (let t = 0; t < tris.length; t++) {
+      const p = [0, 1, 2].map(k => [0, 1, 2].map(c => view.getFloat32(84 + 50 * t + 12 + 12 * k + 4 * c, true)));
+      const c = cross(p[1], p[2]);
+      V += (p[0][0] * c[0] + p[0][1] * c[1] + p[0][2] * c[2]) / 6;
+    }
+    expect(V / signedVolume(tris)).toBeCloseTo(1, 4);
+  });
+
+  it("Hochachse Z: Höhe des Mundes ±hMouth/2", () => {
+    let zMax = -Infinity;
+    for (let t = 0; t < tris.length; t++) for (let k = 0; k < 3; k++) zMax = Math.max(zMax, view.getFloat32(84 + 50 * t + 12 + 12 * k + 8, true));
+    expect(zMax).toBeCloseTo(H_MOUTH / 2, 3);
+  });
 });

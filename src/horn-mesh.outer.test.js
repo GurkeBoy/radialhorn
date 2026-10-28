@@ -6,28 +6,14 @@
 import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet, throatMorph } from "./horn-math.js";
 import { buildShellGeometry, flangeLayout, triangulate } from "./horn-mesh.js";
+import { edgeCheck, key } from "./test-helpers.js";
 
 const RT = 25.4, T = 20;
 const solve = (Lt, clothoid = 0) => createHornMath(140, { clothoid }).solveHorn(500, Lt, RT, 182, 90);
 const profileOf = (s, fillet = null) => makeProfile(s, RT, 200, "exponential", 0.5, fillet);
 const FLANGE = { diameter: null, fallback: 182, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
 
-const key = p => p.map(v => Math.round(v * 1e6)).join(",");
 const tris = geo => geo.surfaces.flatMap(triangulate);
-function edgeCheck(ts) {
-  const directed = new Map();
-  for (const t of ts) for (let k = 0; k < 3; k++) {
-    const e = key(t[k]) + ">" + key(t[(k + 1) % 3]);
-    directed.set(e, (directed.get(e) || 0) + 1);
-  }
-  let open = 0, flipped = 0;
-  for (const [e, n] of directed) {
-    const [a, b] = e.split(">");
-    if (!directed.get(b + ">" + a)) open++;
-    if (n > 1) flipped++;
-  }
-  return { open, flipped };
-}
 
 // Nächster Punkt eines Dreiecks (Ericson, Real-Time Collision Detection 5.1.5)
 const sub = (u, v) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
@@ -51,27 +37,50 @@ function closest(p, a, b, c) {
 }
 
 /**
- * Kleinster Abstand der Punkte der äußeren Rundungen (rechts oben) zur Innenfläche – gesucht wird
- * nur unter 2·t (Dreiecke, deren Hüllquader weiter weg liegt als der beste Wert, entfallen).
+ * Kleinster Abstand der Punkte der äußeren Rundungen (rechts oben) zur Innenfläche – gesucht wird nur unter
+ * 2·t. Raster aus Würfeln der Kantenlänge t/2: ein Dreieck steht in allen Zellen seines Hüllquaders, ein Punkt
+ * sucht nur in den Zellen im Umkreis des bisher besten Abstands (jedes Dreieck näher als dieser liegt dort).
+ * Dreiecke, deren Hüllquader weiter weg liegt als der beste Wert, entfallen vor der Abstandsrechnung.
  */
 function minWall(geo, t) {
+  const cell = t / 2, cellOf = v => Math.floor(v / cell);
+  const cellKey = (x, y, z) => ((x + 1024) * 4096 + (y + 1024)) * 4096 + (z + 1024);   // Zellen |x| < 1024 (≈ 10 m)
   const tris = geo.surfaces.filter(f => f.name.startsWith("inner.")).flatMap(triangulate).map(tri => ({
     tri,
     lo: [0, 1, 2].map(k => Math.min(tri[0][k], tri[1][k], tri[2][k])),
     hi: [0, 1, 2].map(k => Math.max(tri[0][k], tri[1][k], tri[2][k])),
   }));
-  let min = 2 * t;
-  for (const p of geo.surfaces.filter(f => /^outer\.round.*TopR$/.test(f.name)).flatMap(f => f.grid.flat())) {
-    for (const { tri, lo, hi } of tris) {
-      const dx = Math.max(lo[0] - p[0], 0, p[0] - hi[0]), dy = Math.max(lo[1] - p[1], 0, p[1] - hi[1]), dz = Math.max(lo[2] - p[2], 0, p[2] - hi[2]);
-      if (dx * dx + dy * dy + dz * dz >= min * min) continue;
-      const q = closest(p, ...tri);
-      min = Math.min(min, Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]));
+  const grid = new Map();
+  tris.forEach(({ lo, hi }, i) => {
+    for (let x = cellOf(lo[0]); x <= cellOf(hi[0]); x++) for (let y = cellOf(lo[1]); y <= cellOf(hi[1]); y++) for (let z = cellOf(lo[2]); z <= cellOf(hi[2]); z++) {
+      const key = cellKey(x, y, z);
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(i);
+    }
+  });
+  const stamp = new Int32Array(tris.length);              // je Punkt jedes Dreieck nur einmal prüfen
+  let min = 2 * t, pointNo = 0;
+  for (const p of geo.surfaces.filter(f => /^outer.round.*TopR$/.test(f.name)).flatMap(f => f.grid.flat())) {
+    pointNo++;
+    const r = Math.ceil(min / cell), cx = cellOf(p[0]), cy = cellOf(p[1]), cz = cellOf(p[2]);
+    for (let x = cx - r; x <= cx + r; x++) for (let y = cy - r; y <= cy + r; y++) for (let z = cz - r; z <= cz + r; z++) {
+      for (const i of grid.get(cellKey(x, y, z)) ?? []) {
+        if (stamp[i] === pointNo) continue;
+        stamp[i] = pointNo;
+        const { tri, lo, hi } = tris[i];
+        const dx = Math.max(lo[0] - p[0], 0, p[0] - hi[0]), dy = Math.max(lo[1] - p[1], 0, p[1] - hi[1]), dz = Math.max(lo[2] - p[2], 0, p[2] - hi[2]);
+        if (dx * dx + dy * dy + dz * dz >= min * min) continue;
+        const q = closest(p, ...tri);
+        min = Math.min(min, Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]));
+      }
     }
   }
   return min;
 }
 
+// Die Zahlen der Wandstärke- und Knick-Prüfungen unten sind Regressionsgrenzen: sie halten den heutigen Stand
+// der Außenseite am Throat fest (leicht dünner bzw. geknickt, wo außen andere Zeilen als innen liegen), keine
+// Anforderung. Wird die Geometrie dort verbessert, dürfen sie enger werden – nicht weiter.
 describe("runder Throat außen (R = r + e)", () => {
   const CASES = [
     ["Standard", solve(60), null, null],
@@ -100,7 +109,7 @@ describe("runder Throat außen (R = r + e)", () => {
           expect(Math.min(pos, neg)).toBe(0);
         }
       }
-    }, 20000);
+    });
   }
 
   it("Wand an den Ecken: mit e = t genau t (gerader Bereich, Throat), im Eingang vor der Naht knapp darunter", () => {
@@ -112,7 +121,7 @@ describe("runder Throat außen (R = r + e)", () => {
     // scharf und e = t/2: an den Ecken ohnehin dicker
     const s = solve(60), m = throatMorph(s, RT, null);
     for (const e of [0, T / 2]) expect(minWall(buildShellGeometry(s, RT, profileOf(s), null, T, null, e, m), T)).toBeGreaterThan(T);
-  }, 60000);
+  });
 
   it("Throat mit e = t: außen nahezu ein Kreis Ø 2·(rt + t), sonst ein gerundetes Rechteck", () => {
     // Wand am Throat schräg (≈ 20°): senkrecht zur Wand t, waagerecht etwas mehr – die Rundung
@@ -134,15 +143,26 @@ describe("runder Throat außen (R = r + e)", () => {
     // geraden Wand ist dort nur ≈ 1 mm lang (bisherige Kantenrundung dort ≈ 20°); Lₜ = 60: der Deckel
     // knickt beim Übergang in die Aufweitung schon ohne runden Throat um ≈ 11°
     const maxCrease = geo => {
-      const edges = new Map(), k = p => p.map(v => Math.round(v * 1e5)).join(",");
+      // Kanten als Paar von Punktnummern (Zeichenketten je Kante waren hier der Zeitfresser)
+      const edges = new Map(), idOfKey = new Map(), idOfPoint = new WeakMap(), BASE = 2 ** 26;
+      const idOf = p => {
+        let id = idOfPoint.get(p);
+        if (id === undefined) {
+          const k = key(p);
+          id = idOfKey.get(k);
+          if (id === undefined) { id = idOfKey.size; idOfKey.set(k, id); }
+          idOfPoint.set(p, id);
+        }
+        return id;
+      };
       for (const f of geo.surfaces.filter(f => f.name.startsWith("outer."))) for (const tri of triangulate(f)) {
         const u = sub(tri[1], tri[0]), v = sub(tri[2], tri[0]);
         const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]], len = Math.hypot(...n);
         if (len < 1e-8) continue;
         for (let i = 0; i < 3; i++) {
-          const a = tri[i], b = tri[(i + 1) % 3], key = [k(a), k(b)].sort().join("|");
-          if (!edges.has(key)) edges.set(key, []);
-          edges.get(key).push({ n: n.map(x => x / len), mid: [0, 1, 2].map(j => (a[j] + b[j]) / 2) });
+          const a = tri[i], b = tri[(i + 1) % 3], ia = idOf(a), ib = idOf(b), edge = Math.min(ia, ib) * BASE + Math.max(ia, ib);
+          if (!edges.has(edge)) edges.set(edge, []);
+          edges.get(edge).push({ n: n.map(x => x / len), mid: [0, 1, 2].map(j => (a[j] + b[j]) / 2) });
         }
       }
       let max = 0;
