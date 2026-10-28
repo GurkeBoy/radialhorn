@@ -40,6 +40,9 @@ each [release](https://github.com/GurkeBoy/radialhorn/releases). They are not co
 - **Key figures:** mouth area, vertical opening angle, approximate cutoff frequencies.
 - **Volume:** air volume, wall material (including flange and ribs) and outer body in litres, computed from the same
   closed 3D meshes as the exports.
+- **Wall thickness advice:** a recommended minimum wall thickness for your material (PLA, PETG, ABS, resin, plywood,
+  MDF, aluminium or your own values), so the wall barely yields under sound pressure, with a traffic light for the
+  current wall and the lowest wall mode as information. A rule of thumb, not a measurement.
 - **Export:** DXF with exact curves (SPLINE/ARC/LINE instead of polylines, so CAD builds smooth solids), STEP of the
   body as smooth faces (editable in CAD), STL of the shell or air volume, and a PDF datasheet with scaled drawings.
 - **Project files:** save a design as `*.radialhorn.json`, open it again or share it; values are checked on opening.

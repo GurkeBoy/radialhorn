@@ -6,6 +6,7 @@ import { checkSetting, readSetting, writeSetting } from "./settings.js";
 import { CURVES, lengthOffset } from "./horn-math.js";
 import { PLACEHOLDER_DRIVER } from "./simulation.js";
 import { fmtLength } from "./utils.js";
+import { MATERIAL_KEYS } from "./wall-advice.js";
 
 export const PROJECT_FORMAT = "radialhorn-project";
 /** 2: L ohne Raumecke ab der Treiberrückseite (in Version 1 ab der Hut-Spitze, dw/2 dahinter). */
@@ -69,6 +70,10 @@ export const DESIGN_DEFAULTS = {
   ribThickness: 4,
   roundOn: false,          // Verrundungen auf der Hornseite des Flanschs (Plattenkanten, Rippen)
   roundR: 2,
+  wallMaterial: "pla",     // Werkstoff der Wandstärke-Empfehlung (wall-advice.js: MATERIAL_KEYS)
+  wallE: 3,                // eigener Werkstoff: E-Modul [GPa]
+  wallRho: 1250,           // eigener Werkstoff: Dichte [kg/m³]
+  wallLimit: 5,            // zulässige Nachgiebigkeit der Wand [%]
   ribLength: 30,           // entlang des Horns ab der Plattenfläche, soweit die Wand unter dem Flanschrand bleibt
   abstrahlung: "auto",
   simTemp: 20,
@@ -79,7 +84,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-export const ADDED_LATER = new Set(["morphOn", "morphLength", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR"]);
+export const ADDED_LATER = new Set(["morphOn", "morphLength", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);
@@ -89,6 +94,7 @@ const CHOICES = {
   curve: CURVES,
   abstrahlung: ["auto", "4pi", "2pi", "pi", "pi/2"],
   "driver.massIs": ["Mmd", "Mms"],
+  wallMaterial: MATERIAL_KEYS,
 };
 
 /** Projektdatei (Text) aus dem aktuellen Entwurf. */

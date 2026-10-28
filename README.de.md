@@ -41,6 +41,9 @@ Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.
 - **Kennwerte:** Mundfläche, vertikaler Öffnungswinkel, Grenzfrequenzen (Näherung).
 - **Volumen:** Luftvolumen, Wandmaterial (mit Flansch und Rippen) und Außenkörper in Litern, aus denselben
   geschlossenen 3D-Netzen wie die Exporte.
+- **Wandstärke-Empfehlung:** empfohlene Mindestwandstärke für deinen Werkstoff (PLA, PETG, ABS, Harz, Sperrholz, MDF,
+  Alu oder eigene Werte), damit die Wand unter dem Schalldruck kaum nachgibt, mit Ampel für die aktuelle Wand und der
+  tiefsten Wandmode als Information. Eine Faustregel, keine Messung.
 - **Export:** DXF mit exakten Kurven (SPLINE/ARC/LINE statt Polylinien, damit CAD glatte Körper erzeugt), STEP des
   Körpers aus glatten Flächen (in CAD bearbeitbar), STL der Schale bzw. des Luftvolumens und PDF-Datenblatt mit
   maßstäblichen Zeichnungen.

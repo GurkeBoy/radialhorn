@@ -24,7 +24,7 @@ const hasName = (text, name) => new RegExp(`(^|[^A-Za-z0-9_])${name}(?![A-Za-z0-
 
 const KEYS = Object.keys(DESIGN_DEFAULTS);
 // Entwurfswerte, die nicht zur Geometrie gehören (Bedienung bzw. Simulation)
-const NOT_GEOMETRY = ["abstrahlung", "driver", "simTemp", "throatCustom"];
+const NOT_GEOMETRY = ["abstrahlung", "driver", "simTemp", "throatCustom", "wallE", "wallLimit", "wallMaterial", "wallRho"];
 
 describe("Entwurfswerte in App.jsx", () => {
   it("jeder Entwurfswert hat einen gespeicherten Zustand (usePersistentState)", () => {
