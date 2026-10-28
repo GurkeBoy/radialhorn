@@ -42,6 +42,8 @@ export const DESIGN_DEFAULTS = {
   throatCustom: false,
   morphOn: false,          // Übergang rund → eckig am Throat
   morphLength: null,       // Länge entlang der Wand [mm]; null: Throat-Durchmesser
+  mouthRoundOn: false,     // Ecken am Mund gerundet (weicher Übergang vom Throat)
+  mouthRoundR: 20,         // Eckradius am Mund [mm]
   openingAngle: 140,
   L: 500,
   Lt: 60,
@@ -84,7 +86,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-export const ADDED_LATER = new Set(["morphOn", "morphLength", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
+export const ADDED_LATER = new Set(["morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);

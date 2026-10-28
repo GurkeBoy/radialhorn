@@ -60,10 +60,14 @@ export default {
   "profile.exponential": "Exponential",
   "profile.hypex": "Hypex",
   "profile.hypexT": "Hypex T",
+  "profile.mouthRound": "Mundecken verrunden",
+  "profile.mouthRoundHint": "Der Eckradius wächst weich vom Throat bis zum Mund",
+  "profile.mouthRoundRadius": "Radius am Mund",
   "profile.fillet": "Verrundung Übergang",
   "profile.filletRadius": "Radius r",
   "warn.filletNeedsTractrix": "Verrundung nur mit Traktrix-Eingang (Lₜ > 0)",
   "warn.filletLimited": "Radius zu groß – begrenzt auf {mm} mm",
+  "warn.mouthRoundLimited": "Radius auf {mm} mm begrenzt (fast die halbe Mundhöhe).",
   "warn.morphLimited": "Begrenzt auf {mm} mm – die Länge der Wand bis zum Mund",
 
   // Treiber, Aufstellung, Ausführung

@@ -60,10 +60,14 @@ export default {
   "profile.exponential": "Exponential",
   "profile.hypex": "Hypex",
   "profile.hypexT": "Hypex T",
+  "profile.mouthRound": "Round the mouth corners",
+  "profile.mouthRoundHint": "The corner radius grows smoothly from the throat to the mouth",
+  "profile.mouthRoundRadius": "Radius at the mouth",
   "profile.fillet": "Transition fillet",
   "profile.filletRadius": "Radius r",
   "warn.filletNeedsTractrix": "Fillet requires a tractrix entrance (Lₜ > 0)",
   "warn.filletLimited": "Radius too large – limited to {mm} mm",
+  "warn.mouthRoundLimited": "Radius limited to {mm} mm (almost half the mouth height).",
   "warn.morphLimited": "Limited to {mm} mm – the length of the wall up to the mouth",
 
   // Driver, placement, construction

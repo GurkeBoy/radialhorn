@@ -26,7 +26,7 @@ Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.
   Fokuspunkt; optional krümmungsstetiger Übergang (Klothoide) zwischen Traktrix und Wand. Öffnungswinkel,
   Gesamtlänge, Traktrix-Länge, Throat (1", 1,4", 2" oder eigene Größe) und Treibermaße einstellbar.
 - **Vertikales Profil:** Aufweitung linear, exponentiell oder Hypex; optionale Verrundung des Übergangs Throat →
-  Aufweitung.
+  Aufweitung; optional gerundete Mundecken, der Eckradius wächst weich vom Throat bis zum Mund.
 - **Raumecke:** begrenzt die Hornbreite auf die 45°-Diagonale einer Raumecke, optional mit Wandstärke.
 - **Ansichten:** Draufsicht und Seitenriss mit Bemaßung, Zoom (Mausrad), Verschieben (Ziehen) und Vollbild;
   Querschnittsfläche A(z) als Diagramm.

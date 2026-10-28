@@ -2,7 +2,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   hasTraktrix, CURVES, makeProfile, lengthOffset,
-  mouthArea, verticalMouthAngle, frequencyEstimates,
+  mouthArea, verticalMouthAngle, frequencyEstimates, maxMouthRound,
 } from "./horn-math.js";
 import { FONT, SIDEBAR_WIDTH, UI } from "./theme.js";
 import {
@@ -58,6 +58,8 @@ export default function App() {
   };
   const [morphOn,         setMorphOn]         = usePersistentState("morphOn", D.morphOn);
   const [morphLength,     setMorphLength]     = usePersistentState("morphLength", D.morphLength);
+  const [mouthRoundOn,    setMouthRoundOn]    = usePersistentState("mouthRoundOn", D.mouthRoundOn);
+  const [mouthRoundR,     setMouthRoundR]     = usePersistentState("mouthRoundR", D.mouthRoundR);
   const [openingAngle,    setOpeningAngle]    = usePersistentState("openingAngle", D.openingAngle);
   const [L,               setL]               = usePersistentState("L", D.L);
   const [Lt,              setLt]              = usePersistentState("Lt", D.Lt);
@@ -111,12 +113,12 @@ export default function App() {
 
   // Projektdatei (project.js): der Entwurf als Ganzes, Schlüssel wie die gespeicherten Einstellungen
   const designValues = {
-    throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
+    throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
     flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
-    throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength,
+    throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength, mouthRoundOn: setMouthRoundOn, mouthRoundR: setMouthRoundR,
     openingAngle: setOpeningAngle, L: setL, Lt: setLt,
     dw: setDw, dh: setDh, hMouth: setHMouth, curve: setCurve, hypexT: setHypexT, showRaumecke: setShowRaumecke,
     showWandstaerke: setShowWandstaerke, wandstaerke: setWandstaerke, filletOn: setFilletOn, filletR: setFilletR,
@@ -187,10 +189,10 @@ export default function App() {
   // Abgeleitete hängt deshalb an p, nicht am Live-Zustand; die Ansichten sind memo und rendern
   // nur, wenn sich p auswirkt.
   const live = useMemo(() => ({
-    throatDiam, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+    throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
     edgeOn, edgeR, simOn, mouth, simTemp, driver,
-  }), [throatDiam, morphOn, morphLength, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+  }), [throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
     edgeOn, edgeR, simOn, mouth, simTemp, driver]);
   const p = useThrottledValue(live);
@@ -269,7 +271,7 @@ export default function App() {
             value={throatCustom ? THROAT_CUSTOM : throatDiam} onChange={selectThroat} />
           {throatCustom && <Slider label={t("throat.diameter")} value={throatDiam} min={THROAT_RANGE.min} max={THROAT_RANGE.max} step={0.1} unit="mm" onChange={setThroatDiam} />}
           <Toggle label={t("throat.morph")} checked={morphOn} onChange={setMorphOn} hint={morphOn ? t("throat.morphHint") : null} />
-          {morphOn && morph && <Slider label={t("throat.morphLength")} value={shown("morphLength", morph.length)} min={1} max={Math.max(1, Math.floor(morph.max))} step={1} unit="mm" onChange={setMorphLength} />}
+          {morphOn && morph?.r > 0 && <Slider label={t("throat.morphLength")} value={shown("morphLength", morph.length)} min={1} max={Math.max(1, Math.floor(morph.max))} step={1} unit="mm" onChange={setMorphLength} />}
           {morphOn && morph?.limited && <Warn>{t("warn.morphLimited", { mm: morph.length.toFixed(0) })}</Warn>}
         </Card>
 
@@ -297,6 +299,9 @@ export default function App() {
           {filletOn && <Slider label={t("profile.filletRadius")} value={filletR} min={1} max={1000} step={1} unit="mm" onChange={setFilletR} />}
           {filletOn && s && !hasTraktrix(s) && <Warn>{t("warn.filletNeedsTractrix")}</Warn>}
           {fillet?.limited && <Warn>{t("warn.filletLimited", { mm: fillet.R.toFixed(1) })}</Warn>}
+          <Toggle label={t("profile.mouthRound")} checked={mouthRoundOn} onChange={setMouthRoundOn} hint={mouthRoundOn ? t("profile.mouthRoundHint") : null} />
+          {mouthRoundOn && <Slider label={t("profile.mouthRoundRadius")} value={mouthRoundR} min={1} max={Math.max(1, Math.floor(maxMouthRound(hMouth / 2)))} step={1} unit="mm" onChange={setMouthRoundR} />}
+          {mouthRoundOn && morph?.mouth && morph.mouth.R < mouthRoundR && <Warn>{t("warn.mouthRoundLimited", { mm: morph.mouth.R.toFixed(0) })}</Warn>}
         </Card>
 
         <Card title={t("card.driver")} id="treiber">
@@ -380,7 +385,7 @@ export default function App() {
         </Card>
 
         {s && <>
-          <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={!!morph} t={t} />
+          <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={morph?.r > 0} t={t} />
           <Volumes volumes={volumes} t={t} />
           <WallAdvice advice={advice} wall={wall} t={t} onApply={applyWallAdvice}
             material={wallMaterial} onMaterial={setWallMaterial} customE={wallE} onCustomE={setWallE}

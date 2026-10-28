@@ -598,6 +598,11 @@ function roundInnerCorners(b, entranceCorners, sectorCorners, kloStart, outer = 
   ].filter((p, i, all) => i === 0 || !same(p, all[i - 1]));
   if (same(loop[0], loop[loop.length - 1])) loop.pop();
   b.throatLoop = [...loop, loop[0]];
+  if (!outer) {
+    // Mund: Rundungen der letzten Zeile (Viertelkreise von der Deckel- bzw. Bodenzeile bis zur Wand)
+    const lin = rounded.lin, end = grid => grid[grid.length - 1];
+    b.mouthArcs = { topL: end(lin.topL), topR: end(lin.topR), botL: end(lin.botL), botR: end(lin.botR) };
+  }
   if (outer) {
     // Mund: Eckzeilen um die Rundung bis zur Seitenwand verlängert (Stirnflächen der Seitenwände)
     const lin = rounded.lin, endRow = grid => grid[grid.length - 1].slice(1);
@@ -849,9 +854,23 @@ export function buildHornGeometry(s, rt, profile, fillet = null, morph = null, r
     surfaces: [
       ...surfacesOf(air),
       { name: "capThroat", section: "cap", ...capThroat, outward: () => [0, 0, -1] },
-      { name: "capMouth",  section: "cap", grid: air.capMouth,  outward: radialOut },
+      { name: "capMouth",  section: "cap", grid: morph?.mouth ? mouthStrip(air.mouthArcs, air.mouth.top, air.mouth.bottom) : air.capMouth, outward: radialOut },
     ],
   };
+}
+
+/**
+ * Mundkappe bzw. Mundring mit gerundeten Ecken: Randzeile von der linken Wand über die linke Rundung, die Deckel- bzw.
+ * Bodenzeile und die rechte Rundung bis zur rechten Wand (die Rundungen sind Viertelkreise von q bis zur Wand).
+ */
+function mouthPath(left, center, right) {
+  return [...[...left].reverse(), ...center.slice(1), ...right.slice(1)];
+}
+
+/** Streifen zwischen oberer und unterer Randzeile (senkrecht, je Spalte ein Punktepaar). */
+function mouthStrip({ topL, topR, botL, botR }, top, bottom) {
+  const upper = mouthPath(topL, top, topR), lower = mouthPath(botL, bottom, botR);
+  return upper.map((p, k) => [lower[k], p]);
 }
 
 const FLANGE_MIN_RIM = 1;   // kleinster Flanschrand außerhalb der Schale [mm]
@@ -1284,19 +1303,38 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
   ]);
   const n = am.top.length - 1;
   const dir = sign => () => [sign * Math.sin(s.alpha2), 0, Math.cos(s.alpha2)];
-
+  // Mundverrundung: Deckel und Boden laufen samt Rundungen als Streifen bis zur Wand (innen und außen gleich viele
+  // Punkte, eingeschrumpfte Eckstreifen entfallen); die Stirnflächen der Seitenwände sind dann Vierecke
+  const rim = morph?.mouth ? (() => {
+    const squeeze = path => path.filter((p, i) => i === 0 || Math.hypot(p[0] - path[i - 1][0], p[1] - path[i - 1][1], p[2] - path[i - 1][2]) > 1e-9);
+    const { topL, topR, botL, botR } = air.mouthArcs;
+    const inner = { top: mouthPath(topL, am.top, topR), bottom: mouthPath(botL, am.bottom, botR) };
+    const outerPath = { top: squeeze(mouthPath(om.cornerTopL, om.top, om.cornerTopR)), bottom: squeeze(mouthPath(om.cornerBottomL, om.bottom, om.cornerBottomR)) };
+    return { inner, outer: outerPath };
+  })() : null;
+  const ends = rim && [0, -1].map(k => {
+    const at = (path, i) => path[i < 0 ? path.length + i : i];
+    return [at(rim.inner.bottom, k), at(rim.inner.top, k), at(rim.outer.top, k), at(rim.outer.bottom, k)];
+  });
   return {
     surfaces: [
       ...surfacesOf(outer).map(f => ({ ...f, name: "outer." + f.name })),
       ...surfacesOf(air, true).map(f => ({ ...f, name: "inner." + f.name })),
       ...throatEnd,
       ...(ribs?.surfaces ?? []),
-      { name: "rimMouthTop",    section: "rim", grid: [am.top, om.top],       outward: radialOut },
-      { name: "rimMouthBottom", section: "rim", grid: [am.bottom, om.bottom], outward: radialOut },
-      { name: "rimEndR", section: "rim", outward: dir(1),
-        triangles: endFace(am.top[n], am.bottom[n], om.top[n], om.bottom[n], om.cornerTopR, om.cornerBottomR) },
-      { name: "rimEndL", section: "rim", outward: dir(-1),
-        triangles: endFace(am.top[0], am.bottom[0], om.top[0], om.bottom[0], om.cornerTopL, om.cornerBottomL) },
+      ...(rim ? [
+        { name: "rimMouthTop",    section: "rim", grid: [rim.inner.top, rim.outer.top],       outward: radialOut },
+        { name: "rimMouthBottom", section: "rim", grid: [rim.inner.bottom, rim.outer.bottom], outward: radialOut },
+        { name: "rimEndL", section: "rim", outward: dir(-1), triangles: fan(ends[0]) },
+        { name: "rimEndR", section: "rim", outward: dir(1),  triangles: fan(ends[1]) },
+      ] : [
+        { name: "rimMouthTop",    section: "rim", grid: [am.top, om.top],       outward: radialOut },
+        { name: "rimMouthBottom", section: "rim", grid: [am.bottom, om.bottom], outward: radialOut },
+        { name: "rimEndR", section: "rim", outward: dir(1),
+          triangles: endFace(am.top[n], am.bottom[n], om.top[n], om.bottom[n], om.cornerTopR, om.cornerBottomR) },
+        { name: "rimEndL", section: "rim", outward: dir(-1),
+          triangles: endFace(am.top[0], am.bottom[0], om.top[0], om.bottom[0], om.cornerTopL, om.cornerBottomL) },
+      ]),
     ],
     ribs: ribs && { count: ribs.count, length: ribs.length, overlap: ribs.overlap, shapes: ribs.shapes, thickness: layout.ribs.thickness },
   };
