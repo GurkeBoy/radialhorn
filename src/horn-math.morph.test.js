@@ -156,15 +156,22 @@ describe("Mundverrundung (mouthRounding)", () => {
     }
   });
 
-  it("zusammen mit dem Übergang am Throat: der größere der beiden Radien; Übergang bleibt erhalten", () => {
-    const throat = throatMorph(s, RT, 120);
-    const both = mouthRounding(s, profile, throat, 30);
-    expect(both).toMatchObject({ r: RT, length: 120 });
-    expect(cornerRadius(0, both)).toBeCloseTo(RT, 9);
-    expect(cornerRadius(S, both)).toBeCloseTo(30, 6);
-    for (const sw of [10, 60, 119, 150, 250]) {
-      expect(cornerRadius(sw, both)).toBeCloseTo(Math.max(cornerRadius(sw, throat), cornerRadius(sw, mouthRounding(s, profile, null, 30))), 12);
+  it("zusammen mit dem Übergang am Throat: eine einzige Rampe vom Treiberkreis rt auf R, ohne Delle; die Übergangslänge gilt nicht mehr", () => {
+    for (const R of [10, 30, 60]) {
+      const both = mouthRounding(s, profile, throatMorph(s, RT, 120), R);
+      expect(both).toMatchObject({ r: RT, length: S });
+      expect(cornerRadius(0, both)).toBeCloseTo(RT, 9);
+      expect(cornerRadius(S, both)).toBeCloseTo(R, 6);
+      // monoton zwischen rt und R (nie unter dem kleineren der beiden Enden), im Inneren genau linear, soweit die Höhe nicht begrenzt
+      for (let k = 1; k < 20; k++) {
+        const r = cornerRadius(S * k / 20, both);
+        expect(r).toBeGreaterThanOrEqual(Math.min(RT, R) - 1e-9);
+        expect(r).toBeLessThanOrEqual(Math.max(RT, R) + 1e-9);
+      }
+      expect(mouthRounding(s, profile, throatMorph(s, RT, 300), R).mouth.from).toBe(RT);   // Länge egal
     }
+    const a = mouthRounding(s, profile, throatMorph(s, RT, 60), 30), b = mouthRounding(s, profile, throatMorph(s, RT, 250), 30);
+    for (const sw of [0, 20, 100, 200, S]) expect(cornerRadius(sw, a)).toBe(cornerRadius(sw, b));
   });
 
   it("Mundfläche und Grenzfrequenzen berücksichtigen die gerundeten Ecken", () => {

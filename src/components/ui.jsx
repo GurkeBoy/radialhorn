@@ -213,12 +213,17 @@ function Stepper({ onStep, label }) {
   return <>{half(1, true)}{half(-1, false)}</>;
 }
 
-/** Ein/Aus-Schalter; die ganze Zeile ist klickbar und per Tastatur bedienbar. hint erscheint darunter. */
-export function Toggle({ label, checked, onChange, hint }) {
-  return (
-    <>
+/**
+ * Ein/Aus-Schalter; die ganze Zeile ist klickbar und per Tastatur bedienbar. hint erscheint immer darunter;
+ * info nur auf Wunsch: ein Info-Knopf (ⓘ) hinter der Beschriftung blendet den Text darunter ein und aus
+ * (für längere Erklärungen, die sonst Platz brauchen und ablenken).
+ */
+export function Toggle({ label, checked, onChange, hint, info }) {
+  const tr = useT();
+  const [infoOpen, setInfoOpen] = useState(false);
+  const switchButton = (
       <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
-        style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", margin: "0 0 8px", padding: 0, background: "none", border: "none", minHeight: 20 }}>
+        style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", margin: info ? 0 : "0 0 8px", padding: 0, background: "none", border: "none", minHeight: 20 }}>
         <span style={{
           width: 36, height: 20, borderRadius: 10, position: "relative", transition: "background 0.2s",
           background: checked ? UI.accent : UI.borderControl, flexShrink: 0,
@@ -232,7 +237,22 @@ export function Toggle({ label, checked, onChange, hint }) {
           {label}
         </span>
       </button>
+  );
+  return (
+    <>
+      {info
+        ? <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
+            {switchButton}
+            <button type="button" onClick={() => setInfoOpen(o => !o)} aria-expanded={infoOpen} aria-label={tr("ui.info")} title={tr("ui.info")}
+              style={{
+                width: 16, height: 16, padding: 0, borderRadius: "50%", flexShrink: 0, cursor: "pointer", fontSize: 10, lineHeight: "14px",
+                fontFamily: FONT, fontStyle: "italic", color: infoOpen ? UI.accent : UI.faint, background: "none",
+                border: `1px solid ${infoOpen ? UI.accent : UI.borderControl}`,
+              }}>i</button>
+          </div>
+        : switchButton}
       {hint && <Note underToggle>{hint}</Note>}
+      {info && infoOpen && <Note underToggle>{info}</Note>}
     </>
   );
 }

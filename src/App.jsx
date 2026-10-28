@@ -271,8 +271,8 @@ export default function App() {
             value={throatCustom ? THROAT_CUSTOM : throatDiam} onChange={selectThroat} />
           {throatCustom && <Slider label={t("throat.diameter")} value={throatDiam} min={THROAT_RANGE.min} max={THROAT_RANGE.max} step={0.1} unit="mm" onChange={setThroatDiam} />}
           <Toggle label={t("throat.morph")} checked={morphOn} onChange={setMorphOn} hint={morphOn ? t("throat.morphHint") : null} />
-          {morphOn && morph?.r > 0 && <Slider label={t("throat.morphLength")} value={shown("morphLength", morph.length)} min={1} max={Math.max(1, Math.floor(morph.max))} step={1} unit="mm" onChange={setMorphLength} />}
-          {morphOn && morph?.limited && <Warn>{t("warn.morphLimited", { mm: morph.length.toFixed(0) })}</Warn>}
+          {morphOn && morph?.r > 0 && !mouthRoundOn && <Slider label={t("throat.morphLength")} value={shown("morphLength", morph.length)} min={1} max={Math.max(1, Math.floor(morph.max))} step={1} unit="mm" onChange={setMorphLength} />}
+          {morphOn && !mouthRoundOn && morph?.limited && <Warn>{t("warn.morphLimited", { mm: morph.length.toFixed(0) })}</Warn>}
         </Card>
 
         <Card title={t("card.geometry")} id="geometrie">
@@ -299,7 +299,7 @@ export default function App() {
           {filletOn && <Slider label={t("profile.filletRadius")} value={filletR} min={1} max={1000} step={1} unit="mm" onChange={setFilletR} />}
           {filletOn && s && !hasTraktrix(s) && <Warn>{t("warn.filletNeedsTractrix")}</Warn>}
           {fillet?.limited && <Warn>{t("warn.filletLimited", { mm: fillet.R.toFixed(1) })}</Warn>}
-          <Toggle label={t("profile.mouthRound")} checked={mouthRoundOn} onChange={setMouthRoundOn} hint={mouthRoundOn ? t("profile.mouthRoundHint") : null} />
+          <Toggle label={t("profile.mouthRound")} checked={mouthRoundOn} onChange={setMouthRoundOn} info={t("profile.mouthRoundHint")} />
           {mouthRoundOn && <Slider label={t("profile.mouthRoundRadius")} value={mouthRoundR} min={1} max={Math.max(1, Math.floor(maxMouthRound(hMouth / 2)))} step={1} unit="mm" onChange={setMouthRoundR} />}
           {mouthRoundOn && morph?.mouth && morph.mouth.R < mouthRoundR && <Warn>{t("warn.mouthRoundLimited", { mm: morph.mouth.R.toFixed(0) })}</Warn>}
         </Card>

@@ -76,7 +76,9 @@ describe("createGeometryEngine", () => {
     const on = step({ ...BASE, hMouth: 210, mouthRoundOn: true });
     expect(on.diff).toContain("morph");
     expect(on.next.values.morph.mouth.R).toBe(20);
-    expect(on.next.values.morph).toMatchObject({ r: on.before.values.morph.r, length: on.before.values.morph.length });   // Übergang am Throat bleibt
+    // mit Übergang am Throat läuft eine Rampe vom Treiberkreis (rt) zum Mund; die Übergangslänge gilt nicht mehr (length = ganze Wand)
+    expect(on.next.values.morph).toMatchObject({ r: on.before.values.morph.r, mouth: { from: on.before.values.morph.r } });
+    expect(on.next.values.morph.length).toBeGreaterThan(on.before.values.morph.length);
     // mit Mundverrundung hängt der Übergang am Profil (die Höhe der Wand begrenzt den Radius)
     expect(step({ ...BASE, hMouth: 220, mouthRoundOn: true }).diff).toContain("morph");
     // Radius ändern: nur der Übergang und was daran hängt
