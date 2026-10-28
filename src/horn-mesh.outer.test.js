@@ -58,6 +58,9 @@ function minWall(geo, t) {
   return min;
 }
 
+// Die Zahlen der Wandstärke- und Knick-Prüfungen unten sind Regressionsgrenzen: sie halten den heutigen Stand
+// der Außenseite am Throat fest (leicht dünner bzw. geknickt, wo außen andere Zeilen als innen liegen), keine
+// Anforderung. Wird die Geometrie dort verbessert, dürfen sie enger werden – nicht weiter.
 describe("runder Throat außen (R = r + e)", () => {
   const CASES = [
     ["Standard", solve(60), null, null],
@@ -86,7 +89,7 @@ describe("runder Throat außen (R = r + e)", () => {
           expect(Math.min(pos, neg)).toBe(0);
         }
       }
-    }, 20000);
+    });
   }
 
   it("Wand an den Ecken: mit e = t genau t (gerader Bereich, Throat), im Eingang vor der Naht knapp darunter", () => {
@@ -98,7 +101,7 @@ describe("runder Throat außen (R = r + e)", () => {
     // scharf und e = t/2: an den Ecken ohnehin dicker
     const s = solve(60), m = throatMorph(s, RT, null);
     for (const e of [0, T / 2]) expect(minWall(buildShellGeometry(s, RT, profileOf(s), null, T, null, e, m), T)).toBeGreaterThan(T);
-  }, 60000);
+  });
 
   it("Throat mit e = t: außen nahezu ein Kreis Ø 2·(rt + t), sonst ein gerundetes Rechteck", () => {
     // Wand am Throat schräg (≈ 20°): senkrecht zur Wand t, waagerecht etwas mehr – die Rundung

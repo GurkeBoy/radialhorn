@@ -17,22 +17,29 @@ const tris = geo => geo.surfaces.flatMap(triangulate);
 const grid = (geo, name) => geo.surfaces.find(f => f.name === name).grid;
 
 describe("gerundete Längskanten", () => {
-  it("geschlossen und einheitlich orientiert – auch ohne Traktrix, mit Klothoide, lang, dick, mit Flansch", () => {
-    const cases = [
-      [s, profile, null, T, T / 2], [s, profile, null, T, T], [s, profile, null, 60, 30],
-      [solveHorn(500, 0, RT, 182, 90), null, null, T, T],
-      [createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 182, 90), null, null, T, 8],
-      [createHornMath(140).solveHorn(700, 250, RT, 182, 90), null, 150, 10, 10],
-      [createHornMath(160).solveHorn(500, 120, RT, 182, 90), null, null, 80, 80],
-    ];
-    for (const [sol, prof, R, t, r] of cases) {
-      const fillet = R ? computeFillet(sol, RT, 200, "hypex", 0.7, R) : null;
-      const p = prof ?? makeProfile(sol, RT, 200, fillet ? "hypex" : "exponential", fillet ? 0.7 : 0.5, fillet);
+  // [Name, Lösung, Profil (null: aus Lösung und Verrundung), Verrundungsradius R des Übergangs, Wandstärke t, Kantenradius r]
+  const CASES = [
+    ["r = t/2", s, profile, null, T, T / 2],
+    ["r = t", s, profile, null, T, T],
+    ["dick: t = 60, r = 30", s, profile, null, 60, 30],
+    ["ohne Traktrix", solveHorn(500, 0, RT, 182, 90), null, null, T, T],
+    ["mit Klothoide", createHornMath(140, { clothoid: 30 }).solveHorn(500, 80, RT, 182, 90), null, null, T, 8],
+    ["lange Traktrix mit Verrundung R = 150", createHornMath(140).solveHorn(700, 250, RT, 182, 90), null, 150, 10, 10],
+    ["160°, t = r = 80", createHornMath(160).solveHorn(500, 120, RT, 182, 90), null, null, 80, 80],
+  ];
+  for (const [name, sol, prof, R, t, r] of CASES) {
+    const fillet = R ? computeFillet(sol, RT, 200, "hypex", 0.7, R) : null;
+    const p = prof ?? makeProfile(sol, RT, 200, fillet ? "hypex" : "exponential", fillet ? 0.7 : 0.5, fillet);
+
+    it(`${name}: geschlossen und einheitlich orientiert`, () => {
       expect(edgeCheck(tris(buildShellGeometry(sol, RT, p, fillet, t, null, r)))).toEqual({ open: 0, flipped: 0 });
+    });
+
+    it(`${name}: auch mit Flansch`, () => {
       const flange = flangeLayout(sol, RT, p, fillet, t, FLANGE, r);
       expect(edgeCheck(tris(buildShellGeometry(sol, RT, p, fillet, t, flange, r)))).toEqual({ open: 0, flipped: 0 });
-    }
-  }, 120000);   // 14 vollständige Schalen
+    });
+  }
 
   it("ohne Radius genau die scharfkantige Schale", () => {
     const sharp = buildShellGeometry(s, RT, profile, null, T), zero = buildShellGeometry(s, RT, profile, null, T, null, 0);

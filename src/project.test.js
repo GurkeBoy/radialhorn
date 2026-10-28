@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  DESIGN_DEFAULTS, PROJECT_FORMAT, PROJECT_VERSION, ProjectError, buildProject, parseProject, projectFileName, migrateSettings,
+  ADDED_LATER, DESIGN_DEFAULTS, PROJECT_FORMAT, PROJECT_VERSION, ProjectError, buildProject, parseProject, projectFileName, migrateSettings,
 } from "./project.js";
 import { PLACEHOLDER_DRIVER } from "./simulation.js";
 
@@ -52,7 +52,7 @@ describe("Projektdateien", () => {
     const { design, missing, invalid } = parseProject(fileWith(partial));
     expect(design.openingAngle).toBe(100);
     expect(design).not.toHaveProperty("unbekannt");
-    expect(missing.length).toBe(Object.keys(DESIGN_DEFAULTS).length - 1 - 7);   // ohne die später dazugekommenen
+    expect(missing.length).toBe(Object.keys(DESIGN_DEFAULTS).length - 1 - ADDED_LATER.size);   // ohne die später dazugekommenen
     expect(invalid).toEqual([]);
   });
 
@@ -80,6 +80,17 @@ describe("Projektdateien", () => {
     expect(design.ribLength).toBe(DESIGN_DEFAULTS.ribLength);
     expect(design.roundOn).toBe(false);
     expect(design.roundR).toBe(DESIGN_DEFAULTS.roundR);
+  });
+
+  it("alle später dazugekommenen Werte fehlen in älteren Dateien still (Standard, keine Meldung)", () => {
+    const old = { ...sample };
+    for (const key of ADDED_LATER) {
+      expect(Object.keys(DESIGN_DEFAULTS), key).toContain(key);
+      delete old[key];
+    }
+    const { design, missing, invalid } = parseProject(fileWith(old));
+    expect([missing, invalid]).toEqual([[], []]);
+    for (const key of ADDED_LATER) expect(design[key], key).toEqual(DESIGN_DEFAULTS[key]);
   });
 
   it("null nur bei automatischen Werten (Kantenradius, Flansch-Ø, Lochkreis), sonst ungültig", () => {

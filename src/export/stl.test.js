@@ -18,7 +18,7 @@ describe("STL-Export mit doppelter Auflösung (EXPORT_RES)", () => {
   it("geschlossen: Luftvolumen mit rundem Throat, Schale mit rundem Throat, Kanten r = t und Flansch", () => {
     expect(openEdges(hornTriangles(air, EXPORT_RES))).toBe(0);
     expect(openEdges(hornTriangles(shell, EXPORT_RES))).toBe(0);
-  }, 30000);
+  });
 
   it("feiner als die Ansicht: Gitter, Viertelkreise der Rundungen, Flanschrand und Bohrungen", () => {
     expect(hornTriangles(shell, EXPORT_RES).length).toBeGreaterThan(3 * hornTriangles(shell).length);
@@ -31,7 +31,7 @@ describe("STL-Export mit doppelter Auflösung (EXPORT_RES)", () => {
     const arcPoints = list => list.find(f => f.name === "inner.roundTrakTopR").grid[0].length;
     expect(arcPoints(fine)).toBe(32 + 1);
     expect(arcPoints(coarse)).toBe(16 + 1);
-  }, 30000);
+  });
 });
 
 describe("STL mit Stützrippen und Verrundung", () => {
@@ -45,11 +45,11 @@ describe("STL mit Stützrippen und Verrundung", () => {
     expect(ribs).toHaveLength(4);
     expect(hornTriangles(ribbed).length).toBeGreaterThan(hornTriangles({ ...shell, flange: flangeLayout(s, RT, profile, null, 12, { ...FLANGE, diameter: 160 }, 12, morph) }).length);
     expect(openEdges(hornTriangles(ribbed, EXPORT_RES))).toBe(0);
-  }, 60000);
+  });
 
   it("ohne Rippenvorgabe keine Rippenflächen", () => {
     expect(hornGeometry(shell).surfaces.some(f => f.rib)).toBe(false);
-  }, 30000);
+  });
 });
 
 describe("stlBinary (Luftvolumen, Standardhorn)", () => {

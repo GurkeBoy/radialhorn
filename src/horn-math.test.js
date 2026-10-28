@@ -59,13 +59,6 @@ describe("Traktrix-Funktionen zN / xN", () => {
     for (let i = 1; i < ts.length; i++)
       expect(zN(ts[i])).toBeGreaterThan(zN(ts[i - 1]));
   });
-
-  it("Traktrix-Tangente bei T_TRANS entspricht ALPHA2", () => {
-    // Tangentenwinkel der Traktrix = arctan(1/sinh(t))
-    // → bei T_TRANS ist dieser Winkel exakt ALPHA2
-    const angle = Math.atan(1 / Math.sinh(T_TRANS));
-    expect(angle).toBeCloseTo(ALPHA2, 10);
-  });
 });
 
 // ──────────────────────────────────────────────────────────────────
@@ -165,11 +158,9 @@ describe("solveHorn – Grenzfälle", () => {
     [12.7, 25.4, 38.1, 50.8, 76.2].forEach(rt => {
       const s = solveHorn(600, 50, rt, 140, 110);
       expect(s).not.toBeNull();
-      if (s) {
-        // Mundpunkt auf dem Teilkreis
-        const dist = Math.hypot(s.zMouth - s.zFocus, s.xMouth);
-        expect(dist).toBeCloseTo(s.arcR, 5);
-      }
+      // Mundpunkt auf dem Teilkreis
+      const dist = Math.hypot(s.zMouth - s.zFocus, s.xMouth);
+      expect(dist).toBeCloseTo(s.arcR, 5);
     });
   });
 });
@@ -273,36 +264,17 @@ describe("minLtForRaumecke", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────
-// 8. NUMERISCHE REFERENZ-WERTE (Quercheck)
-//    Bekannte Ausgabe für L=500, Lt=60, rt=25.4, dw=120, dh=100
-//    bei ALPHA2=70° – verifiziert durch mathematische Invarianten.
+// 8. PLAUSIBILITÄT (Standardparameter)
+//    Keine fremden Referenzzahlen – die unabhängigen Prüfungen stehen in horn-math.cross-validate.test.js
+//    (Integration, geschlossene Formeln, Skalierung) und horn-math.angles.test.js (andere Winkel).
 // ──────────────────────────────────────────────────────────────────
-describe("Numerische Quercheck (Standardparameter)", () => {
+describe("Plausibilität (Standardparameter)", () => {
   const s = solveHorn(500, 60, 25.4, 120, 100);
 
-  it("Lösung ist valide", () => expect(s).not.toBeNull());
-
-  it("hatTipZ = -160 mm", () => {
-    expect(s.hatTipZ).toBeCloseTo(-100 - 120 / 2, 6); // = -160
-  });
-
-  it("arcLen = arcR · 140° in Radiant", () => {
-    expect(s.arcLen).toBeCloseTo(s.arcR * (140 * Math.PI / 180), 5);
-  });
-
   it("Öffnungswinkel der Fokusstrahlen entspricht ALPHA2", () => {
-    // Der Winkel des Strahls (Fokus → Mund) zur Achse sollte ALPHA2 sein.
+    // Der Winkel des Strahls (Fokus → Mund) zur Achse ist ALPHA2.
     const angle = Math.atan2(s.xMouth, s.zMouth - s.zFocus);
     expect(angle).toBeCloseTo(ALPHA2, 3);
-  });
-
-  it("Fokus liegt vor dem Scheitelpunkt (zFocus < zApex)", () => {
-    // arcR > 0 garantiert: zApex = zFocus + arcR > zFocus
-    expect(s.zFocus).toBeLessThan(s.zApex);
-  });
-
-  it("xMouth > 0 (Horn öffnet sich)", () => {
-    expect(s.xMouth).toBeGreaterThan(0);
   });
 
   it("Alle Positionen sind endliche Zahlen", () => {

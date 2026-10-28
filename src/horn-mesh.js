@@ -30,7 +30,7 @@ import { flangeRibs } from "./flange-ribs.js";
 
 // Auflösung: Gitter (angular, radial, axial), Viertelkreise der Rundungen (round: runder Throat und
 // gerundete Längskanten), Flanschrand und Bohrungen als Vieleck (flange, hole)
-const DEFAULT_RES = { angular: 60, radial: 80, axial: 40, round: 16, flange: 96, hole: 24 };
+export const DEFAULT_RES = { angular: 60, radial: 80, axial: 40, round: 16, flange: 96, hole: 24 };
 /** Doppelte Auflösung für den STL-Export: Facetten etwa ein Viertel so tief (Pfeilhöhe ≤ 0,02 mm). */
 export const EXPORT_RES = { angular: 120, radial: 160, axial: 80, round: 32, flange: 192, hole: 48 };
 /** Entwurf für die 3D-Ansicht beim Ziehen: ¼ der Dreiecke, dicht (mesh-buffers, quality "draft"). */

@@ -11,6 +11,8 @@ const design = (extra = {}) => ({
 });
 const ALL = { draufsicht: true, mundbogen: true, fokus: true, seitenprofil: true, bemassung: true };
 const DATE = new Date(2026, 9, 1);
+const CUT_FILL = "#ececf2";   // Füllfarbe der Schnittflächen (C.cut in pdf.js)
+const cuts = html => (html.match(new RegExp(`fill="${CUT_FILL}"`, "g")) || []).length;
 const row = (html, key) => html.match(new RegExp(`<td>${key}</td><td>([^<]*)</td>`))?.[1];
 
 describe("buildDatasheet", () => {
@@ -71,8 +73,7 @@ describe("buildDatasheet", () => {
   });
 
   it("Wandstärke: Schnitt durch die Schale in beiden Zeichnungen, Maß t", () => {
-    const cuts = h => (h.match(/fill="#ececf2"/g) || []).length;
-    expect(cuts(html)).toBe(0);                               // ohne Wandstärke keine Schnittflächen
+        expect(cuts(html)).toBe(0);                               // ohne Wandstärke keine Schnittflächen
     const withWall = buildDatasheet(design({ wall: 37, showWandstaerke: true, wandstaerke: 37 }), ALL, DATE);
     expect(cuts(withWall)).toBe(4);                           // 2 Zeichnungen × 2 Seiten
     expect(row(withWall, "Mundbreite")).toBe((2 * s.xMouth).toFixed(0) + " mm");   // Innenmaß
@@ -90,7 +91,7 @@ describe("buildDatasheet", () => {
   it("mit Flansch zusätzlich dessen Schnitt", () => {
     const flange = { diameter: 182, thickness: 10 };
     const h = buildDatasheet(design({ wall: 20, flange }), ALL, DATE);
-    expect((h.match(/fill="#ececf2"/g) || []).length).toBe(8);
-    expect((buildDatasheet(design({ wall: 0, flange }), ALL, DATE).match(/fill="#ececf2"/g) || []).length).toBe(0);
+    expect(cuts(h)).toBe(8);
+    expect(cuts(buildDatasheet(design({ wall: 0, flange }), ALL, DATE))).toBe(0);
   });
 });
