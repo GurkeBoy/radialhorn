@@ -1,14 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { solveHorn, makeProfile, computeFillet, createHornMath, throatMorph, maxMorphLength } from "../horn-math.js";
+import { solveHorn, makeProfile, computeFillet, createHornMath, throatMorph, mouthRounding, maxMorphLength } from "../horn-math.js";
 import { buildBrep, hornPatches, ribPatches, stepFile, hornStep, circleOf } from "./step.js";
 import { flangeLayout } from "../horn-mesh.js";
 
 const RT = 25.4, H = 200;
 const BMS = { diameter: null, fallback: 120, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
-const design = (s, curve = "exponential", R = 0, wall = 0, { edgeR = 0, morph = null, flange = null } = {}) => {
+const design = (s, curve = "exponential", R = 0, wall = 0, { edgeR = 0, morph = null, flange = null, mouth = 0 } = {}) => {
   const fillet = R > 0 ? computeFillet(s, RT, H, curve, 0.5, R) : null;
   const profile = makeProfile(s, RT, H, curve, 0.5, fillet);
-  const m = morph && throatMorph(s, RT, morph === "max" ? maxMorphLength(s) : undefined);
+  const throat = morph && throatMorph(s, RT, morph === "max" ? maxMorphLength(s) : undefined);
+  const m = mouth ? mouthRounding(s, profile, throat, mouth) : throat;
   return { s, rt: RT, profile, fillet, wall, edgeR, morph: m,
            flange: flange && flangeLayout(s, RT, profile, fillet, wall, { ...BMS, ...flange }, edgeR, m) };
 };
@@ -34,6 +35,11 @@ const CASES = {
   "Schale, Kanten r = t ohne Traktrix": design(solveHorn(500, 0, RT, 120, 100), "linear", 0, 12, { edgeR: 12 }),
   "Schale 3 mm, Kanten, Klothoide, Verrundung": design(createHornMath(140, { clothoid: 30 }).solveHorn(500, 60, RT, 120, 100), "exponential", 40, 3, { edgeR: 3 }),
   Flansch: design(std(), "exponential", 0, 12, { flange: {} }),
+  "Mundecken R = 30": design(std(), "exponential", 0, 0, { mouth: 30 }),
+  "Schale, Mundecken, e = 0": design(std(), "exponential", 0, 12, { mouth: 30 }),
+  "Schale, Mundecken, e = t": design(std(), "exponential", 0, 12, { mouth: 30, edgeR: 12 }),
+  "Schale, runder Throat + Mundecken": design(std(), "exponential", 0, 12, { morph: true, mouth: 30, edgeR: 12 }),
+  "Flansch, Mundecken, Rippen": design(std(), "exponential", 0, 12, { mouth: 30, flange: { ribs: { thickness: 4, length: 30 } } }),
   "Flansch mit Stützrippen": design(std(), "exponential", 0, 12, { flange: { ribs: { thickness: 4, length: 30 } } }),
   "Flansch, Verrundung r = 3": design(std(), "exponential", 0, 12, { flange: { round: 3 } }),
   "Flansch, Verrundung, Rippen": design(std(), "exponential", 0, 12, { flange: { round: 3, ribs: { thickness: 4, length: 30 } } }),

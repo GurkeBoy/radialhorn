@@ -94,7 +94,7 @@ function dimensioning(massstab) {
  */
 export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   const tr = (key, params) => translate(lang, key, params);
-  const { s, rt, L, hMouth, curve, hypexT, fillet, profile, showRaumecke, showWandstaerke, wandstaerke } = design;
+  const { s, rt, L, hMouth, curve, hypexT, fillet, profile, morph, showRaumecke, showWandstaerke, wandstaerke } = design;
   const wall = design.wall ?? 0, flange = wall > 0 ? design.flange ?? null : null;
   const trakOn = hasTraktrix(s);
   const wallPts = planOutline(s);
@@ -169,7 +169,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
     [tr("pdf.throat"),         (rt * 2).toFixed(1) + " mm"],
     [tr("pdf.mouthWidth"),     mundB + " mm"],
     [tr("pdf.mouthHeight"),    hMouth + " mm"],
-    [tr("pdf.mouthArea"),      (mouthArea(s, hMouth) / 1e6).toFixed(4) + " m²"],
+    [tr("pdf.mouthArea"),      (mouthArea(s, hMouth, morph) / 1e6).toFixed(4) + " m²"],
     [tr("pdf.arcRadius"),      s.arcR.toFixed(1) + " mm"],
     [tr("pdf.flare"),          tr("profile." + curve) + (curve === "hypex" ? ` (T=${hypexT})` : "")],
     [tr("pdf.fillet"),         fillet ? "R " + fillet.R.toFixed(1) + " mm" : "–"],

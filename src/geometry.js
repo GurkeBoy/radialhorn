@@ -6,7 +6,7 @@
 // rechnet nur neu, was er betrifft. Jedes Ergebnis trägt eine Version; die App behält bei gleicher
 // Version ihr bisheriges Objekt (adoptGeometry) – so bleiben memo/useMemo dahinter wirksam, auch
 // wenn die Daten als Kopie aus dem Worker kommen.
-import { createHornMath, computeFillet, makeProfile, throatMorph, lengthOffset } from "./horn-math.js";
+import { createHornMath, computeFillet, makeProfile, throatMorph, mouthRounding, lengthOffset } from "./horn-math.js";
 import { flangeLayout, shellPlanOutline, shellProfileOutline } from "./horn-mesh.js";
 import { linspace } from "./utils.js";
 
@@ -15,7 +15,7 @@ export const L_MAX = 1200;   // Obergrenze des L-Reglers [mm]; mit Raumecke gilt
 /** Reglerwerte, von denen die Geometrie abhängt (alles andere – Simulation, Ansicht – nicht). */
 export const GEOMETRY_KEYS = [
   "throatDiam", "openingAngle", "L", "Lt", "dw", "dh", "hMouth", "curve", "hypexT", "showRaumecke", "showWandstaerke",
-  "wandstaerke", "filletOn", "filletR", "clothoidOn", "clothoidLength", "morphOn", "morphLength", "flangeOn", "flangeD",
+  "wandstaerke", "filletOn", "filletR", "clothoidOn", "clothoidLength", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "flangeOn", "flangeD",
   "flangeT", "holeCount", "holeCircle", "holeD", "holeAngle", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "edgeOn", "edgeR",
 ];
 
@@ -81,9 +81,12 @@ export function createGeometryEngine() {
       () => p.filletOn && sv ? computeFillet(sv, rt, p.hMouth, p.curve, p.hypexT, p.filletR) : null);
     const profile = stage("profile", [s.version, fillet.version, p.hMouth, p.curve, p.hypexT],
       () => sv && makeProfile(sv, rt, p.hMouth, p.curve, p.hypexT, fillet.value));
-    // Übergang rund → eckig am Throat (Eckradius entlang der Wand), auf das Machbare begrenzt
-    const morph = stage("morph", [s.version, p.morphOn, p.morphLength],
-      () => p.morphOn && sv ? throatMorph(sv, rt, p.morphLength) : null);
+    // Eckradius entlang der Wand: Übergang rund → eckig am Throat, auf das Machbare begrenzt, und/oder
+    // Ecken am Mund gerundet (mouthRounding hängt am Profil)
+    const morph = stage("morph", [s.version, p.morphOn, p.morphLength, p.mouthRoundOn, p.mouthRoundOn ? profile.version : 0, p.mouthRoundR], () => {
+      const throat = p.morphOn && sv ? throatMorph(sv, rt, p.morphLength) : null;
+      return p.mouthRoundOn && sv ? mouthRounding(sv, profile.value, throat, p.mouthRoundR) : throat;
+    });
 
     const wall = p.showWandstaerke ? p.wandstaerke : 0;
     // gerundete Längskanten außen: Radius höchstens die Wandstärke (sonst würde die Wand an der Ecke dünner)

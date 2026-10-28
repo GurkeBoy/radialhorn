@@ -60,10 +60,14 @@ export default {
   "profile.exponential": "Exponential",
   "profile.hypex": "Hypex",
   "profile.hypexT": "Hypex T",
+  "profile.mouthRound": "Mundecken verrunden",
+  "profile.mouthRoundHint": "Der Eckradius wächst gleichmäßig vom Throat bis zum Mund; mit „Rund → eckig“ vom Treiberkreis aus, deren Länge entfällt",
+  "profile.mouthRoundRadius": "Radius am Mund",
   "profile.fillet": "Verrundung Übergang",
   "profile.filletRadius": "Radius r",
   "warn.filletNeedsTractrix": "Verrundung nur mit Traktrix-Eingang (Lₜ > 0)",
   "warn.filletLimited": "Radius zu groß – begrenzt auf {mm} mm",
+  "warn.mouthRoundLimited": "Radius auf {mm} mm begrenzt (fast die halbe Mundhöhe).",
   "warn.morphLimited": "Begrenzt auf {mm} mm – die Länge der Wand bis zum Mund",
 
   // Treiber, Aufstellung, Ausführung
@@ -199,6 +203,7 @@ export default {
   "view.showCornerTitle": "Wände der Raumecke ein-/ausblenden",
   "view.resetView": "Ansicht zurücksetzen",
   "view.reset": "⟲ Reset",
+  "ui.info": "Info",
   "view.resetZoom": "Zoom zurücksetzen",
   "view.fullscreen": "Vollbild",
   "view.exitFullscreen": "Vollbild beenden",

@@ -141,7 +141,7 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
   if (opts.flansch && flange) {
     const X = [1, 0, 0], r = flange.diameter / 2;
     out.push(dxfCircle(0, 0, r, "Flansch", X, 0), dxfCircle(0, 0, r, "Flansch", X, flange.thickness));
-    if (morph) out.push(dxfCircle(0, 0, rt, "Flansch", X, 0));   // runder Throat: Kreis des Treiberausgangs
+    if (morph?.r > 0) out.push(dxfCircle(0, 0, rt, "Flansch", X, 0));   // runder Throat: Kreis des Treiberausgangs
     else {
       const sq = [[rt, rt], [-rt, rt], [-rt, -rt], [rt, -rt]];
       sq.forEach(([y, z], i) => out.push(dxfLine([0, y, z], [0, ...sq[(i + 1) % 4]], "Flansch")));

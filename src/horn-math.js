@@ -622,13 +622,61 @@ export function wallPoint(s, profile, zWall) {
 // auf der Wand) endet an ihrem eigenen Wandpunkt, der hinter ihrer Lage auf der Achse liegt.
 
 /**
- * Eckradius [mm] an der Bogenlänge sWall: rt·(1 + cos(π·s/Länge))/2 – an beiden Enden ohne Knick
- * (am Throat läuft die Ecke rund aus dem Treiber heraus, am Ende tangential ins scharfe Rechteck).
- * @param morph  { r, length } (r = rt) oder null
+ * Eckradius [mm] an der Bogenlänge sWall.
+ *   - Übergang am Throat (throatMorph): rt·(1 − s/Länge) – gleichmäßig vom Kreis des Treiberausgangs
+ *     (am Throat r = rt) auf 0 im scharfen Rechteck (am Ende des Übergangs).
+ *   - Mundverrundung (mouthRounding): eine einzige Rampe vom Radius am Throat (rt mit Übergang, sonst 0)
+ *     gleichmäßig auf R am Mund; die Länge des Throat-Übergangs gilt dann nicht mehr.
+ * @param morph  { r, length, mouth? } (r = rt) oder null
  */
 export function cornerRadius(sWall, morph) {
-  if (!morph || !(sWall < morph.length)) return 0;
-  return morph.r * (1 + Math.cos(Math.PI * Math.max(0, sWall) / morph.length)) / 2;
+  if (!morph) return 0;
+  if (morph.mouth) return mouthCornerRadius(sWall, morph.mouth);
+  return sWall < morph.length ? morph.r * (1 - Math.max(0, sWall) / morph.length) : 0;
+}
+
+/**
+ * Eckradius mit Mundverrundung an der Bogenlänge sWall: from + (R − from)·s/S – gleichmäßig vom Radius am
+ * Throat (from) auf R am Mund (S = Wandlänge bis zum Mund), nirgends höher als die halbe Höhe an dieser Stelle
+ * (am Mund nur 95 % davon; sampled: Stützstellen der Wand, aufsteigend in s). Die Enden liegen am Rand der Fläche
+ * (Throat, offener Mund): ein Knick im Radius ist dort nicht zu sehen.
+ */
+function mouthCornerRadius(sWall, { R, S, from, sampled }) {
+  const u = Math.min(1, Math.max(0, sWall / S)), r = from + (R - from) * u, cap = 1 - (1 - MOUTH_CAP) * u;
+  // Obergrenze: Anteil der halben Höhe, aber nie unter dem Radius am Throat (am Treiberkreis ist r = h erlaubt)
+  const limit = hv => Math.min(r, Math.max(cap * hv, Math.min(from, hv)));
+  const { s: ss, h } = sampled;
+  if (sWall <= ss[0]) return limit(h[0]);
+  if (sWall >= ss[ss.length - 1]) return limit(h[h.length - 1]);
+  let lo = 0, hi = ss.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; ss[mid] <= sWall ? (lo = mid) : (hi = mid); }
+  return limit(h[lo] + (h[hi] - h[lo]) * (sWall - ss[lo]) / (ss[hi] - ss[lo]));
+}
+
+const MOUTH_SAMPLES = 160;
+const MOUTH_CAP = 0.95;   // Eckradius am Mund höchstens dieser Anteil der halben Höhe (sonst schrumpft die gerade Wand auf nichts)
+
+/** Größter Radius der Mundverrundung: fast die halbe Mundhöhe (dann laufen die Enden des Mundes beinahe als Halbkreis aus). */
+export const maxMouthRound = hMouthHalf => MOUTH_CAP * hMouthHalf;
+
+/**
+ * Ecken am Mund gerundet: ein Eckradius, der gleichmäßig vom Radius am Throat (0, mit throatMorph rt) auf R am Mund
+ * ansteigt (cornerRadius). Das Ergebnis ersetzt das morph-Objekt überall (Netz, Querschnitt, Simulation); mit Übergang
+ * am Throat ist length dann die ganze Wand (die Zeilen des Netzes werden bis zum Mund verdichtet). null, wenn R < 0,5 mm
+ * ist und es keinen Übergang am Throat gibt.
+ * @param morph  Übergang am Throat (throatMorph) oder null
+ * @returns {{ r, length, limited, max, mouth: { R, S, from, sampled } } | null}
+ */
+export function mouthRounding(s, profile, morph, R) {
+  const used = Math.min(R, maxMouthRound(profile(s.zApex)));
+  if (!(used >= 0.5)) return morph;
+  const S = maxMorphLength(s), ss = [], h = [];
+  for (let i = 0; i <= MOUTH_SAMPLES; i++) {
+    const p = wallPoint(s, profile, s.zMouth * i / MOUTH_SAMPLES);
+    ss.push(p.sWall); h.push(p.hWall);
+  }
+  const base = morph ?? { r: 0, length: 0, limited: false, max: S };
+  return { ...base, length: S, mouth: { R: used, S, from: base.r, sampled: { s: ss, h } } };
 }
 
 /** Wandpunkt z, an dem der Übergang endet (Bogenlänge = morph.length; Bisektion). */
@@ -723,8 +771,12 @@ export function crossSection(s, profile, n = 100, zWallList = null, morph = null
 // KENNWERTE
 // ──────────────────────────────────────────────────────────────────
 
-/** Mundfläche (Bogenlänge × Mundhöhe) [mm²]. */
-export const mouthArea = (s, hMouth) => s.arcR * 2 * s.alpha2 * hMouth;
+/**
+ * Mundfläche (Bogenlänge × Mundhöhe) [mm²], mit gerundeten Mundecken (morph, mouthRounding) um (4 − π)·r²
+ * des Eckradius am Mund vermindert – dieselbe Fläche wie am Ende von crossSection und der Simulation.
+ */
+export const mouthArea = (s, hMouth, morph = null) =>
+  s.arcR * 2 * s.alpha2 * hMouth - cornerDeficit(cornerRadius(maxMorphLength(s), morph));
 
 /** Vertikaler Öffnungswinkel am Mund [°], aus der Profilsteigung kurz vor dem Mundscheitel. */
 export function verticalMouthAngle(s, profile) {
@@ -741,9 +793,9 @@ export function verticalMouthAngle(s, profile) {
  *            A_Mund = Bogenlänge × Mundhöhe
  *   fcHigh – Throat-Durchmesser ≈ halbe Wellenlänge (λ = 2·rt)
  */
-export function frequencyEstimates(s, rt, hMouth, roundThroat = false) {
+export function frequencyEstimates(s, rt, hMouth, roundThroat = false, morph = null) {
   const c = SPEED_OF_SOUND;
-  const A = mouthArea(s, hMouth);
+  const A = mouthArea(s, hMouth, morph);
   const throatArea = roundThroat ? Math.PI * rt * rt : (2 * rt) ** 2;
   const m = Math.log(A / throatArea) / (s.zApex - s.hatTipZ);
   return {

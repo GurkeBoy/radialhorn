@@ -10,7 +10,7 @@ import { createGeometryEngine, adoptGeometry, GEOMETRY_KEYS } from "./geometry.j
 const BASE = {
   throatDiam: 50.8, openingAngle: 140, L: 700, Lt: 132.3, dw: 182, dh: 90, hMouth: 200, curve: "hypex", hypexT: 0.7,
   showRaumecke: true, showWandstaerke: true, wandstaerke: 10, filletOn: true, filletR: 477, clothoidOn: true, clothoidLength: 30,
-  morphOn: true, morphLength: 473, flangeOn: true, flangeD: 120, flangeT: 10, holeCount: 4, holeCircle: 101.6, holeD: 6.6,
+  morphOn: true, morphLength: 473, mouthRoundOn: false, mouthRoundR: 20, flangeOn: true, flangeD: 120, flangeT: 10, holeCount: 4, holeCircle: 101.6, holeD: 6.6,
   holeAngle: 0, ribsOn: false, ribThickness: 4, ribLength: 30, roundOn: false, roundR: 2, edgeOn: true, edgeR: 10,
 };
 
@@ -58,6 +58,31 @@ describe("createGeometryEngine", () => {
     // Mundhöhe: Verrundung, Profil und alles daran – nicht die Lösung, nicht der Übergang, nicht der Grundriss
     expect(step({ ...BASE, flangeD: 140, hMouth: 210 })).toEqual(["fillet", "flange", "shellCut"]);
     expect(step({ ...BASE, flangeD: 140, hMouth: 210, L: 650 })).toContain("s");
+  });
+
+  it("Mundverrundung: eigener Eckradius im Übergang-Objekt; hängt nur dann am Profil", () => {
+    const compute = createGeometryEngine();
+    let prev = compute(BASE);
+    const step = params => {
+      const next = compute(params);
+      const diff = Object.keys(next.versions).filter(k => next.versions[k] !== prev.versions[k]).sort();
+      const before = prev;
+      prev = next;
+      return { diff, before, next };
+    };
+    expect(prev.values.morph.mouth).toBeUndefined();
+    // ohne Mundverrundung ändert die Mundhöhe den Übergang nicht (Zwischenspeicher)
+    expect(step({ ...BASE, hMouth: 210 }).diff).not.toContain("morph");
+    const on = step({ ...BASE, hMouth: 210, mouthRoundOn: true });
+    expect(on.diff).toContain("morph");
+    expect(on.next.values.morph.mouth.R).toBe(20);
+    // mit Übergang am Throat läuft eine Rampe vom Treiberkreis (rt) zum Mund; die Übergangslänge gilt nicht mehr (length = ganze Wand)
+    expect(on.next.values.morph).toMatchObject({ r: on.before.values.morph.r, mouth: { from: on.before.values.morph.r } });
+    expect(on.next.values.morph.length).toBeGreaterThan(on.before.values.morph.length);
+    // mit Mundverrundung hängt der Übergang am Profil (die Höhe der Wand begrenzt den Radius)
+    expect(step({ ...BASE, hMouth: 220, mouthRoundOn: true }).diff).toContain("morph");
+    // Radius ändern: nur der Übergang und was daran hängt
+    expect(step({ ...BASE, hMouth: 220, mouthRoundOn: true, mouthRoundR: 30 }).diff).toEqual(["flange", "morph"]);
   });
 
   it("Ergebnis ist übertragbar (structuredClone, wie postMessage)", () => {

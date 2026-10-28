@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   createHornMath, makeProfile, crossSection, entrancePoints, linearWallPoints,
-  wallPoint, cornerRadius, cornerDeficit, maxMorphLength, throatMorph, frequencyEstimates,
+  wallPoint, cornerRadius, cornerDeficit, maxMorphLength, throatMorph, mouthRounding, maxMouthRound, mouthArea, frequencyEstimates,
 } from "./horn-math.js";
 import { areaCurve } from "./simulation.js";
 
@@ -53,6 +53,9 @@ describe("Eckradius (cornerRadius)", () => {
     expect(cornerRadius(50, morph)).toBe(0);
     expect(cornerRadius(80, morph)).toBe(0);
     expect(cornerRadius(10, null)).toBe(0);
+  });
+  it("fällt linear mit der Bogenlänge", () => {
+    for (let sw = 0; sw <= 50; sw += 5) expect(cornerRadius(sw, morph)).toBeCloseTo(RT * (1 - sw / 50), 12);
   });
   it("fällt monoton", () => {
     let prev = Infinity;
@@ -126,5 +129,73 @@ describe("Querschnitt mit rundem Throat", () => {
     const sq = frequencyEstimates(s, RT, 200), rd = frequencyEstimates(s, RT, 200, true);
     const c = 343000, L = s.zApex - s.hatTipZ;
     expect((rd.fcCut - sq.fcCut) * 4 * Math.PI / c).toBeCloseTo(Math.log(4 / Math.PI) / L, 12);
+  });
+});
+
+describe("Mundverrundung (mouthRounding)", () => {
+  const s = solve(60), profile = profileOf(s), S = maxMorphLength(s);
+
+  it("Radius steigt gleichmäßig von 0 am Throat auf R am Mund (linear in der Bogenlänge)", () => {
+    const morph = mouthRounding(s, profile, null, 30);
+    expect(cornerRadius(0, morph)).toBe(0);
+    expect(cornerRadius(S / 2, morph)).toBeCloseTo(15, 6);
+    expect(cornerRadius(S, morph)).toBeCloseTo(30, 6);
+    for (let k = 1; k <= 50; k++) expect(cornerRadius(S * k / 50, morph)).toBeCloseTo(30 * k / 50, 6);   // gleichbleibende Steigung
+  });
+
+  it("nie größer als fast die halbe Höhe an der Stelle; R wird auf maxMouthRound begrenzt", () => {
+    const morph = mouthRounding(s, profile, null, 1e6);
+    expect(morph.mouth.R).toBeCloseTo(maxMouthRound(profile(s.zApex)), 9);
+    for (let k = 0; k <= 40; k++) {
+      const sw = S * k / 40, p = [0, 1].map(() => 0);
+      void p;
+      // halbe Höhe an der Stelle über die Wand (wallPoint) – der Radius bleibt darunter
+      let lo = 0, hi = s.zMouth;
+      for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; wallPoint(s, profile, mid).sWall < sw ? (lo = mid) : (hi = mid); }
+      expect(cornerRadius(sw, morph)).toBeLessThanOrEqual(wallPoint(s, profile, lo).hWall + 1e-6);
+    }
+  });
+
+  it("zusammen mit dem Übergang am Throat: eine einzige Rampe vom Treiberkreis rt auf R, ohne Delle; die Übergangslänge gilt nicht mehr", () => {
+    for (const R of [10, 30, 60]) {
+      const both = mouthRounding(s, profile, throatMorph(s, RT, 120), R);
+      expect(both).toMatchObject({ r: RT, length: S });
+      expect(cornerRadius(0, both)).toBeCloseTo(RT, 9);
+      expect(cornerRadius(S, both)).toBeCloseTo(R, 6);
+      // monoton zwischen rt und R (nie unter dem kleineren der beiden Enden), im Inneren genau linear, soweit die Höhe nicht begrenzt
+      for (let k = 1; k < 20; k++) {
+        const r = cornerRadius(S * k / 20, both);
+        expect(r).toBeGreaterThanOrEqual(Math.min(RT, R) - 1e-9);
+        expect(r).toBeLessThanOrEqual(Math.max(RT, R) + 1e-9);
+      }
+      expect(mouthRounding(s, profile, throatMorph(s, RT, 300), R).mouth.from).toBe(RT);   // Länge egal
+    }
+    const a = mouthRounding(s, profile, throatMorph(s, RT, 60), 30), b = mouthRounding(s, profile, throatMorph(s, RT, 250), 30);
+    for (const sw of [0, 20, 100, 200, S]) expect(cornerRadius(sw, a)).toBe(cornerRadius(sw, b));
+  });
+
+  it("Mundfläche und Grenzfrequenzen berücksichtigen die gerundeten Ecken", () => {
+    const morph = mouthRounding(s, profile, null, 30), plain = mouthArea(s, 200);
+    expect(mouthArea(s, 200, morph)).toBeCloseTo(plain - cornerDeficit(30), 6);
+    expect(mouthArea(s, 200, null)).toBe(plain);
+    // dieselbe Fläche wie am Ende der Flächenkurve (Simulation)
+    expect(areaCurve(s, RT, profile, undefined, morph).S.at(-1) * 1e6).toBeCloseTo(mouthArea(s, 200, morph), 6);
+    const f0 = frequencyEstimates(s, RT, 200), f1 = frequencyEstimates(s, RT, 200, false, morph);
+    expect(f1.fcLow).toBeGreaterThan(f0.fcLow);                         // kleinere Mundfläche: höhere Grenzfrequenz
+    expect(f1.fcCut).toBeLessThan(f0.fcCut);                            // kleinere Flare-Konstante: tiefere Cutoff-Frequenz
+  });
+
+  it("ohne nennenswerten Radius bleibt alles beim Alten", () => {
+    expect(mouthRounding(s, profile, null, 0.2)).toBeNull();
+    const throat = throatMorph(s, RT, 120);
+    expect(mouthRounding(s, profile, throat, 0)).toBe(throat);
+  });
+
+  it("verkleinert die Querschnittsfläche am Mund um (4 − π)·R², davor weniger", () => {
+    const plain = crossSection(s, profile, 50), rounded = crossSection(s, profile, 50, null, mouthRounding(s, profile, null, 30));
+    const atWall = (pts, zWall) => pts.find(p => p.zWall === zWall);   // die Abtastpunkte stimmen bis auf die zusätzliche Stützstelle überein
+    expect(atWall(plain, s.zMouth).A - atWall(rounded, s.zMouth).A).toBeCloseTo(cornerDeficit(30), 6);
+    for (const p of plain) expect(atWall(rounded, p.zWall).A).toBeLessThanOrEqual(p.A + 1e-9);
+    expect(atWall(rounded, 0).A).toBeCloseTo(atWall(plain, 0).A, 6);   // am Throat unverändert
   });
 });

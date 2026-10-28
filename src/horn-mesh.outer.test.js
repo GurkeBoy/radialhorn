@@ -125,7 +125,8 @@ describe("runder Throat außen (R = r + e)", () => {
 
   it("Throat mit e = t: außen nahezu ein Kreis Ø 2·(rt + t), sonst ein gerundetes Rechteck", () => {
     // Wand am Throat schräg (≈ 20°): senkrecht zur Wand t, waagerecht etwas mehr – die Rundung
-    // folgt dem nächsten Innenwandpunkt (exakte Wandstärke), der Kreis weicht um < 2 mm ab
+    // folgt dem nächsten Innenwandpunkt (exakte Wandstärke), der Kreis weicht um < 3 mm ab (linearer Radius: am Throat
+    // fällt er mit der Steigung −rt/Länge, nicht mit Steigung 0 wie früher beim Cosinus, dort < 2 mm)
     const s = solve(60), profile = profileOf(s), m = throatMorph(s, RT, null);
     const ring = e => {
       const rim = buildShellGeometry(s, RT, profile, null, T, null, e, m).surfaces.find(f => f.name === "rimThroat");
@@ -133,7 +134,7 @@ describe("runder Throat außen (R = r + e)", () => {
     };
     const round = ring(T);
     expect(Math.min(...round)).toBeCloseTo(RT + T, 6);
-    expect(Math.max(...round)).toBeLessThan(RT + T + 2);
+    expect(Math.max(...round)).toBeLessThan(RT + T + 3);
     expect(Math.max(...ring(0))).toBeGreaterThan(Math.max(...round) + 5);          // scharf: Ecken weiter draußen
   });
 
@@ -173,7 +174,7 @@ describe("runder Throat außen (R = r + e)", () => {
       }
       return max;
     };
-    for (const [Lt, limit] of [[0, 8], [10, 8.5], [20, 17], [60, 12.5]]) {
+    for (const [Lt, limit] of [[0, 8], [10, 12.5], [20, 17], [60, 13.5]]) {
       const s = solve(Lt), profile = profileOf(s), m = throatMorph(s, RT, null);
       for (const e of [0, T]) for (const withFlange of [false, true]) {
         const flange = withFlange ? flangeLayout(s, RT, profile, null, T, FLANGE, e, m) : null;
