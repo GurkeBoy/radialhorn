@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   createHornMath, makeProfile, crossSection, entrancePoints, linearWallPoints,
-  wallPoint, cornerRadius, cornerDeficit, maxMorphLength, throatMorph, mouthRounding, maxMouthRound, frequencyEstimates,
+  wallPoint, cornerRadius, cornerDeficit, maxMorphLength, throatMorph, mouthRounding, maxMouthRound, mouthArea, frequencyEstimates,
 } from "./horn-math.js";
 import { areaCurve } from "./simulation.js";
 
@@ -165,6 +165,17 @@ describe("Mundverrundung (mouthRounding)", () => {
     for (const sw of [10, 60, 119, 150, 250]) {
       expect(cornerRadius(sw, both)).toBeCloseTo(Math.max(cornerRadius(sw, throat), cornerRadius(sw, mouthRounding(s, profile, null, 30))), 12);
     }
+  });
+
+  it("Mundfläche und Grenzfrequenzen berücksichtigen die gerundeten Ecken", () => {
+    const morph = mouthRounding(s, profile, null, 30), plain = mouthArea(s, 200);
+    expect(mouthArea(s, 200, morph)).toBeCloseTo(plain - cornerDeficit(30), 6);
+    expect(mouthArea(s, 200, null)).toBe(plain);
+    // dieselbe Fläche wie am Ende der Flächenkurve (Simulation)
+    expect(areaCurve(s, RT, profile, undefined, morph).S.at(-1) * 1e6).toBeCloseTo(mouthArea(s, 200, morph), 6);
+    const f0 = frequencyEstimates(s, RT, 200), f1 = frequencyEstimates(s, RT, 200, false, morph);
+    expect(f1.fcLow).toBeGreaterThan(f0.fcLow);                         // kleinere Mundfläche: höhere Grenzfrequenz
+    expect(f1.fcCut).toBeLessThan(f0.fcCut);                            // kleinere Flare-Konstante: tiefere Cutoff-Frequenz
   });
 
   it("ohne nennenswerten Radius bleibt alles beim Alten", () => {

@@ -766,8 +766,12 @@ export function crossSection(s, profile, n = 100, zWallList = null, morph = null
 // KENNWERTE
 // ──────────────────────────────────────────────────────────────────
 
-/** Mundfläche (Bogenlänge × Mundhöhe) [mm²]. */
-export const mouthArea = (s, hMouth) => s.arcR * 2 * s.alpha2 * hMouth;
+/**
+ * Mundfläche (Bogenlänge × Mundhöhe) [mm²], mit gerundeten Mundecken (morph, mouthRounding) um (4 − π)·r²
+ * des Eckradius am Mund vermindert – dieselbe Fläche wie am Ende von crossSection und der Simulation.
+ */
+export const mouthArea = (s, hMouth, morph = null) =>
+  s.arcR * 2 * s.alpha2 * hMouth - cornerDeficit(cornerRadius(maxMorphLength(s), morph));
 
 /** Vertikaler Öffnungswinkel am Mund [°], aus der Profilsteigung kurz vor dem Mundscheitel. */
 export function verticalMouthAngle(s, profile) {
@@ -784,9 +788,9 @@ export function verticalMouthAngle(s, profile) {
  *            A_Mund = Bogenlänge × Mundhöhe
  *   fcHigh – Throat-Durchmesser ≈ halbe Wellenlänge (λ = 2·rt)
  */
-export function frequencyEstimates(s, rt, hMouth, roundThroat = false) {
+export function frequencyEstimates(s, rt, hMouth, roundThroat = false, morph = null) {
   const c = SPEED_OF_SOUND;
-  const A = mouthArea(s, hMouth);
+  const A = mouthArea(s, hMouth, morph);
   const throatArea = roundThroat ? Math.PI * rt * rt : (2 * rt) ** 2;
   const m = Math.log(A / throatArea) / (s.zApex - s.hatTipZ);
   return {

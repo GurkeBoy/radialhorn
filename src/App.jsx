@@ -385,7 +385,7 @@ export default function App() {
         </Card>
 
         {s && <>
-          <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={morph?.r > 0} t={t} />
+          <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={morph?.r > 0} morph={morph} t={t} />
           <Volumes volumes={volumes} t={t} />
           <WallAdvice advice={advice} wall={wall} t={t} onApply={applyWallAdvice}
             material={wallMaterial} onMaterial={setWallMaterial} customE={wallE} onCustomE={setWallE}
@@ -442,14 +442,14 @@ function ViewPanel({ flex, children }) {
 }
 
 /** Kennwerte des Horns und grobe Grenzfrequenzen in einer Karte. */
-const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroat, t }) {
-  const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt, hMouth, roundThroat);
+const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroat, morph, t }) {
+  const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt, hMouth, roundThroat, morph);
   return (
     <Card title={t("card.keyFigures")} id="kennwerte">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 12 }}>
         <Stat label={t("key.mouthWidth")} value={(2 * s.xMouth).toFixed(1) + " mm"} />
         <Stat label={t("key.mouthHeight")} value={hMouth + " mm"} />
-        <Stat label={t("key.mouthArea")} value={(mouthArea(s, hMouth) / 1e6).toFixed(4) + " m²"} />
+        <Stat label={t("key.mouthArea")} value={(mouthArea(s, hMouth, morph) / 1e6).toFixed(4) + " m²"} />
         <Stat label={t("key.arcLength")} value={s.arcLen.toFixed(1) + " mm"} />
         <Stat label={t("key.vertAngle")} value={verticalMouthAngle(s, profile).toFixed(1) + "°"} />
         <Stat label={t("key.horizAngle")} value={s.openingAngle + "°"} />

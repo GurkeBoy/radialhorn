@@ -45,10 +45,10 @@ describe("Mundfläche und Volumen", () => {
   const mouthCap = R => buildHornGeometry(s, RT, profile, null, mouthRounding(s, profile, null, R)).surfaces.find(f => f.name === "capMouth");
 
   it("die Mundkappe liegt auf dem Zylinder um den Fokus und hat die Fläche Mund − (4 − π)·R²", () => {
-    const R = 40, cap = mouthCap(R);
+    const R = 40, cap = mouthCap(R), morph = mouthRounding(s, profile, null, R);
     for (const p of triangulate(cap).flat()) expect(Math.hypot(p[0], p[2] - s.zFocus)).toBeCloseTo(s.arcR, 6);
     const A = triangulate(cap).reduce((sum, tri) => sum + area(tri), 0);
-    expect(A / (mouthArea(s, H_MOUTH) - cornerDeficit(R))).toBeCloseTo(1, 2);   // Sehnen statt Bogen: Abweichung unter 1 %
+    expect(A / mouthArea(s, H_MOUTH, morph)).toBeCloseTo(1, 2);   // Sehnen statt Bogen: Abweichung unter 1 %
   });
 
   it("ohne Rundung unverändert; das Volumen nimmt mit dem Radius ab, höchstens um (4 − π)·R² · Wandlänge", () => {
