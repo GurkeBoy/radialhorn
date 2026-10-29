@@ -67,7 +67,7 @@ export default {
   "profile.filletRadius": "Radius r",
   "warn.filletNeedsTractrix": "Fillet requires a tractrix entrance (Lₜ > 0)",
   "warn.filletLimited": "Radius too large – limited to {mm} mm",
-  "warn.mouthRoundLimited": "Radius limited to {mm} mm (almost half the mouth height).",
+  "warn.mouthRoundLimited": "Radius limited to {mm} mm (at most almost half the mouth height and a quarter of the mouth arc radius).",
   "warn.morphLimited": "Limited to {mm} mm – the length of the wall up to the mouth",
 
   // Driver, placement, construction

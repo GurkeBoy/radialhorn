@@ -67,7 +67,7 @@ export default {
   "profile.filletRadius": "Radius r",
   "warn.filletNeedsTractrix": "Verrundung nur mit Traktrix-Eingang (Lₜ > 0)",
   "warn.filletLimited": "Radius zu groß – begrenzt auf {mm} mm",
-  "warn.mouthRoundLimited": "Radius auf {mm} mm begrenzt (fast die halbe Mundhöhe).",
+  "warn.mouthRoundLimited": "Radius auf {mm} mm begrenzt (höchstens fast die halbe Mundhöhe und ein Viertel des Mundbogenradius).",
   "warn.morphLimited": "Begrenzt auf {mm} mm – die Länge der Wand bis zum Mund",
 
   // Treiber, Aufstellung, Ausführung

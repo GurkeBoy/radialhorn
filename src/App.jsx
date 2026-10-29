@@ -300,7 +300,7 @@ export default function App() {
           {filletOn && s && !hasTraktrix(s) && <Warn>{t("warn.filletNeedsTractrix")}</Warn>}
           {fillet?.limited && <Warn>{t("warn.filletLimited", { mm: fillet.R.toFixed(1) })}</Warn>}
           <Toggle label={t("profile.mouthRound")} checked={mouthRoundOn} onChange={setMouthRoundOn} info={t("profile.mouthRoundHint")} />
-          {mouthRoundOn && <Slider label={t("profile.mouthRoundRadius")} value={mouthRoundR} min={1} max={Math.max(1, Math.floor(maxMouthRound(hMouth / 2)))} step={1} unit="mm" onChange={setMouthRoundR} />}
+          {mouthRoundOn && <Slider label={t("profile.mouthRoundRadius")} value={mouthRoundR} min={1} max={Math.max(1, Math.floor(maxMouthRound(hMouth / 2, s?.arcR)))} step={1} unit="mm" onChange={setMouthRoundR} />}
           {mouthRoundOn && morph?.mouth && morph.mouth.R < mouthRoundR && <Warn>{t("warn.mouthRoundLimited", { mm: morph.mouth.R.toFixed(0) })}</Warn>}
         </Card>
 

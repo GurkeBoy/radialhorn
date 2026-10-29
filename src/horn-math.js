@@ -643,21 +643,25 @@ export function cornerRadius(sWall, morph) {
  */
 function mouthCornerRadius(sWall, { R, S, from, sampled }) {
   const u = Math.min(1, Math.max(0, sWall / S)), r = from + (R - from) * u, cap = 1 - (1 - MOUTH_CAP) * u;
-  // Obergrenze: Anteil der halben Höhe, aber nie unter dem Radius am Throat (am Treiberkreis ist r = h erlaubt)
-  const limit = hv => Math.min(r, Math.max(cap * hv, Math.min(from, hv)));
-  const { s: ss, h } = sampled;
-  if (sWall <= ss[0]) return limit(h[0]);
-  if (sWall >= ss[ss.length - 1]) return limit(h[h.length - 1]);
+  // Obergrenzen: Anteil der halben Höhe und des Zeilenradius (Abstand zum Fokus), aber nie unter dem Radius am Throat
+  // (am Treiberkreis ist r = h erlaubt)
+  const limit = (hv, rho) => Math.min(r, Math.max(cap * hv, Math.min(from, hv)), Math.max(MOUTH_RHO * rho, from));
+  const { s: ss, h, rho } = sampled;
+  if (sWall <= ss[0]) return limit(h[0], rho[0]);
+  if (sWall >= ss[ss.length - 1]) return limit(h[h.length - 1], rho[rho.length - 1]);
   let lo = 0, hi = ss.length - 1;
   while (hi - lo > 1) { const mid = (lo + hi) >> 1; ss[mid] <= sWall ? (lo = mid) : (hi = mid); }
-  return limit(h[lo] + (h[hi] - h[lo]) * (sWall - ss[lo]) / (ss[hi] - ss[lo]));
+  const f = (sWall - ss[lo]) / (ss[hi] - ss[lo]);
+  return limit(h[lo] + (h[hi] - h[lo]) * f, rho[lo] + (rho[hi] - rho[lo]) * f);
 }
 
 const MOUTH_SAMPLES = 160;
 const MOUTH_CAP = 0.95;   // Eckradius am Mund höchstens dieser Anteil der halben Höhe (sonst schrumpft die gerade Wand auf nichts)
 
-/** Größter Radius der Mundverrundung: fast die halbe Mundhöhe (dann laufen die Enden des Mundes beinahe als Halbkreis aus). */
-export const maxMouthRound = hMouthHalf => MOUTH_CAP * hMouthHalf;
+const MOUTH_RHO = 0.25;   // Eckradius höchstens dieser Anteil des Zeilenradius (Abstand zum Fokus): die Ecke wird in der Zeile, einem Kreisbogen um den Fokus, gerundet – bei größerem Radius im Verhältnis zum Bogen weicht die Wandstärke an der Rundung merklich ab
+
+/** Größter Radius der Mundverrundung: fast die halbe Mundhöhe (dann laufen die Enden des Mundes beinahe als Halbkreis aus), höchstens ein Viertel des Mundbogenradius arcR. */
+export const maxMouthRound = (hMouthHalf, arcR = Infinity) => Math.min(MOUTH_CAP * hMouthHalf, MOUTH_RHO * arcR);
 
 /**
  * Ecken am Mund gerundet: ein Eckradius, der gleichmäßig vom Radius am Throat (0, mit throatMorph rt) auf R am Mund
@@ -668,15 +672,15 @@ export const maxMouthRound = hMouthHalf => MOUTH_CAP * hMouthHalf;
  * @returns {{ r, length, limited, max, mouth: { R, S, from, sampled } } | null}
  */
 export function mouthRounding(s, profile, morph, R) {
-  const used = Math.min(R, maxMouthRound(profile(s.zApex)));
+  const used = Math.min(R, maxMouthRound(profile(s.zApex), s.arcR));
   if (!(used >= 0.5)) return morph;
-  const S = maxMorphLength(s), ss = [], h = [];
+  const S = maxMorphLength(s), ss = [], h = [], rho = [];
   for (let i = 0; i <= MOUTH_SAMPLES; i++) {
-    const p = wallPoint(s, profile, s.zMouth * i / MOUTH_SAMPLES);
-    ss.push(p.sWall); h.push(p.hWall);
+    const zWall = s.zMouth * i / MOUTH_SAMPLES, p = wallPoint(s, profile, zWall);
+    ss.push(p.sWall); h.push(p.hWall); rho.push(Math.hypot(p.xWall, zWall - s.zFocus));
   }
   const base = morph ?? { r: 0, length: 0, limited: false, max: S };
-  return { ...base, length: S, mouth: { R: used, S, from: base.r, sampled: { s: ss, h } } };
+  return { ...base, length: S, mouth: { R: used, S, from: base.r, sampled: { s: ss, h, rho } } };
 }
 
 /** Wandpunkt z, an dem der Übergang endet (Bogenlänge = morph.length; Bisektion). */
