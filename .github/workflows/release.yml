@@ -3,6 +3,8 @@ name: Release
 # Baut die Installer für Windows, macOS und Linux und hängt sie an einen Release-Entwurf.
 # Auslösen: Tag v<version> pushen (Version wie in src-tauri/tauri.conf.json) oder von Hand
 # (Actions → Release → Run workflow). Der Entwurf wird erst durch Veröffentlichen sichtbar.
+# Der Entwurf wird vorab in einem eigenen Job angelegt: Legen die drei Build-Jobs ihn gleichzeitig selbst an, entstehen drei
+# getrennte Entwürfe mit demselben Tag (so bei v1.1.1: Windows/macOS in einem, Linux in einem anderen).
 
 on:
   push:
@@ -13,8 +15,27 @@ permissions:
   contents: write
 
 jobs:
+  draft:
+    name: Release-Entwurf anlegen
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Entwurf anlegen, falls es noch keinen gibt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          # gh release view findet Entwürfe nicht, die Liste schon
+          if [ -n "$(gh release list --json tagName --jq ".[] | select(.tagName == \"v$version\") | .tagName")" ]; then
+            echo "Release v$version existiert schon"
+          else
+            gh release create "v$version" --draft --title "Radialhorn v$version" --target "$GITHUB_SHA" \
+              --notes "Radial horn configurator – geometry, drawings, CAD export and 1D acoustic simulation."
+          fi
+
   build:
     name: Build (${{ matrix.name }})
+    needs: draft
     strategy:
       fail-fast: false
       matrix:
