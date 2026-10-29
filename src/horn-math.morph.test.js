@@ -145,7 +145,7 @@ describe("Mundverrundung (mouthRounding)", () => {
 
   it("nie größer als fast die halbe Höhe an der Stelle; R wird auf maxMouthRound begrenzt", () => {
     const morph = mouthRounding(s, profile, null, 1e6);
-    expect(morph.mouth.R).toBeCloseTo(maxMouthRound(profile(s.zApex)), 9);
+    expect(morph.mouth.R).toBeCloseTo(maxMouthRound(profile(s.zApex), s.arcR), 9);
     for (let k = 0; k <= 40; k++) {
       const sw = S * k / 40, p = [0, 1].map(() => 0);
       void p;
