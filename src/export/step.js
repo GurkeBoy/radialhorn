@@ -455,9 +455,27 @@ export function hornStep(design, meta) {
   return stepFile([body, ...ribs], meta);
 }
 
-export function exportSTEP(design) {
+/**
+ * @param design
+ * @param fuse  true: Rippen und Horn zu einem Körper vereinen (step-fuse.js, im Worker); schlägt das fehl, wird die Datei
+ *              mit getrennten Körpern geschrieben und das Ergebnis trägt warning
+ * @returns Ergebnis wie downloadFile, bei misslungener Vereinigung zusätzlich { warning }
+ */
+export async function exportSTEP(design, { fuse = false } = {}) {
   const { s, rt, wall = 0 } = design;
   const kind = wall > 0 ? `schale_${wall}mm${design.flange ? "_flansch" : ""}` : "luftvolumen";
   const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm_${kind}.step`;
-  return downloadFile(() => hornStep(design, { fileName: fname }), fname, "model/step");
+  let warning = null;
+  const result = await downloadFile(async () => {
+    const step = hornStep(design, { fileName: fname });
+    if (!fuse || !design.flange?.ribs) return step;
+    try {
+      const { fuseStepInWorker } = await import("./step-fuse-client.js");
+      return (await fuseStepInWorker(step, fname)).step;
+    } catch (err) {
+      warning = err?.message ?? String(err);
+      return step;
+    }
+  }, fname, "model/step");
+  return warning ? { ...result, warning } : result;
 }

@@ -72,6 +72,7 @@ export const DESIGN_DEFAULTS = {
   ribThickness: 4,
   roundOn: false,          // Verrundungen auf der Hornseite des Flanschs (Plattenkanten, Rippen)
   roundR: 2,
+  stepFuse: true,          // STEP: Rippen und Horn zu einem Körper vereinen (OpenCascade im Worker)
   wallMaterial: "pla",     // Werkstoff der Wandstärke-Empfehlung (wall-advice.js: MATERIAL_KEYS)
   wallE: 3,                // eigener Werkstoff: E-Modul [GPa]
   wallRho: 1250,           // eigener Werkstoff: Dichte [kg/m³]
@@ -86,7 +87,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-export const ADDED_LATER = new Set(["morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
+export const ADDED_LATER = new Set(["morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);

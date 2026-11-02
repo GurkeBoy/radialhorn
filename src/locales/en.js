@@ -165,6 +165,9 @@ export default {
 
   // Export
   "export.dimensions": "Dimensions",
+  "export.stepFuse": "STEP: fuse ribs with horn",
+  "export.stepFuseInfo": "The horn and the ribs are fused into a single solid in the STEP (OpenCascade, a few seconds). Without the switch they are separate solids that you join in your CAD. If fusing fails, the file is saved with separate solids.",
+  "export.fuseFailed": "Ribs not fused, saved as separate solids ({msg})",
   "export.dxfHint": "DXF: all curves and points (top view, mouth arc, focus, side profile, transitions, flange) – one layer each, in mm",
   "export.dimensionsHint": "In the PDF datasheet",
   "export.dxf": "↓ DXF (curves)",

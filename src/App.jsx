@@ -93,6 +93,7 @@ export default function App() {
   const [wallE,           setWallE]           = usePersistentState("wallE", D.wallE);
   const [wallRho,         setWallRho]         = usePersistentState("wallRho", D.wallRho);
   const [wallLimit,       setWallLimit]       = usePersistentState("wallLimit", D.wallLimit);
+  const [stepFuse,        setStepFuse]        = usePersistentState("stepFuse", D.stepFuse);
   const [pdfDimensions,   setPdfDimensions]   = usePersistentState("pdfBemassung", true);
   const [simOn,           setSimOn]           = usePersistentState("simOn", false);
   // Abstrahlung: "auto" = π in der Raumecke (zwei Wände; Boden/Decke bei Ohrhöhe im Arbeitsbereich
@@ -115,7 +116,7 @@ export default function App() {
   const designValues = {
     throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
-    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, abstrahlung: simMouth, simTemp, driver,
+    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, stepFuse, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
     throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength, mouthRoundOn: setMouthRoundOn, mouthRoundR: setMouthRoundR,
@@ -126,7 +127,7 @@ export default function App() {
     flangeOn: setFlangeOn, flangeD: setFlangeD, flangeT: setFlangeT, holeCount: setHoleCount,
     holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, ribsOn: setRibsOn, ribThickness: setRibThickness,
     ribLength: setRibLength, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
-    wallLimit: setWallLimit, abstrahlung: setSimMouth,
+    wallLimit: setWallLimit, stepFuse: setStepFuse, abstrahlung: setSimMouth,
     simTemp: setSimTemp, driver: setDriver,
   };
   const applyDesign = design => { for (const [key, value] of Object.entries(design)) designSetters[key](value); };
@@ -154,6 +155,7 @@ export default function App() {
         : r.status === "opened" ? { kind: "ok", text: t("save.printOpened") }
         : { kind: "ok", text: t(r.status === "downloaded" ? "save.downloaded" : r.html ? "save.savedHtml" : "save.saved", { name: r.name }) };
       const n = conflictNote && r.status !== "cancelled" ? flange?.invalidHoles ?? 0 : 0;
+      if (r.warning) { saved.kind = "warn"; saved.text = `${saved.text} · ${t("export.fuseFailed", { msg: r.warning })}`; }
       setNotice(n > 0 ? {
         kind: "warn",
         text: `${saved.text} · ${conflictText(n)}${conflictNote === "3d" ? ", " + t("export.conflict3d") : conflictNote === "dxf" ? ", " + t("export.conflictDxf") : ""}`,
@@ -397,11 +399,12 @@ export default function App() {
             <Note>{t("export.dxfHint")}</Note>
             <Toggle label={t("export.dimensions")} checked={pdfDimensions} onChange={setPdfDimensions} hint={t("export.dimensionsHint")} />
             {flange?.invalidHoles > 0 && <Warn>{conflictText(flange.invalidHoles)}: {t("export.conflictCard")}</Warn>}
+            {flange?.ribs && <Toggle label={t("export.stepFuse")} checked={stepFuse} onChange={setStepFuse} info={t("export.stepFuseInfo")} />}
             <div style={{ marginTop: 4 }}>
               <Button primary onClick={() => reportSave(() => exportDXF(design), "dxf")}>{t("export.dxf")}</Button>
               <Button onClick={() => reportSave(() => exportPDF(design, { ...ALL_LAYERS, bemassung: pdfDimensions }, lang), "pdf")}>{t("export.pdf")}</Button>
               <Button onClick={() => reportSave(() => exportSTL(design), "3d")}>{wall > 0 ? t(flange ? "export.stlShellFlange" : "export.stlShell", { mm: wall }) : t("export.stlAir")}</Button>
-              <Button onClick={() => reportSave(() => exportSTEP(design), "3d")}>{wall > 0 ? t(flange ? "export.stepShellFlange" : "export.stepShell", { mm: wall }) : t("export.stepAir")}</Button>
+              <Button onClick={() => reportSave(() => exportSTEP(design, { fuse: stepFuse }), "3d")}>{wall > 0 ? t(flange ? "export.stepShellFlange" : "export.stepShell", { mm: wall }) : t("export.stepAir")}</Button>
             </div>
           </Card>
         </>}
