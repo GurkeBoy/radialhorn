@@ -5,7 +5,7 @@
 // Traktrix und gekrümmte Aufweitung als SPLINE, Geraden als LINE, Kreisbögen als ARC –,
 // damit CAD-Systeme glatte Körper daraus erzeugen.
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, makeProfile } from "../horn-math.js";
-import { buildShellGeometry } from "../horn-mesh.js";
+import { buildShell } from "../bodies.js";
 import { linspace } from "../utils.js";
 import { fitBSpline } from "./bspline.js";
 import { downloadFile } from "./download.js";
@@ -103,7 +103,7 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
   }
   if (opts.fokus) out.push(dxfPoint(s.zFocus, 0, 0, "Fokus"));
 
-  if (opts.seitenprofil) {
+  if (opts.seitenprofil && !s.round) {
     // Mit Verrundung endet der Throat an T1, die Aufweitung beginnt an T2, dazwischen ein ARC
     const throatEnd = fillet ? fillet.zT1 : s.zInnerApex;
     const zFrom = fillet ? fillet.zT2 : (hasTraktrix(s) ? s.zInnerApex : 0);
@@ -126,7 +126,12 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
   }
 
   if (opts.uebergang && hasTraktrix(s)) {
-    const points = [
+    // rundes Horn: nur das Profil (Längsschnitt), kein Seitenprofil
+    const points = s.round ? [
+      [0, rt, 0], [s.zTrans, s.xTrans, 0],
+      ...(hasClothoid(s) ? [[s.clothoid.start[1], s.clothoid.start[0], 0]] : []),
+      [s.zMouth, s.xMouth, 0],
+    ] : [
       [0, rt, 0], [s.zTrans, s.xTrans, 0],                 // Draufsicht: Throat, Eingang → gerade Wand
       ...(hasClothoid(s) ? [[s.clothoid.start[1], s.clothoid.start[0], 0]] : []),   // Traktrix → Klothoide
       [0, 0, rt], [s.zInnerApex, 0, rt],                   // Seitenprofil: Throat, Throat → Aufweitung
@@ -141,7 +146,7 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
   if (opts.flansch && flange) {
     const X = [1, 0, 0], r = flange.diameter / 2;
     out.push(dxfCircle(0, 0, r, "Flansch", X, 0), dxfCircle(0, 0, r, "Flansch", X, flange.thickness));
-    if (morph?.r > 0) out.push(dxfCircle(0, 0, rt, "Flansch", X, 0));   // runder Throat: Kreis des Treiberausgangs
+    if (morph?.r > 0 || s.round) out.push(dxfCircle(0, 0, rt, "Flansch", X, 0));   // runder Throat: Kreis des Treiberausgangs
     else {
       const sq = [[rt, rt], [-rt, rt], [-rt, -rt], [rt, -rt]];
       sq.forEach(([y, z], i) => out.push(dxfLine([0, y, z], [0, ...sq[(i + 1) % 4]], "Flansch")));
@@ -150,8 +155,8 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
     // Bohrungen im Konflikt mit der Schale: gleiches Bohrbild, eigener Layer
     for (const [y, z] of flange.conflicts ?? []) out.push(dxfCircle(y, z, flange.holes.diameter / 2, "Flansch_Konflikt", X, 0));
     // Stützrippen: Profil in der Rippenebene (Mittelschnitt) und Grundriss auf der Plattenfläche
-    const ribs = flange.ribs && wall > 0 && profile
-      ? buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR, morph).ribs : null;
+    const ribs = flange.ribs && wall > 0 && (profile || s.round)
+      ? buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph).ribs : null;
     for (const { phi, poly } of ribs?.shapes ?? []) {
       const u = [Math.cos(phi), Math.sin(phi)], v = [-Math.sin(phi), Math.cos(phi)], hw = ribs.thickness / 2;
       const at = ([rho, z], side = 0) => [z, rho * u[0] + side * v[0], rho * u[1] + side * v[1]];
@@ -169,6 +174,6 @@ export const ALL_LAYERS = { draufsicht: true, mundbogen: true, fokus: true, seit
 
 export function exportDXF(design) {
   const { s, rt } = design;
-  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm.dxf`;
+  const fname = `radialhorn_${s.round ? "rund_" : ""}${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm.dxf`;
   return downloadFile(() => buildDXF(design, ALL_LAYERS), fname, "application/dxf");
 }

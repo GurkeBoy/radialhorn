@@ -464,7 +464,7 @@ export function hornStep(design, meta) {
 export async function exportSTEP(design, { fuse = false } = {}) {
   const { s, rt, wall = 0 } = design;
   const kind = wall > 0 ? `schale_${wall}mm${design.flange ? "_flansch" : ""}` : "luftvolumen";
-  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm_${kind}.step`;
+  const fname = `radialhorn_${s.round ? "rund_" : ""}${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm_${kind}.step`;
   let warning = null;
   const result = await downloadFile(async () => {
     const step = hornStep(design, { fileName: fname });

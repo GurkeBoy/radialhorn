@@ -1,5 +1,6 @@
 // STL-Export: Schale (bei Wandstärke) oder Luftvolumen, jeweils als geschlossener Körper in mm.
-import { buildHornGeometry, buildShellGeometry, triangulate, EXPORT_RES } from "../horn-mesh.js";
+import { triangulate, EXPORT_RES } from "../horn-mesh.js";
+import { buildAir, buildShell } from "../bodies.js";
 import { downloadFile } from "./download.js";
 
 // STL-Achsen: X = Breite, Y = Hornachse, Z = Höhe (Z nach oben, wie in CAD üblich).
@@ -33,8 +34,8 @@ export function stlBinary(triangles, header = "Radialhorn") {
  */
 export function hornGeometry({ s, rt, profile, fillet, wall = 0, flange = null, edgeR = 0, morph = null }, res = undefined) {
   return wall > 0
-    ? buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR, morph, res)
-    : buildHornGeometry(s, rt, profile, fillet, morph, res);
+    ? buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, res)
+    : buildAir(s, rt, profile, fillet, morph, res);
 }
 
 /** Alle Dreiecke des geschlossenen Körpers (hornGeometry). */
@@ -43,7 +44,7 @@ export const hornTriangles = (design, res = undefined) => hornGeometry(design, r
 export function exportSTL(design) {
   const { s, rt, wall = 0 } = design;
   const kind = wall > 0 ? `schale_${wall}mm${design.flange ? "_flansch" : ""}` : "luftvolumen";
-  const fname = `radialhorn_${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm_${kind}.stl`;
+  const fname = `radialhorn_${s.round ? "rund_" : ""}${Math.round(s.openingAngle)}deg_L${Math.round(design.L)}_T${(rt * 2).toFixed(0)}mm_${kind}.stl`;
   // doppelte Auflösung: Facetten ≈ ¼ so tief wie in der Ansicht (≤ 0,02 mm statt ≤ 0,06 mm innen)
   return downloadFile(() => stlBinary(hornTriangles(design, EXPORT_RES)), fname, "model/stl");
 }

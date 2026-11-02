@@ -2,7 +2,8 @@
 // Summe der vorzeichenbehafteten Tetraeder zum Ursprung (Divergenzsatz). Läuft im Web Worker
 // (volume.worker.js, useVolumes).
 import { makeProfile } from "./horn-math.js";
-import { buildHornGeometry, buildShellGeometry, triangulate } from "./horn-mesh.js";
+import { triangulate } from "./horn-mesh.js";
+import { buildAir, buildShell } from "./bodies.js";
 
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
@@ -25,9 +26,9 @@ const volumeOf = geometry => meshVolume(geometry.surfaces.flatMap(triangulate));
  */
 export function computeVolumes({ s, rt, hMouth, curve, hypexT, fillet, morph = null, wall, flange = null, edgeR = 0 }) {
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
-  const air = volumeOf(buildHornGeometry(s, rt, profile, fillet, morph));
+  const air = volumeOf(buildAir(s, rt, profile, fillet, morph));
   if (!(wall > 0)) return { air, shell: null, outer: null };
-  const geometry = buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR, morph);
+  const geometry = buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph);
   const shell = volumeOf(geometry) - (geometry.ribs?.overlap ?? 0);   // Rippen reichen in Platte und Wand hinein
   return { air, shell, outer: air + shell };
 }

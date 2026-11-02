@@ -25,6 +25,9 @@ each [release](https://github.com/GurkeBoy/radialhorn/releases). They are not co
 - **Horizontal profile:** tractrix entrance → straight wall at half the opening angle → mouth arc around the focal
   point; optional curvature-continuous transition (clothoid) between tractrix and wall. Opening angle, total length,
   tractrix length, throat (1", 1.4", 2" or custom) and driver dimensions are adjustable.
+- **Round horn:** a switch at the top turns the horn into a body of revolution – the top-view profile (tractrix
+  entrance, straight wall) revolved around the axis, with a round mouth. Also for small high-frequency horns. Everything
+  from wall and flange to ribs, simulation and all exports works for it as well.
 - **Vertical profile:** linear, exponential or hypex flare; optional fillet at the transition throat → flare; optional
   rounded mouth corners, with the corner radius growing evenly from the throat to the mouth.
 - **Room corner:** limits the horn width to the 45° diagonal of a room corner, optionally including wall thickness.

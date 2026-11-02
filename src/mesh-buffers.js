@@ -2,7 +2,8 @@
 // Web Worker (mesh.worker.js), damit Slider und 2D-Ansichten beim Neuaufbau nicht stocken; die
 // Eingaben sind reine Daten (klonbar), die Profilfunktion wird hier aus ihnen neu gebaut.
 import { makeProfile } from "./horn-math.js";
-import { buildHornGeometry, buildShellGeometry, triangulate, gridLines, DRAFT_RES } from "./horn-mesh.js";
+import { triangulate, gridLines, DRAFT_RES } from "./horn-mesh.js";
+import { buildAir, buildShell } from "./bodies.js";
 
 /**
  * @param input  { s, rt, hMouth, curve, hypexT, fillet, wall, flange, edgeR, morph, sections, quality }
@@ -17,8 +18,8 @@ export function meshBuffers({ s, rt, hMouth, curve, hypexT, fillet, wall, flange
   const draft = quality === "draft", res = draft ? DRAFT_RES : undefined;
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
   const geometry = wall > 0
-    ? buildShellGeometry(s, rt, profile, fillet, wall, flange, edgeR, morph, res)
-    : buildHornGeometry(s, rt, profile, fillet, morph, res);
+    ? buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, res)
+    : buildAir(s, rt, profile, fillet, morph, res);
 
   const out = [];
   for (const section of sections) {

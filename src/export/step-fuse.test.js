@@ -4,8 +4,9 @@
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import initOC from "replicad-opencascadejs";
-import { solveHorn, makeProfile } from "../horn-math.js";
+import { solveHorn, makeProfile, createHornMath, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { flangeLayout } from "../horn-mesh.js";
+import { layoutFlange } from "../bodies.js";
 import { hornStep } from "./step.js";
 import { fuseStepBodies } from "./step-fuse.js";
 
@@ -38,6 +39,31 @@ function bodiesOf(step) {
   oc.FS.unlink("/check.step");
   return { volumes, valid };
 }
+
+describe("STEP des runden Horns in OpenCascade", () => {
+  const s = { ...createHornMath(70).solveHorn(500, 60, RT, 0, 0), round: true };
+  const design = (wall, flange = null) => ({ s, rt: RT, profile: null, fillet: null, wall, edgeR: 0, morph: null, flange });
+
+  it("Luftvolumen: ein gültiger Körper, Rauminhalt = Rotation des Profils (Flächen exakt, nicht facettiert)", () => {
+    const { volumes, valid } = bodiesOf(hornStep(design(0), { fileName: "rund.step" }));
+    expect(valid).toBe(true);
+    expect(volumes).toHaveLength(1);
+    const pts = [...entrancePoints(s, 4000, 4000), ...linearWallPoints(s, 4000)].filter((p, i, a) => i === 0 || p[1] > a[i - 1][1]);
+    let wall = 0;
+    for (let i = 1; i < pts.length; i++) wall += Math.PI * (pts[i][0] ** 2 + pts[i][0] * pts[i - 1][0] + pts[i - 1][0] ** 2) / 3 * (pts[i][1] - pts[i - 1][1]);
+    const h = s.zApex - s.zMouth, a = s.xMouth;
+    expect(volumes[0] / (wall + Math.PI * h * (3 * a * a + h * h) / 6)).toBeCloseTo(1, 4);
+  });
+
+  it("Schale: ein gültiger Körper; mit Flansch und Rippen Horn + 4 Rippen, vereint zu einem", () => {
+    expect(bodiesOf(hornStep(design(12), { fileName: "s.step" }))).toMatchObject({ valid: true, volumes: [expect.any(Number)] });
+    const flange = layoutFlange(s, RT, null, null, 12, { ...FLANGE, ribs: { thickness: 4, length: 30 } }, 0, null);
+    const step = hornStep(design(12, flange), { fileName: "f.step" });
+    expect(bodiesOf(step).volumes).toHaveLength(1 + flange.holes.count);
+    const { step: fused } = fuseStepBodies(oc, step, "f.step");
+    expect(bodiesOf(fused)).toMatchObject({ valid: true, volumes: [expect.any(Number)] });
+  });
+});
 
 describe("fuseStepBodies", () => {
   it("vereint Horn und vier Rippen zu einem gültigen Körper; Volumen zwischen Horn und Summe", () => {

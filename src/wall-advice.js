@@ -20,7 +20,7 @@
 //  • Zusätzlich die tiefste Biegemode des breitesten Streifens (nur Information, eingespannt-eingespannt):
 //    f₁ = 3,561/L²·√(D/(ρ·t)). Eigenfrequenzen im Betriebsbereich lassen sich nicht vermeiden; sie zeigen, wo
 //    die Wand mitschwingt.
-import { crossSection } from "./horn-math.js";
+import { crossSection, crossSectionRound } from "./horn-math.js";
 
 /** Richtwerte der Werkstoffe (E-Modul [Pa], Dichte [kg/m³], Querkontraktion): gedruckt bei 100 % Füllung, Schichten längs. */
 export const MATERIALS = {
@@ -90,6 +90,31 @@ export function lowestMode(spanMM, mat, tMM) {
   return 22.373 / (2 * Math.PI * L ** 2) * Math.sqrt(D / (mat.rho * t));
 }
 
+// ── Rundes Horn (Rotationskörper) ────────────────────────────────────────────────────────────────────────
+// Dünnwandige Rotationsschale unter Innendruck (Membrantheorie, Ring um die Achse): Ringkraft N = p·x/cos θ (x Radius
+// der Wand, θ ihr Winkel zur Achse), die Wand weitet sich radial um u = x·N/(E·t), die Querschnittsfläche um ΔA/A =
+// 2·u/x. Nachgiebigkeit ν_w = K·ΔA/(A·p) = 2·K·x/(E·t·cos θ), also t_min = 2·K·x/(E·ν_max·cos θ). Eine runde Schale ist
+// um Größenordnungen steifer als ein Kasten; die Empfehlung liegt meist unter der Mindestwandstärke für Druck und
+// Handhabung. Information: tiefste Atmungsmode des Rings f = √(E/(ρ(1 − ν²)))/(2π·x). Bei steiler Wand (cos θ klein) wird
+// die Schale zur Platte – cos θ wird deshalb auf ROUND_COS_MIN begrenzt.
+const ROUND_COS_MIN = 0.1;
+
+/** Stützstellen des runden Horns: Lage z, Fläche A, Wandradius x und Wandwinkel θ. */
+export function wallStationsRound(s, n = 120) {
+  return crossSectionRound(s, n).map(({ z, A, xWall, theta }) => ({ z, A, x: xWall, theta, B: 2 * xWall, H: 2 * xWall }));
+}
+
+const roundFactor = st => 2 * (st.x / 1000) / Math.max(ROUND_COS_MIN, Math.cos(st.theta));
+
+/** Nachgiebigkeit ν_w des runden Horns an einer Stützstelle bei der Wandstärke t [mm]. */
+export const stationComplianceRound = (st, mat, tMM, K) => K * roundFactor(st) / (mat.E * tMM / 1000);
+
+/** Kleinste Wandstärke [mm] des runden Horns an einer Stützstelle für die Nachgiebigkeit nuMax (Anteil). */
+export const stationMinThicknessRound = (st, mat, nuMax, K) => 1000 * K * roundFactor(st) / (mat.E * nuMax);
+
+/** Tiefste Atmungsmode [Hz] eines Rings vom Radius xMM [mm]. */
+export const ringMode = (xMM, mat) => Math.sqrt(mat.E / (mat.rho * (1 - mat.nu ** 2))) / (2 * Math.PI * xMM / 1000);
+
 /**
  * Wandstärke-Empfehlung.
  * @param opts.s, opts.profile, opts.morph  Lösung, Profil (makeProfile), Übergang rund → eckig oder null
@@ -104,7 +129,8 @@ export function lowestMode(spanMM, mat, tMM) {
  *   des breitesten Streifens bei tMM (bzw. der Empfehlung ohne Wand) [Hz]
  */
 export function wallAdvice({ s, profile, morph = null, material, K, tMM = null, nuMax = NU_MAX_DEFAULT }) {
-  if (!s || !profile) return null;
+  if (!s || (!profile && !s.round)) return null;
+  if (s.round) return wallAdviceRound({ s, material, K, tMM, nuMax });
   const stations = wallStations(s, profile, morph);
   const zone = pressureZone(stations);
   const limit = nuMax / 100;
@@ -121,6 +147,28 @@ export function wallAdvice({ s, profile, morph = null, material, K, tMM = null, 
   };
   if (tMM !== null) {
     result.compliance = Math.max(...zone.map(st => stationCompliance(st, material, tMM, K)));
+    result.ratio = result.compliance / limit;
+    result.status = result.ratio <= 1 ? "ok" : result.ratio <= 2 ? "tight" : "thin";
+  }
+  return result;
+}
+
+/** wallAdvice für das runde Horn: gleiches Ergebnis, mit round = true; B und H sind der Durchmesser an der maßgebenden Stelle. */
+function wallAdviceRound({ s, material, K, tMM, nuMax }) {
+  const zone = pressureZone(wallStationsRound(s));
+  const limit = nuMax / 100;
+  let worst = zone[0], tMin = 0;
+  for (const st of zone) {
+    const t = stationMinThicknessRound(st, material, limit, K);
+    if (t > tMin) { tMin = t; worst = st; }
+  }
+  const tRecommended = Math.max(ROUND_TO, Math.ceil(tMin / ROUND_TO - 1e-9) * ROUND_TO);
+  const result = {
+    round: true, tMin, tRecommended, worst: { z: worst.z, B: worst.B, H: worst.H }, zoneEnd: zone.at(-1).z,
+    compliance: null, ratio: null, status: null, fMode: ringMode(Math.max(...zone.map(st => st.x)), material),
+  };
+  if (tMM !== null) {
+    result.compliance = Math.max(...zone.map(st => stationComplianceRound(st, material, tMM, K)));
     result.ratio = result.compliance / limit;
     result.status = result.ratio <= 1 ? "ok" : result.ratio <= 2 ? "tight" : "thin";
   }
