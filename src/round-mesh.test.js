@@ -114,6 +114,21 @@ describe("Schale des runden Horns", () => {
     expect(ribs.thickness).toBe(4);
   });
 
+  it("alle Rippen gleich lang (Rotationssymmetrie), auch wenn der Strahl genau durch einen Eckpunkt des Netzes läuft", () => {
+    // Rippenwinkel auf Vielfachen von 5,625° (Spalten des 64-Ecks): der Strahl trifft die Eckpunkte genau
+    for (const [angle, L] of [[50, 500], [30, 300], [70, 500]]) {
+      const s = solve(60, { angle, L });
+      for (const [count, holeAngle] of [[4, 0], [4, 45], [3, 0], [6, 11.25], [8, 0]]) {
+        const flange = { ...FLANGE, holes: { count, circle: null, diameter: 6.6, angle: holeAngle }, ribs: { thickness: 4, length: 30 } };
+        const layout = layoutFlange(s, RT, null, null, 8, flange, 0, null);
+        const { shapes } = buildShell(s, RT, null, null, 8, layout, 0, null).ribs;
+        expect(shapes.length, `${angle}°, ${count} Löcher, ${holeAngle}°`).toBe(count);
+        const top = shapes.map(sh => Math.max(...sh.poly.map(q => q[1])));
+        expect(Math.max(...top) - Math.min(...top), `${angle}°, ${count} Löcher, ${holeAngle}°`).toBeLessThan(1.5);   // höchstens eine Schnittebene Unterschied
+      }
+    }
+  });
+
   it("Flansch umschließt die Schale (Mindestdurchmesser aus dem Kreis des Außenkörpers)", () => {
     const s = CASES["Traktrix + gerade Wand"];
     const layout = layoutFlange(s, RT, null, null, 10, { ...FLANGE, diameter: 40 }, 0, null);
