@@ -11,6 +11,8 @@ export default defineConfig({
     testTimeout: 60000,
   },
   plugins: [react()],
+  // OpenCascade (Wasm, nur für das Vereinen der Rippen im STEP-Export): nicht vorbündeln, sonst lädt Vite die Seite beim ersten Export neu
+  optimizeDeps: { exclude: ["replicad-opencascadejs"] },
   // Desktop-App: das Bundle wird lokal geladen, three.js macht es bewusst > 500 kB
   build: { chunkSizeWarningLimit: 1000 },
 

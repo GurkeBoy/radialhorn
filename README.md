@@ -91,4 +91,6 @@ New UI languages need only a dictionary in [`src/locales/`](src/locales/) – a 
 Third-party: the [DM Mono](https://github.com/googlefonts/dm-mono) font is embedded under the
 [SIL Open Font License 1.1](src/assets/fonts/OFL.txt). Hornresp is a separate program by David J McBean; this project is
 not affiliated with it and includes only numerical Hornresp results as reference data, with the kind permission of
-David J McBean.
+David J McBean. The STEP export can fuse the support ribs with the horn into one solid using
+[OpenCascade](https://dev.opencascade.org/) as WebAssembly ([replicad-opencascadejs](https://github.com/sgenoud/replicad),
+LGPL-2.1), which is loaded only for that export.

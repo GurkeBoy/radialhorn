@@ -165,6 +165,9 @@ export default {
 
   // Export
   "export.dimensions": "Bemaßungen",
+  "export.stepFuse": "STEP: Rippen mit Horn vereinen",
+  "export.stepFuseInfo": "Horn und Rippen werden im STEP zu einem Körper verschmolzen (OpenCascade, ein paar Sekunden). Ohne den Schalter sind es getrennte Körper, die du im CAD vereinst. Klappt das Vereinen nicht, wird die Datei mit getrennten Körpern gespeichert.",
+  "export.fuseFailed": "Rippen nicht vereint, getrennte Körper gespeichert ({msg})",
   "export.dxfHint": "DXF: alle Kurven und Punkte (Draufsicht, Mundbogen, Fokus, Seitenprofil, Übergänge, Flansch) – je eigener Layer, in mm",
   "export.dimensionsHint": "Im PDF-Datenblatt",
   "export.dxf": "↓ DXF (Kurven)",
