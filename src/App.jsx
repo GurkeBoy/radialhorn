@@ -65,6 +65,11 @@ export default function App() {
   const [openingAngle,    setOpeningAngle]    = usePersistentState("openingAngle", D.openingAngle);
   const [L,               setL]               = usePersistentState("L", D.L);
   const [Lt,              setLt]              = usePersistentState("Lt", D.Lt);
+  // Rundes Horn: eigene Werte für Winkel, Länge und Traktrix-Länge (andere Bedeutung als beim Radialhorn: kein Winkelsektor in
+  // der Raumecke, L ab dem Throat); beim Umschalten der Bauform bleiben beide Sätze erhalten
+  const [roundAngle,      setRoundAngle]      = usePersistentState("roundAngle", D.roundAngle);
+  const [roundL,          setRoundL]          = usePersistentState("roundL", D.roundL);
+  const [roundLt,         setRoundLt]         = usePersistentState("roundLt", D.roundLt);
   const [dw,              setDw]              = usePersistentState("dw", D.dw);
   const [dh,              setDh]              = usePersistentState("dh", D.dh);
   const [hMouth,          setHMouth]          = usePersistentState("hMouth", D.hMouth);
@@ -116,13 +121,13 @@ export default function App() {
 
   // Projektdatei (project.js): der Entwurf als Ganzes, Schlüssel wie die gespeicherten Einstellungen
   const designValues = {
-    hornShape, throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
+    hornShape, throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
     flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, stepFuse, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
     hornShape: setHornShape, throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength, mouthRoundOn: setMouthRoundOn, mouthRoundR: setMouthRoundR,
-    openingAngle: setOpeningAngle, L: setL, Lt: setLt,
+    openingAngle: setOpeningAngle, L: setL, Lt: setLt, roundAngle: setRoundAngle, roundL: setRoundL, roundLt: setRoundLt,
     dw: setDw, dh: setDh, hMouth: setHMouth, curve: setCurve, hypexT: setHypexT, showRaumecke: setShowRaumecke,
     showWandstaerke: setShowWandstaerke, wandstaerke: setWandstaerke, filletOn: setFilletOn, filletR: setFilletR,
     clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, edgeOn: setEdgeOn, edgeR: setEdgeR,
@@ -193,10 +198,10 @@ export default function App() {
   // Abgeleitete hängt deshalb an p, nicht am Live-Zustand; die Ansichten sind memo und rendern
   // nur, wenn sich p auswirkt.
   const live = useMemo(() => ({
-    hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+    hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle: round ? roundAngle : openingAngle, L: round ? roundL : L, Lt: round ? roundLt : Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
     edgeOn, edgeR, simOn, mouth, simTemp, driver,
-  }), [hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+  }), [round, hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
     edgeOn, edgeR, simOn, mouth, simTemp, driver]);
   const p = useThrottledValue(live);
@@ -285,11 +290,11 @@ export default function App() {
         </Card>
 
         <Card title={t("card.geometry")} id="geometrie">
-          <Slider label={t("geometry.openingAngle")} value={openingAngle} min={round ? 10 : 60} max={160} step={1} unit="°" onChange={setOpeningAngle} />
-          <Slider label={t("geometry.length")} value={shown("L", LClamped)} min={Lmin} max={Lmax} step={5} unit="mm" onChange={setL} />
+          <Slider label={t("geometry.openingAngle")} value={round ? roundAngle : openingAngle} min={round ? 10 : 60} max={160} step={1} unit="°" onChange={round ? setRoundAngle : setOpeningAngle} />
+          <Slider label={t("geometry.length")} value={shown("L", LClamped)} min={Lmin} max={Lmax} step={5} unit="mm" onChange={round ? setRoundL : setL} />
           <Note>{t(round ? "geometry.lengthFromThroat" : g.showRaumecke ? "geometry.lengthFromCorner" : "geometry.lengthFromDriver")}</Note>
           {warnings.raumecke && <Warn>{t("warn.cornerLimit", { mm: LMaxRaumecke.toFixed(0) })}</Warn>}
-          <Slider label={t("geometry.tractrixLength")} value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={setLt} />
+          <Slider label={t("geometry.tractrixLength")} value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={round ? setRoundLt : setLt} />
           {warnings.ltMax && <Warn>{t("warn.ltMax", { mm: LtMax.toFixed(0) })}</Warn>}
           {warnings.ltFollows && <Note>{t("note.ltFollows", { mm: LtClamped.toFixed(0) })}</Note>}
           <Toggle label={t("geometry.clothoid")} checked={clothoidOn} onChange={setClothoidOn} />
