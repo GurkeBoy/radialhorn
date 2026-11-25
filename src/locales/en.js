@@ -180,6 +180,8 @@ export default {
   "volume.air": "Air volume",
   "volume.shell": "Wall material",
   "volume.outer": "Outer body",
+  "volume.centroidAir": "Centre of mass, air",
+  "volume.centroidShell": "Centre of mass, shell",
   "volume.hint": "From the 3D mesh: air volume from the throat, without the driver chamber; wall material incl. flange",
   "volume.noWall": "Without wall thickness only the air volume (from the throat, without driver chamber)",
 
@@ -220,6 +222,8 @@ export default {
   "view.3dShell": "3D · SHELL · WALL THICKNESS {mm} MM",
   "view.grid": "▦ Grid",
   "view.gridTitle": "Surfaces / grid",
+  "view.showCentroid": "⊕ Centre of mass",
+  "view.showCentroidTitle": "Show/hide the centre of mass (shell with wall thickness, otherwise the air volume)",
   "view.showDriver": "◉ Driver",
   "view.showDriverTitle": "Show/hide driver",
   "view.showCorner": "◿ Corner",

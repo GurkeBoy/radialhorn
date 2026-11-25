@@ -43,7 +43,7 @@ each [release](https://github.com/GurkeBoy/radialhorn/releases). They are not co
   π/2 (approximation). SPL at 1 m / 2.83 V and electrical impedance as a chart, export as CSV.
 - **Key figures:** mouth area, vertical opening angle, approximate cutoff frequencies.
 - **Volume:** air volume, wall material (including flange and ribs) and outer body in litres, computed from the same
-  closed 3D meshes as the exports.
+  closed 3D meshes as the exports, plus the centre of mass of the shown body (shell or air), also as a marker in the 3D view.
 - **Wall thickness advice:** a recommended minimum wall thickness for your material (PLA, PETG, ABS, resin, plywood,
   MDF, aluminium or your own values), so the wall barely yields under sound pressure, with a traffic light for the
   current wall and the lowest wall mode as information. A rule of thumb, not a measurement.

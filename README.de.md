@@ -43,7 +43,7 @@ Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.
   SPL bei 1 m / 2,83 V und elektrische Impedanz als Diagramm, Export als CSV.
 - **Kennwerte:** Mundfläche, vertikaler Öffnungswinkel, Grenzfrequenzen (Näherung).
 - **Volumen:** Luftvolumen, Wandmaterial (mit Flansch und Rippen) und Außenkörper in Litern, aus denselben
-  geschlossenen 3D-Netzen wie die Exporte.
+  geschlossenen 3D-Netzen wie die Exporte. Dazu der Schwerpunkt des gezeigten Körpers (Schale oder Luft), auch als Markierung in der 3D-Ansicht.
 - **Wandstärke-Empfehlung:** empfohlene Mindestwandstärke für deinen Werkstoff (PLA, PETG, ABS, Harz, Sperrholz, MDF,
   Alu oder eigene Werte), damit die Wand unter dem Schalldruck kaum nachgibt, mit Ampel für die aktuelle Wand und der
   tiefsten Wandmode als Information. Eine Faustregel, keine Messung.

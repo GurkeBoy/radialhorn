@@ -419,7 +419,7 @@ export default function App() {
 
         {s && <>
           <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={morph?.r > 0} morph={morph} t={t} />
-          <Volumes volumes={volumes} t={t} />
+          <Volumes volumes={volumes} wall={wall} t={t} />
           <WallAdvice advice={advice} wall={wall} t={t} onApply={applyWallAdvice}
             material={wallMaterial} onMaterial={setWallMaterial} customE={wallE} onCustomE={setWallE}
             customRho={wallRho} onCustomRho={setWallRho} limit={wallLimit} onLimit={setWallLimit} />
@@ -449,7 +449,8 @@ export default function App() {
               showRaumecke={g.showRaumecke && !s?.round} showWandstaerke={g.showWandstaerke} wandstaerke={g.wandstaerke} flange={flange} shellOuter={shellOuter} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={s?.round ? 4 * rt : g.dw} dh={s?.round ? 2 * rt + 10 : g.dh} hMouth={s?.round ? 2 * s.xMouth : g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke && !s?.round} />
+            <Ansicht3D s={s} rt={rt} dw={s?.round ? 4 * rt : g.dw} dh={s?.round ? 2 * rt + 10 : g.dh} hMouth={s?.round ? 2 * s.xMouth : g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke && !s?.round}
+              centroid={wall > 0 ? volumes?.shellCentroid : volumes?.airCentroid} />
           </ViewPanel>
         </div>
         {(!round || sim) && <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
@@ -505,7 +506,7 @@ const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroa
 });
 
 /** Volumen des Horns: Luftvolumen (Innenform), Wandmaterial der Schale und Außenkörper insgesamt. */
-const Volumes = memo(function Volumes({ volumes, t }) {
+const Volumes = memo(function Volumes({ volumes, wall, t }) {
   const litres = v => v === null || v === undefined ? "–" : (v / 1e6).toFixed(2) + " L";
   return (
     <Card title={t("card.volume")} id="volumen">
@@ -513,6 +514,9 @@ const Volumes = memo(function Volumes({ volumes, t }) {
         <Stat label={t("volume.air")} value={litres(volumes?.air)} />
         <Stat label={t("volume.shell")} value={litres(volumes?.shell)} />
         <Stat label={t("volume.outer")} value={litres(volumes?.outer)} />
+        {(wall > 0 ? volumes?.shellCentroid : volumes?.airCentroid) && (
+          <Stat label={t(wall > 0 ? "volume.centroidShell" : "volume.centroidAir")} value={"z = " + (wall > 0 ? volumes.shellCentroid : volumes.airCentroid)[2].toFixed(1) + " mm"} />
+        )}
       </div>
       <Note>{volumes?.shell == null ? t("volume.noWall") : t("volume.hint")}</Note>
     </Card>

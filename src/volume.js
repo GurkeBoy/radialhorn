@@ -17,18 +17,34 @@ export function meshVolume(tris) {
   return V;
 }
 
-const volumeOf = geometry => meshVolume(geometry.surfaces.flatMap(triangulate));
+/**
+ * Rauminhalt [mm³] und Schwerpunkt [x, h, z] eines geschlossenen, einheitlich nach außen orientierten Netzes: Summe der
+ * vorzeichenbehafteten Tetraeder zum Ursprung, jeder mit seinem Schwerpunkt (a + b + c)/4 gewichtet. Nullvolumen: Schwerpunkt null.
+ */
+export function meshMoments(tris) {
+  let V = 0, mx = 0, my = 0, mz = 0;
+  for (const [a, b, c] of tris) {
+    const n = cross(b, c), v = (a[0] * n[0] + a[1] * n[1] + a[2] * n[2]) / 6;
+    V += v;
+    mx += v * (a[0] + b[0] + c[0]) / 4; my += v * (a[1] + b[1] + c[1]) / 4; mz += v * (a[2] + b[2] + c[2]) / 4;
+  }
+  return { volume: V, centroid: V ? [mx / V, my / V, mz / V] : null };
+}
+
+const momentsOf = geometry => meshMoments(geometry.surfaces.flatMap(triangulate));
 
 /**
  * @param input  { s, rt, hMouth, curve, hypexT, fillet, morph, wall, flange, edgeR }
- * @returns {{ air: number, shell: number|null, outer: number|null }} in mm³; shell (Wandmaterial
- *   inkl. Flansch) und outer (Luft + Wand) nur bei wall > 0
+ * @returns {{ air: number, shell: number|null, outer: number|null, airCentroid: number[], shellCentroid: number[]|null }}
+ *   Rauminhalte in mm³; shell (Wandmaterial inkl. Flansch) und outer (Luft + Wand) nur bei wall > 0; Schwerpunkte
+ *   [x, h, z] in mm (Schale: gleichmäßige Dichte; Rippen überlappen die Wand ein wenig, ihr Überlapp zählt im Moment doppelt)
  */
 export function computeVolumes({ s, rt, hMouth, curve, hypexT, fillet, morph = null, wall, flange = null, edgeR = 0 }) {
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
-  const air = volumeOf(buildAir(s, rt, profile, fillet, morph));
-  if (!(wall > 0)) return { air, shell: null, outer: null };
+  const airMoments = momentsOf(buildAir(s, rt, profile, fillet, morph)), air = airMoments.volume;
+  if (!(wall > 0)) return { air, shell: null, outer: null, airCentroid: airMoments.centroid, shellCentroid: null };
   const geometry = buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph);
-  const shell = volumeOf(geometry) - (geometry.ribs?.overlap ?? 0);   // Rippen reichen in Platte und Wand hinein
-  return { air, shell, outer: air + shell };
+  const shellMoments = momentsOf(geometry);
+  const shell = shellMoments.volume - (geometry.ribs?.overlap ?? 0);   // Rippen reichen in Platte und Wand hinein
+  return { air, shell, outer: air + shell, airCentroid: airMoments.centroid, shellCentroid: shellMoments.centroid };
 }
