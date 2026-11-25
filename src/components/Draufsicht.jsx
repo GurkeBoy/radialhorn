@@ -217,7 +217,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           color={COLOR.arc} marker="url(#arrH)" label={`R ${s.arcR.toFixed(1)} mm`} />
       </svg>
 
-      <Legend showWandstaerke={showWandstaerke} showClothoid={hasClothoid(s)} showFlange={!!flange} />
+      <Legend showWandstaerke={showWandstaerke} blend={hasClothoid(s) ? s.clothoid.kind ?? "clothoid" : null} showFlange={!!flange} />
     </div>
   );
 });
@@ -236,11 +236,11 @@ function RightAngleMark({ x, y, dx, dy, size, color }) {
   return <path d={`M${x + dx*size},${y} L${x + dx*size},${y + dy*size} L${x},${y + dy*size}`} fill="none" stroke={color} strokeWidth="0.9" />;
 }
 
-function Legend({ showWandstaerke, showClothoid, showFlange }) {
+function Legend({ showWandstaerke, blend, showFlange }) {
   const tr = useT();
   const items = [
     { col: COLOR.trak,     label: tr("legend.tractrix") },
-    ...(showClothoid ? [{ col: COLOR.klo, label: tr("legend.clothoid") }] : []),
+    ...(blend ? [{ col: COLOR.klo, label: tr(blend === "arc" ? "legend.blendArc" : "legend.clothoid") }] : []),
     { col: COLOR.horn,     label: tr("legend.linear") },
     { col: COLOR.arc,      label: tr("legend.arc") },
     { col: COLOR.trans,    label: tr("legend.transition"), kind: "dot" },

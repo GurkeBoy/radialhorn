@@ -118,6 +118,20 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
   );
 });
 
+/** Klothoiden-Verrundung: Anfangs- und Endpunkt und die Länge als Beschriftung unter dem unteren Bogen. */
+function ClothoidMarks({ fillet, toX, toY }) {
+  const mid = fillet.zs.length >> 1, x = toX(fillet.zs[mid]), y = toY(-fillet.hs[mid]);
+  return <>
+    {[1, -1].map(sign => <g key={sign}>
+      <circle cx={toX(fillet.zT1)} cy={toY(sign * fillet.hs[0])} r={DOT * 0.7} fill={COLOR.trak} />
+      <circle cx={toX(fillet.zT2)} cy={toY(sign * fillet.hT2)} r={DOT * 0.7} fill={COLOR.horn} />
+    </g>)}
+    <text x={x} y={y + 16} {...S.label} textAnchor="middle" dominantBaseline="central" fill={COLOR.trans}>
+      ℓ {fillet.length.toFixed(fillet.length % 1 ? 1 : 0)}
+    </text>
+  </>;
+}
+
 /**
  * Tangentenpunkte der Verrundung und Radiusmaß: kurze Leitlinie auf der Radiallinie durch die
  * Bogenmitte, Pfeil am Bogen, Richtung Mittelpunkt – nur so lang, dass die Beschriftung außerhalb
@@ -125,6 +139,7 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
  * Bogen, oben kreuzen die Hilfslinien der axialen Maße (Traktrix → Mund).
  */
 function FilletMarks({ fillet, rt, wall, scale, toX, toY }) {
+  if (fillet.kind === "clothoid") return <ClothoidMarks fillet={fillet} toX={toX} toY={toY} />;
   const a2 = Math.atan2(fillet.hT2 - fillet.hc, fillet.zT2 - fillet.zc);   // T1 liegt bei −90°
   const mid = (-Math.PI / 2 + a2) / 2;
   // unterer Bogen: Spiegelbild des oberen (Mittelpunkt bei −hc)

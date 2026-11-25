@@ -82,6 +82,10 @@ export default function App() {
   const [filletR,         setFilletR]         = usePersistentState("filletR", D.filletR);
   const [clothoidOn,      setClothoidOn]      = usePersistentState("clothoidOn", D.clothoidOn);
   const [clothoidLength,  setClothoidLength]  = usePersistentState("clothoidLength", D.clothoidLength);
+  const [arcOn,           setArcOn]           = usePersistentState("arcOn", D.arcOn);
+  const [arcRadius,       setArcRadius]       = usePersistentState("arcRadius", D.arcRadius);
+  const [filletClothoidOn,     setFilletClothoidOn]     = usePersistentState("filletClothoidOn", D.filletClothoidOn);
+  const [filletClothoidLength, setFilletClothoidLength] = usePersistentState("filletClothoidLength", D.filletClothoidLength);
   const [edgeOn,          setEdgeOn]          = usePersistentState("edgeOn", D.edgeOn);
   const [edgeR,           setEdgeR]           = usePersistentState("edgeR", D.edgeR);
   const [flangeOn,        setFlangeOn]        = usePersistentState("flangeOn", D.flangeOn);
@@ -122,15 +126,15 @@ export default function App() {
   // Projektdatei (project.js): der Entwurf als Ganzes, Schlüssel wie die gespeicherten Einstellungen
   const designValues = {
     hornShape, throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke,
-    showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
+    showWandstaerke, wandstaerke, filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, edgeOn, edgeR, flangeOn, flangeD,
     flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, stepFuse, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
     hornShape: setHornShape, throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength, mouthRoundOn: setMouthRoundOn, mouthRoundR: setMouthRoundR,
     openingAngle: setOpeningAngle, L: setL, Lt: setLt, roundAngle: setRoundAngle, roundL: setRoundL, roundLt: setRoundLt,
     dw: setDw, dh: setDh, hMouth: setHMouth, curve: setCurve, hypexT: setHypexT, showRaumecke: setShowRaumecke,
-    showWandstaerke: setShowWandstaerke, wandstaerke: setWandstaerke, filletOn: setFilletOn, filletR: setFilletR,
-    clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, edgeOn: setEdgeOn, edgeR: setEdgeR,
+    showWandstaerke: setShowWandstaerke, wandstaerke: setWandstaerke, filletOn: setFilletOn, filletR: setFilletR, filletClothoidOn: setFilletClothoidOn, filletClothoidLength: setFilletClothoidLength,
+    clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, arcOn: setArcOn, arcRadius: setArcRadius, edgeOn: setEdgeOn, edgeR: setEdgeR,
     flangeOn: setFlangeOn, flangeD: setFlangeD, flangeT: setFlangeT, holeCount: setHoleCount,
     holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, ribsOn: setRibsOn, ribThickness: setRibThickness,
     ribLength: setRibLength, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
@@ -199,10 +203,10 @@ export default function App() {
   // nur, wenn sich p auswirkt.
   const live = useMemo(() => ({
     hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle: round ? roundAngle : openingAngle, L: round ? roundL : L, Lt: round ? roundLt : Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
-    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
+    filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
     edgeOn, edgeR, simOn, mouth, simTemp, driver,
   }), [round, hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
-    filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
+    filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
     edgeOn, edgeR, simOn, mouth, simTemp, driver]);
   const p = useThrottledValue(live);
   // Abgeleitete Geometrie im Web Worker (geometry.js, useGeometry): beim Ziehen rechnet der
@@ -297,10 +301,15 @@ export default function App() {
           <Slider label={t("geometry.tractrixLength")} value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={round ? setRoundLt : setLt} />
           {warnings.ltMax && <Warn>{t("warn.ltMax", { mm: LtMax.toFixed(0) })}</Warn>}
           {warnings.ltFollows && <Note>{t("note.ltFollows", { mm: LtClamped.toFixed(0) })}</Note>}
-          <Toggle label={t("geometry.clothoid")} checked={clothoidOn} onChange={setClothoidOn} />
-          {clothoidOn && <Slider label={t("geometry.clothoidLength")} value={clothoidLength} min={1} max={150} step={1} unit="mm" onChange={setClothoidLength} />}
-          {clothoidOn && warnings.clothoid === "Lt" && <Warn>{t("warn.clothoidLt", { mm: LtMinClothoid.toFixed(0) })}</Warn>}
-          {clothoidOn && warnings.clothoid === "zu lang" && <Warn>{t("warn.clothoidTooLong")}</Warn>}
+          <Group title={t("geometry.blend")}>
+            <SegmentedButtons options={["off", "arc", "clothoid"]} labels={{ off: t("blend.off"), arc: t("blend.arc"), clothoid: t("blend.clothoid") }}
+              value={clothoidOn ? "clothoid" : arcOn ? "arc" : "off"} onChange={v => { setClothoidOn(v === "clothoid"); setArcOn(v === "arc"); }} />
+            {clothoidOn && <Slider label={t("geometry.clothoidLength")} value={clothoidLength} min={1} max={150} step={1} unit="mm" onChange={setClothoidLength} />}
+            {arcOn && <Slider label={t("geometry.arcRadius")} value={arcRadius} min={10} max={1000} step={1} unit="mm" onChange={setArcRadius} />}
+          </Group>
+          {(clothoidOn || arcOn) && warnings.clothoid === "Lt" && <Warn>{t(clothoidOn ? "warn.clothoidLt" : "warn.arcLt", { mm: LtMinClothoid.toFixed(0) })}</Warn>}
+          {(clothoidOn || arcOn) && warnings.clothoid === "zu lang" && <Warn>{t(clothoidOn ? "warn.clothoidTooLong" : "warn.arcTooLong")}</Warn>}
+          {arcOn && !clothoidOn && warnings.arcNone && <Warn>{t("warn.arcNone")}</Warn>}
         </Card>
 
         {!round && <>
@@ -310,10 +319,14 @@ export default function App() {
             <SegmentedButtons options={CURVES} labels={Object.fromEntries(CURVES.map(c => [c, t("profile." + c)]))} value={curve} onChange={setCurve} />
             {curve === "hypex" && <Slider label={t("profile.hypexT")} value={hypexT} min={0} max={2} step={0.05} unit="" onChange={setHypexT} />}
           </Group>
-          <Toggle label={t("profile.fillet")} checked={filletOn} onChange={setFilletOn} />
-          {filletOn && <Slider label={t("profile.filletRadius")} value={filletR} min={1} max={1000} step={1} unit="mm" onChange={setFilletR} />}
-          {filletOn && s && !hasTraktrix(s) && <Warn>{t("warn.filletNeedsTractrix")}</Warn>}
-          {fillet?.limited && <Warn>{t("warn.filletLimited", { mm: fillet.R.toFixed(1) })}</Warn>}
+          <Group title={t("profile.fillet")}>
+            <SegmentedButtons options={["off", "arc", "clothoid"]} labels={{ off: t("blend.off"), arc: t("blend.arc"), clothoid: t("blend.clothoid") }}
+              value={filletOn ? "arc" : filletClothoidOn ? "clothoid" : "off"} onChange={v => { setFilletOn(v === "arc"); setFilletClothoidOn(v === "clothoid"); }} />
+            {filletOn && <Slider label={t("profile.filletRadius")} value={filletR} min={1} max={1000} step={1} unit="mm" onChange={setFilletR} />}
+            {filletClothoidOn && <Slider label={t("profile.filletClothoidLength")} value={filletClothoidLength} min={1} max={600} step={1} unit="mm" onChange={setFilletClothoidLength} />}
+          </Group>
+          {(filletOn || filletClothoidOn) && s && !hasTraktrix(s) && <Warn>{t("warn.filletNeedsTractrix")}</Warn>}
+          {fillet?.limited && <Warn>{fillet.kind === "clothoid" ? t("warn.filletClothoidLimited", { mm: fillet.length.toFixed(1) }) : t("warn.filletLimited", { mm: fillet.R.toFixed(1) })}</Warn>}
           <Toggle label={t("profile.mouthRound")} checked={mouthRoundOn} onChange={setMouthRoundOn} info={t("profile.mouthRoundHint")} />
           {mouthRoundOn && <Slider label={t("profile.mouthRoundRadius")} value={mouthRoundR} min={1} max={Math.max(1, Math.floor(maxMouthRound(hMouth / 2, s?.arcR)))} step={1} unit="mm" onChange={setMouthRoundR} />}
           {mouthRoundOn && morph?.mouth && morph.mouth.R < mouthRoundR && <Warn>{t("warn.mouthRoundLimited", { mm: morph.mouth.R.toFixed(0) })}</Warn>}

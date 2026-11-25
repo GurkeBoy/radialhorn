@@ -63,6 +63,10 @@ export const DESIGN_DEFAULTS = {
   filletR: 100,
   clothoidOn: false,
   clothoidLength: 30,
+  arcOn: false,            // Übergang Traktrix → Gerade als Kreisbogen (statt Klothoide), Radius [mm]
+  arcRadius: 120,
+  filletClothoidOn: false, // Verrundung Throat → Aufweitung als Klothoide (statt Kreisbogen), Länge [mm]
+  filletClothoidLength: 60,
   edgeOn: false,
   edgeR: null,             // null: Wandstärke
   flangeOn: false,
@@ -91,7 +95,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-export const ADDED_LATER = new Set(["hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
+export const ADDED_LATER = new Set(["arcOn", "arcRadius", "filletClothoidOn", "filletClothoidLength", "hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);

@@ -79,9 +79,9 @@ function solveBracketed(f, lo, hi, maxIter = 200) {
 const CLOTHOID_STEPS = 64;   // Simpson-Schritte für die Klothoiden-Integration
 
 /**
- * Punkte einer Klothoide (Krümmung fällt linear von kappa0 auf 0 über die Länge):
- * Tangentenwinkel zur Achse θ(s) = θ0 + κ0·(s − s²/2ℓ). n+1 Punkte {x, z, theta}.
- * @param c  { start: [x, z], theta0, kappa0, length }
+ * Punkte eines Übergangsstücks (Klothoide: Krümmung fällt linear von kappa0 auf kappa1 = 0 über die Länge; Kreisbogen:
+ * kappa1 = kappa0): Tangentenwinkel zur Achse θ(s) = θ0 + κ0·s + (κ1 − κ0)·s²/2ℓ. n+1 Punkte {x, z, theta}.
+ * @param c  { start: [x, z], theta0, kappa0, kappa1?, length, kind? }
  */
 export function clothoidTable(c, n = CLOTHOID_STEPS) {
   const out = [{ x: c.start[0], z: c.start[1], theta: c.theta0 }];
@@ -100,7 +100,8 @@ export function clothoidEnd(c, n = CLOTHOID_STEPS) {
  * Wert) – je Schritt zwei statt drei Auswertungen.
  */
 function clothoidWalk(c, n, visit) {
-  const theta = u => c.theta0 + c.kappa0 * (u - u * u / (2 * c.length));
+  const k1 = c.kappa1 ?? 0;
+  const theta = u => c.theta0 + c.kappa0 * u + (k1 - c.kappa0) * u * u / (2 * c.length);
   const ds = c.length / n;
   let x = c.start[0], z = c.start[1];
   let sa = Math.sin(theta(0)), ca = Math.cos(theta(0));
@@ -124,8 +125,11 @@ function clothoidWalk(c, n, visit) {
  * @param {number} openingAngle  horizontaler Öffnungswinkel [°]
  * @param {number} clothoid      Länge [mm] eines krümmungsstetigen Übergangs (Klothoide)
  *                               zwischen Traktrix und gerader Wand; 0 = ohne
+ * @param {number} arc           Radius [mm] eines Kreisbogens als Übergang statt der Klothoide (Schmiegekreis an die
+ *                               Traktrix, dann tangential in die Gerade); 0 = ohne; die Klothoide hat Vorrang
  */
-export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid = 0 } = {}) {
+export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid = 0, arc = 0 } = {}) {
+  const blend = clothoid > 0 || arc > 0;     // Übergang Traktrix → Gerade (Klothoide oder Kreisbogen)
   const ALPHA2    = (openingAngle / 2) * Math.PI / 180;   // halber Öffnungswinkel
   const T_TRANS   = Math.asinh(1 / Math.tan(ALPHA2));    // Traktrix-Parameter, bei dem die Tangente ALPHA2 erreicht
   const PHI_TOTAL = openingAngle * Math.PI / 180;
@@ -177,12 +181,66 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
   }
 
   /**
+   * Eingang mit Kreisbogen für einen Traktrix-Radius r0: Die Traktrix läuft bis zum Parameter τa, an dem ihr
+   * Krümmungsradius r0·sinh τa gerade den Radius R des Bogens hat (Schmiegekreis: Lage, Richtung und Krümmung stetig).
+   * Der Bogen dreht die Tangente von θ(τa) = atan(1/sinh τa) auf den Winkel α, danach folgt die Gerade tangential;
+   * die Krümmung springt dort von 1/R auf 0. Bogenlänge R·(α − θ). null, wenn R nicht passt: der Kreis muss
+   * innerhalb der Traktrix beginnen (R ≤ r0·sinh τTh) und vor dem Winkel α (R ≥ r0·sinh τα = r0/tan α).
+   */
+  function arcEntrance(r0, rt, R) {
+    if (r0 <= rt) return null;
+    const tTh = Math.acosh(r0 / rt);
+    if (tTh <= T_TRANS) return null;
+    const tauA = Math.asinh(R / r0);
+    if (!(tauA <= tTh && tauA > T_TRANS)) return null;
+    const theta0 = Math.atan(1 / Math.sinh(tauA)), kappa = 1 / R;
+    const x0 = r0 * xN(tauA), z0 = r0 * (zN(tTh) - zN(tauA));
+    const c = {
+      kind: "arc", start: [x0, z0], theta0, kappa0: kappa, kappa1: kappa, length: R * (ALPHA2 - theta0),
+    };
+    // Kreisbogen exakt: x = x0 + (cos θ0 − cos θ)/κ, z = z0 + (sin θ − sin θ0)/κ bei θ = α
+    return {
+      r0, tTh, tEnd: tauA, clothoid: c,
+      xTrans: x0 + R * (Math.cos(theta0) - Math.cos(ALPHA2)), zTrans: z0 + R * (Math.sin(ALPHA2) - Math.sin(theta0)),
+    };
+  }
+
+  /** Eingang mit dem eingestellten Übergangsstück (Klothoide hat Vorrang vor Kreisbogen) für r0; null ohne Übergang. */
+  const entranceFor = (r0, rt) => clothoid > 0 ? clothoidEntrance(r0, rt, clothoid) : arcEntrance(r0, rt, arc);
+
+  /**
+   * Zulässige Traktrix-Längen Lₜ des Kreisbogens: r0 liegt zwischen r0_min (Bogen beginnt am Throat: R = r0·√(r0² − rt²)/rt
+   * ⇒ r0² = (rt² + √(rt⁴ + 4·R²·rt²))/2) und r0_max = R·tan α (Bogen schrumpft auf 0); Lₜ steigt mit r0.
+   * null, wenn das Fenster leer ist. Nur für den Kreisbogen.
+   */
+  function arcWindow(rt) {
+    const rLo = Math.sqrt((rt * rt + Math.sqrt(rt ** 4 + 4 * arc * arc * rt * rt)) / 2) * (1 + 1e-9), rHi = arc * TAN;
+    if (!(rLo < rHi)) return null;
+    const lo = arcEntrance(rLo, rt, arc), hi = arcEntrance(rHi * (1 - 1e-12), rt, arc);
+    return lo && hi ? { rLo, rHi: rHi * (1 - 1e-12), min: lo.zTrans, max: hi.zTrans } : null;
+  }
+
+  /**
+   * Zustand der Traktrix-Länge zum Übergangsstück: "short" (zu kurz: Klothoide passt nicht, Kreisbogen beginnt vor dem
+   * Throat), "long" (zu lang, nur Kreisbogen) oder "ok".
+   */
+  function blendState(Lt, rt) {
+    if (!blend) return "ok";
+    if (arc > 0 && !(clothoid > 0)) {
+      const w = arcWindow(rt);
+      if (!w) return "short";
+      return Lt < w.min ? "short" : Lt > w.max ? "long" : "ok";
+    }
+    return transition(Lt, rt) === null ? "short" : "ok";
+  }
+
+  /**
    * Übergang Eingang → gerade Wand; ohne Traktrix beginnt die Wand direkt am Throat.
-   * Mit Klothoide wird r0 so bestimmt, dass Traktrix + Klothoide axial genau Lt lang sind.
+   * Mit Klothoide oder Kreisbogen wird r0 so bestimmt, dass Traktrix + Übergangsstück axial genau Lt lang sind.
    * null = unlösbar.
    */
   function transition(Lt, rt) {
-    if (!(clothoid > 0)) return transitionUncached(Lt, rt);
+    if (!blend) return transitionUncached(Lt, rt);
     // mit Klothoide teuer und von den Grenzsuchen tausendfach mit gleichen Werten gerufen
     const key = Lt + "|" + rt;
     if (!transitionCache.has(key)) {
@@ -195,19 +253,27 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
 
   function transitionUncached(Lt, rt) {
     if (!(Lt > LT_MIN)) return { r0: null, tTh: null, tEnd: null, clothoid: null, xTrans: rt, zTrans: 0 };
-    if (!(clothoid > 0)) {
+    if (!blend) {
       const r0 = solveR0(Lt, rt);
       if (!r0) return null;
       return { r0, tTh: Math.acosh(r0 / rt), tEnd: T_TRANS, clothoid: null, xTrans: r0 * xN(T_TRANS), zTrans: Lt };
     }
-    const f = r0 => { const e = clothoidEntrance(r0, rt, clothoid); return e ? e.zTrans - Lt : -Lt; };
-    let hi = rt * 2;
-    for (let i = 0; i < 80 && f(hi) < 0; i++) hi *= 2;
-    if (f(hi) < 0) return null;
-    const r0 = solveBracketed(f, rt * (1 + 1e-9), hi);
+    const f = r0 => { const e = entranceFor(r0, rt); return e ? e.zTrans - Lt : -Lt; };
+    let lo = rt * (1 + 1e-9), hi = rt * 2;
+    if (!(clothoid > 0)) {
+      // Kreisbogen: nur das Fenster [r0_min, r0_max) ist lösbar, Lₜ steigt darin mit r0
+      const w = arcWindow(rt);
+      if (!w || Lt < w.min || Lt > w.max) return null;
+      lo = w.rLo; hi = w.rHi;
+      if (f(hi) < 0) return null;
+    } else {
+      for (let i = 0; i < 80 && f(hi) < 0; i++) hi *= 2;
+      if (f(hi) < 0) return null;
+    }
+    const r0 = solveBracketed(f, lo, hi);
     // Die Suche endet auch an einer Sprungstelle (Klothoide passt gerade so, beginnt am Throat,
     // ist aber schon länger als Lt) – dann gibt es keine Lösung.
-    const e = clothoidEntrance(r0, rt, clothoid);
+    const e = entranceFor(r0, rt);
     return e && Math.abs(e.zTrans - Lt) < 1e-6 ? e : null;
   }
 
@@ -277,7 +343,10 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
    */
   function maxLt(L, rt, dw, dh) {
     if (!solveHorn(L, 0, rt, dw, dh)) return 0;
-    const ok = lt => transition(lt, rt) === null ? clothoid > 0 : !!solveHorn(L, lt, rt, dw, dh);
+    const ok = lt => {
+      const state = blendState(lt, rt);
+      return state === "long" ? false : state === "short" ? blend : !!solveHorn(L, lt, rt, dw, dh);
+    };
     let lo = 0, hi = L;
     for (let i = 0; i < 60 && hi - lo > LIMIT_TOL; i++) {
       const mid = (lo + hi) / 2;
@@ -286,9 +355,15 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
     return lo;
   }
 
-  /** Kleinste Traktrix-Länge, in die die Klothoide passt (0 ohne Klothoide). */
+  /** Größte Traktrix-Länge, die das Übergangsstück zulässt (Kreisbogen: Ende des Fensters, 0 wenn es keins gibt; sonst unbegrenzt). */
+  function maxLtForBlend(rt) {
+    return arc > 0 && !(clothoid > 0) ? arcWindow(rt)?.max ?? 0 : Infinity;
+  }
+
+  /** Kleinste Traktrix-Länge, in die das Übergangsstück passt (Klothoide: Bisektion; Kreisbogen: Fenster); 0 ohne Übergang. */
   function minLtForClothoid(rt) {
-    if (!(clothoid > 0)) return 0;
+    if (!blend) return 0;
+    if (!(clothoid > 0)) return arcWindow(rt)?.min ?? Infinity;
     let lo = LT_MIN, hi = clothoid;
     while (transition(hi, rt) === null && hi < 1e5) hi *= 2;
     for (let i = 0; i < 60 && hi - lo > LIMIT_TOL; i++) {
@@ -369,7 +444,7 @@ export function createHornMath(openingAngle = DEFAULT_OPENING_ANGLE, { clothoid 
 
   return {
     openingAngle, ALPHA2, T_TRANS, PHI_TOTAL,
-    solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke, minLtForClothoid, maxLWithRaumecke,
+    solveR0, solveHorn, minL, maxLt, maxLforRaumecke, minLtForRaumecke, minLtForClothoid, maxLtForBlend, maxLWithRaumecke,
   };
 }
 
@@ -448,6 +523,7 @@ function hypexExponent(ratio, T) {
  */
 export function verticalHalfHeight(z, s, rt, hMouth, curve, hypexT, fillet = null) {
   if (fillet && z > fillet.zT1 && z < fillet.zT2) {
+    if (fillet.kind === "clothoid") return tableHeight(fillet, z);
     return fillet.hc - Math.sqrt(Math.max(0, fillet.R ** 2 - (z - fillet.zc) ** 2));
   }
   const h0 = rt, h1 = hMouth / 2;
@@ -521,6 +597,93 @@ export function computeFillet(s, rt, hMouth, curve, hypexT, R) {
     if (sol) { lo = mid; best = sol; } else hi = mid;
   }
   return lo > 0.1 ? { ...best, limited: true } : null;
+}
+
+/** Höhe der Klothoiden-Verrundung bei z (lineare Interpolation in der dichten Tabelle zs/hs, z aufsteigend). */
+function tableHeight({ zs, hs }, z) {
+  let lo = 0, hi = zs.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; zs[mid] <= z ? (lo = mid) : (hi = mid); }
+  return hs[lo] + (hs[hi] - hs[lo]) * (z - zs[lo]) / (zs[hi] - zs[lo] || 1);
+}
+
+const BLEND_STEPS = 400;   // Stützstellen der Klothoiden-Verrundung (Simpson-Integration und Tabelle)
+
+/**
+ * Krümmungsstetige Verrundung (Klothoide) zwischen dem waagerechten Throat (h = rt, Krümmung 0) und der
+ * Aufweitungskurve f: Die Krümmung steigt linear von 0 am Throat auf ein Maximum in der Mitte und fällt/steigt dann
+ * linear auf die Krümmung κ_f der Aufweitung am Ende (zwei Klothoiden, Gesamtlänge ℓ). Lage, Richtung und Krümmung
+ * sind an beiden Enden stetig. Das Ende T2 liegt bei z2 auf f: der Tangentenwinkel θ_f(z2) = atan f′ legt das
+ * Krümmungsmaximum κa = 2·θ_f/ℓ − κ_f/2 fest, die Höhe rt + Y(ℓ, z2) = f(z2) bestimmt z2 (Bisektion), der Beginn
+ * z1 = z2 − X(ℓ, z2) liegt auf dem Throat. Reicht der Platz nicht (z2 hinter dem Mund, Beginn vor dem Throat),
+ * wird die größte machbare Länge genommen (limited).
+ *
+ * @returns {{kind: "clothoid", length, limited, zT1, zT2, hT2, zs, hs} | null}  null ohne Traktrix oder bei ℓ ≤ 0
+ */
+export function computeFilletClothoid(s, rt, hMouth, curve, hypexT, length) {
+  if (!s || !hasTraktrix(s) || !(length > 0)) return null;
+  const z0 = s.zInnerApex, z1 = s.zApex;
+  const f = makeProfile(s, rt, hMouth, curve, hypexT);
+  const d = Math.max(1e-3, (z1 - z0) * 1e-4);
+  const slope = z => (f(z + d) - f(z - d)) / (2 * d);
+  const curvature = z => {
+    const m = slope(z);
+    return (f(z + d) - 2 * f(z) + f(z - d)) / (d * d) / Math.pow(1 + m * m, 1.5);
+  };
+  // Verlauf der Klothoide: Tangentenwinkel θ(u), Krümmung 0 → κa (Mitte) → κe (Ende)
+  const profileOf = (l, theta2, kEnd) => {
+    const ka = 2 * theta2 / l - kEnd / 2, half = l / 2;
+    return u => u <= half
+      ? ka * u * u / l
+      : ka * l / 4 + ka * (u - half) + (kEnd - ka) * (u - half) ** 2 / l;
+  };
+  // Lage am Ende: ∫cos θ, ∫sin θ (Simpson, BLEND_STEPS Schritte)
+  const integrate = (l, theta) => {
+    const h = l / BLEND_STEPS;
+    let x = 0, y = 0;
+    for (let k = 0; k < BLEND_STEPS; k++) {
+      const a = theta(k * h), m = theta((k + 0.5) * h), b = theta((k + 1) * h);
+      x += h / 6 * (Math.cos(a) + 4 * Math.cos(m) + Math.cos(b));
+      y += h / 6 * (Math.sin(a) + 4 * Math.sin(m) + Math.sin(b));
+    }
+    return { x, y };
+  };
+  const trial = l => {
+    const residual = z2 => {
+      const { y } = integrate(l, profileOf(l, Math.atan(slope(z2)), curvature(z2)));
+      return rt + y - f(z2);
+    };
+    let lo = z0 + 5 * d, hi = z1 - d;
+    if (!(residual(lo) > 0) || residual(hi) > 0) return null;   // Länge zu groß: f steigt vor dem Schnitt nicht genug
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      residual(mid) > 0 ? (lo = mid) : (hi = mid);
+    }
+    const z2 = (lo + hi) / 2, theta = profileOf(l, Math.atan(slope(z2)), curvature(z2));
+    const { x } = integrate(l, theta);
+    return z2 - x >= 0 ? { l, z2, theta, zStart: z2 - x } : null;
+  };
+
+  let used = length, sol = trial(length), limited = false;
+  if (!sol) {
+    limited = true;
+    let lo = 0, hi = length;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2, t = trial(mid);
+      if (t) { lo = mid; sol = t; used = mid; } else hi = mid;
+    }
+    if (!sol || lo < 0.1) return null;
+  }
+  const zs = [sol.zStart], hs = [rt];
+  const h = sol.l / BLEND_STEPS;
+  let x = 0, y = 0;
+  for (let k = 0; k < BLEND_STEPS; k++) {
+    const a = sol.theta(k * h), m = sol.theta((k + 0.5) * h), b = sol.theta((k + 1) * h);
+    x += h / 6 * (Math.cos(a) + 4 * Math.cos(m) + Math.cos(b));
+    y += h / 6 * (Math.sin(a) + 4 * Math.sin(m) + Math.sin(b));
+    zs.push(sol.zStart + x); hs.push(rt + y);
+  }
+  zs[BLEND_STEPS] = sol.z2; hs[BLEND_STEPS] = f(sol.z2);   // Ende exakt auf der Aufweitung
+  return { kind: "clothoid", length: used, limited, zT1: sol.zStart, zT2: sol.z2, hT2: f(sol.z2), zs, hs };
 }
 
 // ──────────────────────────────────────────────────────────────────
