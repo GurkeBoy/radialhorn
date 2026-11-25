@@ -7,14 +7,15 @@
 // Version ihr bisheriges Objekt (adoptGeometry) – so bleiben memo/useMemo dahinter wirksam, auch
 // wenn die Daten als Kopie aus dem Worker kommen.
 import { createHornMath, computeFillet, makeProfile, throatMorph, mouthRounding, lengthOffset } from "./horn-math.js";
-import { flangeLayout, shellPlanOutline, shellProfileOutline } from "./horn-mesh.js";
+import { shellPlanOutline, shellProfileOutline } from "./horn-mesh.js";
+import { layoutFlange } from "./bodies.js";
 import { linspace } from "./utils.js";
 
 export const L_MAX = 1200;   // Obergrenze des L-Reglers [mm]; mit Raumecke gilt maxLWithRaumecke, falls kleiner
 
 /** Reglerwerte, von denen die Geometrie abhängt (alles andere – Simulation, Ansicht – nicht). */
 export const GEOMETRY_KEYS = [
-  "throatDiam", "openingAngle", "L", "Lt", "dw", "dh", "hMouth", "curve", "hypexT", "showRaumecke", "showWandstaerke",
+  "hornShape", "throatDiam", "openingAngle", "L", "Lt", "dw", "dh", "hMouth", "curve", "hypexT", "showRaumecke", "showWandstaerke",
   "wandstaerke", "filletOn", "filletR", "clothoidOn", "clothoidLength", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "flangeOn", "flangeD",
   "flangeT", "holeCount", "holeCircle", "holeD", "holeAngle", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "edgeOn", "edgeR",
 ];
@@ -41,7 +42,12 @@ export function createGeometryEngine() {
     return c;
   };
 
-  return function compute(p) {
+  return function compute(input) {
+    // Rundes Horn (Rotationskörper): ohne Treiberabmessungen, Raumecke, vertikales Profil und Kantenrundungen; L zählt vom Throat
+    const round = input.hornShape === "round";
+    const p = round
+      ? { ...input, dw: 0, dh: 0, showRaumecke: false, filletOn: false, morphOn: false, mouthRoundOn: false, edgeOn: false }
+      : input;
     const rt = p.throatDiam / 2;
     const math = stage("math", [p.openingAngle, p.clothoidOn ? p.clothoidLength : 0],
       () => createHornMath(p.openingAngle, { clothoid: p.clothoidOn ? p.clothoidLength : 0 }));
@@ -74,7 +80,10 @@ export function createGeometryEngine() {
     const LMaxRaumecke = stage("lMaxRaumecke", [...geo, p.showRaumecke, extraBreite],
       () => p.showRaumecke ? m.maxLWithRaumecke(rt, p.dw, p.dh, extraBreite, L_MAX) : null).value;
     const LClamped = LMaxForLt !== null && L > LMaxForLt ? LMaxForLt : L;
-    const s = stage("s", [...geo, LClamped, LtClamped], () => m.solveHorn(LClamped, LtClamped, rt, p.dw, p.dh));
+    const s = stage("s", [...geo, LClamped, LtClamped, round], () => {
+      const solution = m.solveHorn(LClamped, LtClamped, rt, p.dw, p.dh);
+      return solution && round ? { ...solution, round: true } : solution;
+    });
     const sv = s.value;
 
     const fillet = stage("fillet", [s.version, p.filletOn, p.hMouth, p.curve, p.hypexT, p.filletR],
@@ -93,7 +102,7 @@ export function createGeometryEngine() {
     const edge = wall > 0 && p.edgeOn ? Math.min(p.edgeR ?? wall, wall) : 0;
     // Flansch nur an der Schale; Ø und Lochkreis werden gegen den Außenkörper aufgelöst
     const flange = stage("flange", [profile.version, morph.version, wall, edge, p.flangeOn, p.flangeD, p.dw, p.flangeT,
-      p.holeCount, p.holeCircle, p.holeD, p.holeAngle, p.ribsOn, p.ribThickness, p.ribLength, p.roundOn, p.roundR], () => sv && wall > 0 && p.flangeOn ? flangeLayout(sv, rt, profile.value, fillet.value, wall, {
+      p.holeCount, p.holeCircle, p.holeD, p.holeAngle, p.ribsOn, p.ribThickness, p.ribLength, p.roundOn, p.roundR], () => sv && wall > 0 && p.flangeOn ? layoutFlange(sv, rt, profile.value, fillet.value, wall, {
       diameter: p.flangeD, fallback: p.dw, thickness: p.flangeT,
       holes: { count: p.holeCount, circle: p.holeCircle, diameter: p.holeD, angle: p.holeAngle },
       ribs: p.ribsOn ? { thickness: p.ribThickness, length: p.ribLength } : null,
@@ -104,14 +113,14 @@ export function createGeometryEngine() {
     const zShell = flange.value ? flange.value.thickness : 0;
     const shellOuter = stage("shellOuter", [s.version, wall, zShell],
       () => sv && wall > 0 ? shellPlanOutline(sv, rt, wall, zShell) : null);
-    const shellCut = stage("shellCut", [profile.version, wall, zShell], () => sv && wall > 0 ? {
+    const shellCut = stage("shellCut", [profile.version, wall, zShell, round], () => sv && wall > 0 && !round ? {
       inner: linspace(zShell, sv.zApex, 300).map(z => [profile.value(z), z]),
       outer: shellProfileOutline(sv, rt, profile.value, wall, zShell),
     } : null);
 
     const stages = { s, fillet, morph, flange, shellOuter, shellCut };
     return {
-      params: p,
+      params: input,
       values: {
         ...Object.fromEntries(VERSIONED.map(k => [k, stages[k].value])),
         // Längen angezeigt (ohne Raumecke ab der Treiberrückseite); LMaxRaumecke nur mit Raumecke, dort ist off = 0

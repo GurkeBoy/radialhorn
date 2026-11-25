@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet, createHornMath, throatMorph, mouthRounding, maxMorphLength } from "../horn-math.js";
 import { buildBrep, hornPatches, ribPatches, stepFile, hornStep, circleOf } from "./step.js";
-import { flangeLayout } from "../horn-mesh.js";
+import { layoutFlange } from "../bodies.js";
 
 const RT = 25.4, H = 200;
 const BMS = { diameter: null, fallback: 120, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
@@ -11,9 +11,11 @@ const design = (s, curve = "exponential", R = 0, wall = 0, { edgeR = 0, morph = 
   const throat = morph && throatMorph(s, RT, morph === "max" ? maxMorphLength(s) : undefined);
   const m = mouth ? mouthRounding(s, profile, throat, mouth) : throat;
   return { s, rt: RT, profile, fillet, wall, edgeR, morph: m,
-           flange: flange && flangeLayout(s, RT, profile, fillet, wall, { ...BMS, ...flange }, edgeR, m) };
+           flange: flange && layoutFlange(s, RT, profile, fillet, wall, { ...BMS, ...flange }, edgeR, m) };
 };
 const std = () => solveHorn(500, 60, RT, 120, 100);
+// rundes Horn (Rotationskörper): L ab dem Throat, ohne Treibermaße
+const rnd = (Lt, angle = 70, L = 500, clothoid = 0) => ({ ...createHornMath(angle, { clothoid }).solveHorn(L, Lt, RT, 0, 0), round: true });
 const CASES = {
   standard: design(solveHorn(500, 60, RT, 120, 100)),
   "ohne Traktrix": design(solveHorn(500, 0, RT, 120, 100), "linear"),
@@ -40,6 +42,12 @@ const CASES = {
   "Schale, Mundecken, e = t": design(std(), "exponential", 0, 12, { mouth: 30, edgeR: 12 }),
   "Schale, runder Throat + Mundecken": design(std(), "exponential", 0, 12, { morph: true, mouth: 30, edgeR: 12 }),
   "Flansch, Mundecken, Rippen": design(std(), "exponential", 0, 12, { mouth: 30, flange: { ribs: { thickness: 4, length: 30 } } }),
+  "rund, Luft": design(rnd(60), "exponential", 0, 0),
+  "rund ohne Traktrix, Luft": design(rnd(0, 70, 400), "exponential", 0, 0),
+  "rund, Schale": design(rnd(60), "exponential", 0, 12),
+  "rund, Klothoide, Schale": design(rnd(60, 70, 500, 30), "exponential", 0, 12),
+  "rund, Flansch": design(rnd(60), "exponential", 0, 12, { flange: {} }),
+  "rund, Flansch, Rippen, Verrundung": design(rnd(60), "exponential", 0, 12, { flange: { round: 3, ribs: { thickness: 4, length: 30 } } }),
   "Flansch mit Stützrippen": design(std(), "exponential", 0, 12, { flange: { ribs: { thickness: 4, length: 30 } } }),
   "Flansch, Verrundung r = 3": design(std(), "exponential", 0, 12, { flange: { round: 3 } }),
   "Flansch, Verrundung, Rippen": design(std(), "exponential", 0, 12, { flange: { round: 3, ribs: { thickness: 4, length: 30 } } }),

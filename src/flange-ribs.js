@@ -65,7 +65,9 @@ export function rayReach(segs, c, s, side = 0) {
     if (Math.abs(den) < 1e-12) continue;
     const t = (a[0] * eh - a[1] * ex) / den;        // (a × e) / (d × e)
     const u = (a[0] * s - a[1] * c) / den;          // (a × d) / (d × e)
-    if (u >= 0 && u <= 1 && t > 0 && (best === null || t > best)) best = t;
+    // etwas Spielraum an den Enden: ein Strahl genau durch einen Eckpunkt des Schnitts trifft sonst beide Nachbarstrecken
+    // knapp daneben (u = −1e-16 bzw. 1 + 1e-16) und gar nichts – die Rippe endete dort zu früh
+    if (u >= -1e-9 && u <= 1 + 1e-9 && t > 0 && (best === null || t > best)) best = t;
   }
   return best;
 }

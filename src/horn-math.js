@@ -743,6 +743,7 @@ const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
  *   aufsteigend in z; zWall = zugehöriger Wandpunkt, cornerR = Eckradius dort
  */
 export function crossSection(s, profile, n = 100, zWallList = null, morph = null) {
+  if (s.round) return crossSectionRound(s, n, zWallList);
   const clothoid = denseClothoid(s);
   const zWalls = zWallList ? [...zWallList] : Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
   if (hasTraktrix(s)) zWalls.push(s.zTrans);
@@ -772,6 +773,37 @@ export function crossSection(s, profile, n = 100, zWallList = null, morph = null
 }
 
 // ──────────────────────────────────────────────────────────────────
+// RUNDES HORN (Rotationskörper)
+// ──────────────────────────────────────────────────────────────────
+//
+// Das Draufsicht-Profil (Traktrix-Eingang, gerade Wand, Mundbogen um den Fokus) um die Hornachse gedreht ergibt ein
+// rotationssymmetrisches Horn. Jede Wellenfront ist dann eine Kugelkappe mit dem Radius und dem Halbwinkel des
+// Draufsicht-Bogens: Fläche 2π·R²·(1 − cos θ), am Throat die Kreisscheibe π·rt². Die Lösung s trägt s.round = true
+// (geometry.js); alles Nachgelagerte (Querschnitt, Mundfläche, Netze, Simulation) prüft dieses Kennzeichen.
+// Länge L zählt dabei vom Throat (Treiberfront, z = 0) bis zum Scheitel des Mundbogens.
+
+/** Fläche der Kugelkappe mit Radius R und Halbwinkel θ [mm²]: 2π·R²·(1 − cos θ), numerisch stabil auch für große R. */
+export const capArea = (R, theta) => 2 * Math.PI * R * R * Math.sin(theta) ** 2 / (1 + Math.cos(theta));
+
+/**
+ * Querschnittsfläche der Wellenfront des runden Horns (wie crossSection, ohne Profil und Ecken), dazu Radius und
+ * Tangentenwinkel der Wand an ihrem Fußpunkt (xWall, theta).
+ * @returns {{z: number, A: number, part: string, zWall: number, cornerR: number, xWall: number, theta: number}[]}
+ */
+export function crossSectionRound(s, n = 100, zWallList = null) {
+  const clothoid = denseClothoid(s);
+  const zWalls = zWallList ? [...zWallList] : Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
+  if (hasTraktrix(s)) zWalls.push(s.zTrans);
+  if (clothoid) zWalls.push(clothoid[0].z);
+  zWalls.sort((a, b) => a - b);
+  const pts = zWalls.map(zWall => {
+    const wf = wavefrontAt(s, zWall, clothoid);
+    return { z: wf.zAxis, A: capArea(wf.radius, wf.halfAngle), part: wf.part, zWall, cornerR: 0, xWall: wf.xWall, theta: wf.halfAngle };
+  });
+  return [{ ...pts[0], z: 0 }, ...pts];
+}
+
+// ──────────────────────────────────────────────────────────────────
 // KENNWERTE
 // ──────────────────────────────────────────────────────────────────
 
@@ -779,8 +811,9 @@ export function crossSection(s, profile, n = 100, zWallList = null, morph = null
  * Mundfläche (Bogenlänge × Mundhöhe) [mm²], mit gerundeten Mundecken (morph, mouthRounding) um (4 − π)·r²
  * des Eckradius am Mund vermindert – dieselbe Fläche wie am Ende von crossSection und der Simulation.
  */
-export const mouthArea = (s, hMouth, morph = null) =>
-  s.arcR * 2 * s.alpha2 * hMouth - cornerDeficit(cornerRadius(maxMorphLength(s), morph));
+export const mouthArea = (s, hMouth, morph = null) => s.round
+  ? capArea(s.arcR, s.alpha2)   // rundes Horn: Kugelkappe des Mundbogens
+  : s.arcR * 2 * s.alpha2 * hMouth - cornerDeficit(cornerRadius(maxMorphLength(s), morph));
 
 /** Vertikaler Öffnungswinkel am Mund [°], aus der Profilsteigung kurz vor dem Mundscheitel. */
 export function verticalMouthAngle(s, profile) {
@@ -800,7 +833,7 @@ export function verticalMouthAngle(s, profile) {
 export function frequencyEstimates(s, rt, hMouth, roundThroat = false, morph = null) {
   const c = SPEED_OF_SOUND;
   const A = mouthArea(s, hMouth, morph);
-  const throatArea = roundThroat ? Math.PI * rt * rt : (2 * rt) ** 2;
+  const throatArea = roundThroat || s.round ? Math.PI * rt * rt : (2 * rt) ** 2;
   const m = Math.log(A / throatArea) / (s.zApex - s.hatTipZ);
   return {
     fcLow:  c / (2 * Math.PI * Math.sqrt(A / Math.PI)),

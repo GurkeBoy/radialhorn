@@ -25,6 +25,9 @@ Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.
 - **Horizontales Profil:** Traktrix-Eingang → gerade Wand unter dem halben Öffnungswinkel → Mundbogen um den
   Fokuspunkt; optional krümmungsstetiger Übergang (Klothoide) zwischen Traktrix und Wand. Öffnungswinkel,
   Gesamtlänge, Traktrix-Länge, Throat (1", 1,4", 2" oder eigene Größe) und Treibermaße einstellbar.
+- **Rundes Horn:** ein Schalter ganz oben macht aus dem Horn einen Rotationskörper – das Draufsicht-Profil (Traktrix-Eingang,
+  gerade Wand) um die Achse gedreht, mit rundem Mund. Auch für kleine Hochtonhörner. Von Wand und Flansch über Rippen und
+  Simulation bis zu allen Exporten funktioniert es ebenfalls.
 - **Vertikales Profil:** Aufweitung linear, exponentiell oder Hypex; optionale Verrundung des Übergangs Throat →
   Aufweitung; optional gerundete Mundecken, der Eckradius wächst gleichmäßig vom Throat bis zum Mund.
 - **Raumecke:** begrenzt die Hornbreite auf die 45°-Diagonale einer Raumecke, optional mit Wandstärke.

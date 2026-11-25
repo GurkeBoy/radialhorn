@@ -48,6 +48,8 @@ export default function App() {
   const lang = langSetting in LANGUAGES ? langSetting : "de";
   const t = useMemo(() => (key, params) => translate(lang, key, params), [lang]);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+  const [hornShape,       setHornShape]       = usePersistentState("hornShape", D.hornShape);
+  const round = hornShape === "round";                     // Bauform rund: Rotationskörper (kein Höhenprofil, keine Raumecke)
   const [throatDiam,      setThroatDiam]      = usePersistentState("throatDiam", D.throatDiam);
   // Eigene Halsgröße: gewählt oder ein gespeicherter Durchmesser, den es als Knopf nicht (mehr) gibt (z. B. früher 3")
   const [throatCustomOn,  setThroatCustomOn]  = usePersistentState("throatCustom", D.throatCustom);
@@ -63,6 +65,11 @@ export default function App() {
   const [openingAngle,    setOpeningAngle]    = usePersistentState("openingAngle", D.openingAngle);
   const [L,               setL]               = usePersistentState("L", D.L);
   const [Lt,              setLt]              = usePersistentState("Lt", D.Lt);
+  // Rundes Horn: eigene Werte für Winkel, Länge und Traktrix-Länge (andere Bedeutung als beim Radialhorn: kein Winkelsektor in
+  // der Raumecke, L ab dem Throat); beim Umschalten der Bauform bleiben beide Sätze erhalten
+  const [roundAngle,      setRoundAngle]      = usePersistentState("roundAngle", D.roundAngle);
+  const [roundL,          setRoundL]          = usePersistentState("roundL", D.roundL);
+  const [roundLt,         setRoundLt]         = usePersistentState("roundLt", D.roundLt);
   const [dw,              setDw]              = usePersistentState("dw", D.dw);
   const [dh,              setDh]              = usePersistentState("dh", D.dh);
   const [hMouth,          setHMouth]          = usePersistentState("hMouth", D.hMouth);
@@ -114,13 +121,13 @@ export default function App() {
 
   // Projektdatei (project.js): der Entwurf als Ganzes, Schlüssel wie die gespeicherten Einstellungen
   const designValues = {
-    throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke,
+    hornShape, throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, clothoidOn, clothoidLength, edgeOn, edgeR, flangeOn, flangeD,
     flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, stepFuse, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
-    throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength, mouthRoundOn: setMouthRoundOn, mouthRoundR: setMouthRoundR,
-    openingAngle: setOpeningAngle, L: setL, Lt: setLt,
+    hornShape: setHornShape, throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength, mouthRoundOn: setMouthRoundOn, mouthRoundR: setMouthRoundR,
+    openingAngle: setOpeningAngle, L: setL, Lt: setLt, roundAngle: setRoundAngle, roundL: setRoundL, roundLt: setRoundLt,
     dw: setDw, dh: setDh, hMouth: setHMouth, curve: setCurve, hypexT: setHypexT, showRaumecke: setShowRaumecke,
     showWandstaerke: setShowWandstaerke, wandstaerke: setWandstaerke, filletOn: setFilletOn, filletR: setFilletR,
     clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, edgeOn: setEdgeOn, edgeR: setEdgeR,
@@ -191,10 +198,10 @@ export default function App() {
   // Abgeleitete hängt deshalb an p, nicht am Live-Zustand; die Ansichten sind memo und rendern
   // nur, wenn sich p auswirkt.
   const live = useMemo(() => ({
-    throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+    hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle: round ? roundAngle : openingAngle, L: round ? roundL : L, Lt: round ? roundLt : Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
     edgeOn, edgeR, simOn, mouth, simTemp, driver,
-  }), [throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
+  }), [round, hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, clothoidOn, clothoidLength, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
     edgeOn, edgeR, simOn, mouth, simTemp, driver]);
   const p = useThrottledValue(live);
@@ -266,23 +273,28 @@ export default function App() {
         </div>
         <ProjectButtons onOpen={openProject} onSave={saveProject} status={projectStatus} history={history} t={t} />
 
+        <Card title={t("card.shape")} id="bauform">
+          <SegmentedButtons options={["radial", "round"]} labels={{ radial: t("shape.radial"), round: t("shape.round") }} value={hornShape} onChange={setHornShape} />
+          <Note>{t(round ? "shape.roundHint" : "shape.radialHint")}</Note>
+        </Card>
+
         <Card title={t("card.throat")} id="throat">
           <SegmentedButtons
             options={[...THROAT_SIZES.map(th => th.diameter), THROAT_CUSTOM]}
             labels={{ ...Object.fromEntries(THROAT_SIZES.map(th => [th.diameter, th.labelKey ? t(th.labelKey) : th.label])), [THROAT_CUSTOM]: t("throat.custom") }}
             value={throatCustom ? THROAT_CUSTOM : throatDiam} onChange={selectThroat} />
           {throatCustom && <Slider label={t("throat.diameter")} value={throatDiam} min={THROAT_RANGE.min} max={THROAT_RANGE.max} step={0.1} unit="mm" onChange={setThroatDiam} />}
-          <Toggle label={t("throat.morph")} checked={morphOn} onChange={setMorphOn} hint={morphOn ? t("throat.morphHint") : null} />
-          {morphOn && morph?.r > 0 && !mouthRoundOn && <Slider label={t("throat.morphLength")} value={shown("morphLength", morph.length)} min={1} max={Math.max(1, Math.floor(morph.max))} step={1} unit="mm" onChange={setMorphLength} />}
-          {morphOn && !mouthRoundOn && morph?.limited && <Warn>{t("warn.morphLimited", { mm: morph.length.toFixed(0) })}</Warn>}
+          {!round && <Toggle label={t("throat.morph")} checked={morphOn} onChange={setMorphOn} hint={morphOn ? t("throat.morphHint") : null} />}
+          {!round && morphOn && morph?.r > 0 && !mouthRoundOn && <Slider label={t("throat.morphLength")} value={shown("morphLength", morph.length)} min={1} max={Math.max(1, Math.floor(morph.max))} step={1} unit="mm" onChange={setMorphLength} />}
+          {!round && morphOn && !mouthRoundOn && morph?.limited && <Warn>{t("warn.morphLimited", { mm: morph.length.toFixed(0) })}</Warn>}
         </Card>
 
         <Card title={t("card.geometry")} id="geometrie">
-          <Slider label={t("geometry.openingAngle")} value={openingAngle} min={60} max={160} step={1} unit="°" onChange={setOpeningAngle} />
-          <Slider label={t("geometry.length")} value={shown("L", LClamped)} min={Lmin} max={Lmax} step={5} unit="mm" onChange={setL} />
-          <Note>{t(g.showRaumecke ? "geometry.lengthFromCorner" : "geometry.lengthFromDriver")}</Note>
+          <Slider label={t("geometry.openingAngle")} value={round ? roundAngle : openingAngle} min={round ? 10 : 60} max={160} step={1} unit="°" onChange={round ? setRoundAngle : setOpeningAngle} />
+          <Slider label={t("geometry.length")} value={shown("L", LClamped)} min={Lmin} max={Lmax} step={5} unit="mm" onChange={round ? setRoundL : setL} />
+          <Note>{t(round ? "geometry.lengthFromThroat" : g.showRaumecke ? "geometry.lengthFromCorner" : "geometry.lengthFromDriver")}</Note>
           {warnings.raumecke && <Warn>{t("warn.cornerLimit", { mm: LMaxRaumecke.toFixed(0) })}</Warn>}
-          <Slider label={t("geometry.tractrixLength")} value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={setLt} />
+          <Slider label={t("geometry.tractrixLength")} value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={round ? setRoundLt : setLt} />
           {warnings.ltMax && <Warn>{t("warn.ltMax", { mm: LtMax.toFixed(0) })}</Warn>}
           {warnings.ltFollows && <Note>{t("note.ltFollows", { mm: LtClamped.toFixed(0) })}</Note>}
           <Toggle label={t("geometry.clothoid")} checked={clothoidOn} onChange={setClothoidOn} />
@@ -291,6 +303,7 @@ export default function App() {
           {clothoidOn && warnings.clothoid === "zu lang" && <Warn>{t("warn.clothoidTooLong")}</Warn>}
         </Card>
 
+        {!round && <>
         <Card title={t("card.profile")} id="profil">
           <Slider label={t("profile.mouthHeight")} value={hMouth} min={Math.ceil(rt * 2)} max={600} step={1} unit="mm" onChange={setHMouth} />
           <Group title={t("profile.flareCurve")}>
@@ -305,24 +318,29 @@ export default function App() {
           {mouthRoundOn && <Slider label={t("profile.mouthRoundRadius")} value={mouthRoundR} min={1} max={Math.max(1, Math.floor(maxMouthRound(hMouth / 2, s?.arcR)))} step={1} unit="mm" onChange={setMouthRoundR} />}
           {mouthRoundOn && morph?.mouth && morph.mouth.R < mouthRoundR && <Warn>{t("warn.mouthRoundLimited", { mm: morph.mouth.R.toFixed(0) })}</Warn>}
         </Card>
+        </>}
 
+        {!round && <>
         <Card title={t("card.driver")} id="treiber">
           <Slider label={t("driver.width")} value={dw} min={10} max={300} step={1} unit="mm" onChange={setDw} />
           <Slider label={t("driver.depth")} value={dh} min={10} max={250} step={1} unit="mm" onChange={setDh} />
         </Card>
+        </>}
 
+        {!round && <>
         <Card title={t("card.placement")} id="aufstellung">
           <Toggle label={t("placement.corner")} checked={showRaumecke} onChange={toggleRaumecke}
             hint={showRaumecke ? t("placement.cornerHint") : null} />
         </Card>
+        </>}
 
         <Card title={t("card.construction")} id="ausfuehrung">
           <Toggle label={t("construction.wall")} checked={showWandstaerke} onChange={setShowWandstaerke}
             hint={showWandstaerke ? null : t("construction.wallHint")} />
           {showWandstaerke && <>
             <Slider label={t("construction.wallThickness")} value={wandstaerke} min={1} max={100} step={1} unit="mm" onChange={setWandstaerke} />
-            <Toggle label={t("construction.roundEdges")} checked={edgeOn} onChange={setEdgeOn} />
-            {edgeOn && <Slider label={t("construction.edgeRadius")} value={Math.min(edgeR ?? wandstaerke, wandstaerke)} min={1} max={wandstaerke} step={1} unit="mm" onChange={setEdgeR} />}
+            {!round && <Toggle label={t("construction.roundEdges")} checked={edgeOn} onChange={setEdgeOn} />}
+            {!round && edgeOn && <Slider label={t("construction.edgeRadius")} value={Math.min(edgeR ?? wandstaerke, wandstaerke)} min={1} max={wandstaerke} step={1} unit="mm" onChange={setEdgeR} />}
             <Toggle label={t("construction.flange")} checked={flangeOn} onChange={setFlangeOn} />
           </>}
           {flange && <Group title={t("flange.title")}>
@@ -414,21 +432,21 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 10, gap: 8, overflow: "hidden", minWidth: 0 }}>
         <div style={{ flex: 6, display: "flex", gap: 8, minHeight: 0 }}>
           <ViewPanel flex={1}>
-            <Draufsicht s={s} rt={rt} dw={g.dw} dh={g.dh} L={LClamped}
-              showRaumecke={g.showRaumecke} showWandstaerke={g.showWandstaerke} wandstaerke={g.wandstaerke} flange={flange} shellOuter={shellOuter} />
+            <Draufsicht s={s} rt={rt} dw={s?.round ? 0 : g.dw} dh={s?.round ? 0 : g.dh} L={LClamped}
+              showRaumecke={g.showRaumecke && !s?.round} showWandstaerke={g.showWandstaerke} wandstaerke={g.wandstaerke} flange={flange} shellOuter={shellOuter} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={g.dw} dh={g.dh} hMouth={g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke} />
+            <Ansicht3D s={s} rt={rt} dw={s?.round ? 4 * rt : g.dw} dh={s?.round ? 2 * rt + 10 : g.dh} hMouth={s?.round ? 2 * s.xMouth : g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke && !s?.round} />
           </ViewPanel>
         </div>
-        <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
-          <ViewPanel flex={1}>
+        {(!round || sim) && <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
+          {!round && <ViewPanel flex={1}>
             <Seitenriss s={s} rt={rt} dw={g.dw} dh={g.dh} L={LClamped} hMouth={g.hMouth} profile={profile} fillet={fillet} flange={flange} wall={wall} shellCut={shellCut} showRaumecke={g.showRaumecke} />
-          </ViewPanel>
+          </ViewPanel>}
           {sim && <ViewPanel flex={1}>
             <Frequenzgang result={simResult} fLimit={sim.fLimit} mouth={p.mouth} showPhase={simPhase} placeholder={isPlaceholder(p.driver)} />
           </ViewPanel>}
-        </div>
+        </div>}
       </div>
       <Toast notice={notice} onClose={() => setNotice(null)} />
     </div>
@@ -450,12 +468,19 @@ const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroa
   return (
     <Card title={t("card.keyFigures")} id="kennwerte">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 12 }}>
-        <Stat label={t("key.mouthWidth")} value={(2 * s.xMouth).toFixed(1) + " mm"} />
-        <Stat label={t("key.mouthHeight")} value={hMouth + " mm"} />
-        <Stat label={t("key.mouthArea")} value={(mouthArea(s, hMouth, morph) / 1e6).toFixed(4) + " m²"} />
-        <Stat label={t("key.arcLength")} value={s.arcLen.toFixed(1) + " mm"} />
-        <Stat label={t("key.vertAngle")} value={verticalMouthAngle(s, profile).toFixed(1) + "°"} />
-        <Stat label={t("key.horizAngle")} value={s.openingAngle + "°"} />
+        {s.round ? <>
+          <Stat label={t("key.mouthDiameter")} value={(2 * s.xMouth).toFixed(1) + " mm"} />
+          <Stat label={t("key.mouthArea")} value={(mouthArea(s, hMouth, morph) / 1e6).toFixed(4) + " m²"} />
+          <Stat label={t("key.openingAngle")} value={s.openingAngle + "°"} />
+          <Stat label={t("key.length")} value={s.zApex.toFixed(1) + " mm"} />
+        </> : <>
+          <Stat label={t("key.mouthWidth")} value={(2 * s.xMouth).toFixed(1) + " mm"} />
+          <Stat label={t("key.mouthHeight")} value={hMouth + " mm"} />
+          <Stat label={t("key.mouthArea")} value={(mouthArea(s, hMouth, morph) / 1e6).toFixed(4) + " m²"} />
+          <Stat label={t("key.arcLength")} value={s.arcLen.toFixed(1) + " mm"} />
+          <Stat label={t("key.vertAngle")} value={verticalMouthAngle(s, profile).toFixed(1) + "°"} />
+          <Stat label={t("key.horizAngle")} value={s.openingAngle + "°"} />
+        </>}
       </div>
       <Group title={t("key.frequencies")}>
         <FrequencyRow label={t("key.fcLow")}  value={fcLow} />
@@ -512,7 +537,7 @@ const WallAdvice = memo(function WallAdvice({
             </div>
           : <Note>{t("wall.wallOff")}</Note>}
         <Button onClick={onApply}>{t("wall.apply")}</Button>
-        <Note>{t("wall.note", { z: Math.round(advice.zoneEnd), B: Math.round(advice.worst.B) })}</Note>
+        <Note>{t(advice.round ? "wall.noteRound" : "wall.note", { z: Math.round(advice.zoneEnd), B: Math.round(advice.worst.B) })}</Note>
       </>}
     </Card>
   );

@@ -410,7 +410,7 @@ export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM, morph = nul
     if (!tooWide) break;
     walls = refined;
   }
-  const x = [0], S = [(2 * rt * 2 * profile(0) - cornerDeficit(cornerRadius(0, morph))) * 1e-6];
+  const x = [0], S = [(s.round ? Math.PI * rt * rt : 2 * rt * 2 * profile(0) - cornerDeficit(cornerRadius(0, morph))) * 1e-6];
   for (const { z, A } of pts) {
     if (z - x.at(-1) * 1e3 <= 1e-9) continue;   // doppelte Stützstellen (Sektionsgrenzen)
     x.push(z * 1e-3);

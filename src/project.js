@@ -38,6 +38,10 @@ export function migrateSettings(storage) {
  * Standardwerte dieser Einstellungen in App.jsx.
  */
 export const DESIGN_DEFAULTS = {
+  roundAngle: 60,          // rundes Horn: Öffnungswinkel [°], Länge ab dem Throat und Traktrix-Länge [mm] (eigene Werte, getrennt vom Radialhorn)
+  roundL: 300,
+  roundLt: 60,
+  hornShape: "radial",     // Bauform: "radial" (Sektor mit Höhenprofil) oder "round" (Draufsicht-Profil um die Achse gedreht)
   throatDiam: 50.8,
   throatCustom: false,
   morphOn: false,          // Übergang rund → eckig am Throat
@@ -87,7 +91,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-export const ADDED_LATER = new Set(["morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
+export const ADDED_LATER = new Set(["hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);
@@ -95,6 +99,7 @@ const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);
 // Werte, die aus einer festen Auswahl kommen müssen (der Code verzweigt danach)
 const CHOICES = {
   curve: CURVES,
+  hornShape: ["radial", "round"],
   abstrahlung: ["auto", "4pi", "2pi", "pi", "pi/2"],
   "driver.massIs": ["Mmd", "Mms"],
   wallMaterial: MATERIAL_KEYS,

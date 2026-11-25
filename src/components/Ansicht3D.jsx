@@ -255,6 +255,10 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
     if (group) t.scene.add(group);
   };
 
+  // Andere Bauform (radial ↔ rund): ganz andere Abmessungen, die Kamera stellt sich beim nächsten Netz neu ein
+  const round = !!s?.round;
+  useEffect(() => { if (three.current) three.current.framed = false; }, [round]);
+
   // Horn neu aufbauen, sobald der Worker ein neues Netz liefert
   useEffect(() => {
     const t = three.current;

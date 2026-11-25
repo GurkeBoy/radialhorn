@@ -35,7 +35,7 @@ export const DEFAULT_RES = { angular: 60, radial: 80, axial: 40, round: 16, flan
 export const EXPORT_RES = { angular: 120, radial: 160, axial: 80, round: 32, flange: 192, hole: 48 };
 /** Entwurf für die 3D-Ansicht beim Ziehen: ¼ der Dreiecke, dicht (mesh-buffers, quality "draft"). */
 export const DRAFT_RES = { angular: 30, radial: 40, axial: 20, round: 8, flange: 48, hole: 12 };
-const resOf = res => ({ ...DEFAULT_RES, ...res });
+export const resOf = res => ({ ...DEFAULT_RES, ...res });
 
 // flangeLayout braucht vom Außenkörper nur den Randzug am Throat (Zeile 0): der hängt nur an der
 // Auflösung quer (angular, round), nicht an der in Längsrichtung – grob gerechnet ist er bitgleich
@@ -45,7 +45,7 @@ const layoutResOf = res => {
   if (!layoutRes.has(res)) layoutRes.set(res, { ...resOf(res), radial: 4, axial: 8 });
   return layoutRes.get(res);
 };
-const TRAK_MIN_STEP = 0.25;   // kleinster Zeilenabstand im Traktrix-Abschnitt des Luftvolumens [mm Bogenlänge]
+export const TRAK_MIN_STEP = 0.25;   // kleinster Zeilenabstand im Traktrix-Abschnitt des Luftvolumens [mm Bogenlänge]
 
 /**
  * Halbe Höhe der senkrecht um t versetzten Profilkurve als Funktion des Abstands r zum
@@ -92,7 +92,7 @@ export function offsetHeight(hAt, rMax, t) {
  * dann gerade Wand bis zum Mund. lineStart = Index des Beginns der Geraden, kloStart = Index
  * des Beginns der Klothoide (oder null).
  */
-function innerWall(s, rt, n = 400, minStep = 0) {
+export function innerWall(s, rt, n = 400, minStep = 0) {
   // Traktrix-Abschnitt höchstens eine Zeile je minStep Bogenlänge: steht Lₜ genau auf dem Minimum
   // für die Klothoide, ist er praktisch null lang – 40 Zeilen auf einem Punkt kippen numerisch
   const trakLength = hasTraktrix(s) ? s.r0 * Math.log(Math.cosh(s.tTh) / Math.cosh(s.tEnd)) : 0;
@@ -169,7 +169,7 @@ function wallEnvelope(s, wall, t) {
   };
 }
 
-function contourRight(s, rt, t, axial, z0 = 0) {
+export function contourRight(s, rt, t, axial, z0 = 0) {
   const wall = innerWall(s, rt, 2000).points;
   // t = 0 ab z0 > 0 (Außenkörper bei Kantenradius = t mit Flansch): allgemeiner Weg, die
   // Einhüllende ist dann die Innenwand selbst
@@ -766,7 +766,7 @@ function closedLoop(topRow, bottomRow) {
  * beginnt (nach anteiliger Bogenlänge lief er bei Kantenradius = t davon, es entstanden
  * Dreiecke ohne Fläche und verdrehte).
  */
-function zipper(a, b) {
+export function zipper(a, b) {
   const angle = p => Math.atan2(p[1], p[0]);
   // fortlaufender Winkel ab dem Start von a (ohne Sprung bei ±π)
   const unwrapped = loop => {
@@ -913,7 +913,14 @@ function polygonDistance([px, py], poly) {
  */
 export function flangeLayout(s, rt, profile, fillet, t, flange, edgeR = 0, morph = null, res = DEFAULT_RES) {
   const outer = outerBody(s, rt, profile, fillet, t, layoutResOf(res), flange.thickness, edgeR, morph);
-  const loop = outer.throatLoop.slice(0, -1);
+  return resolveFlange(outer.throatLoop.slice(0, -1), flange, res);
+}
+
+/**
+ * Flansch gegen den Randzug des Außenkörpers bei z = Dicke auflösen (flangeLayout; rundes Horn: round-mesh.js).
+ * @param loop  Randzug [x, h] (offen)
+ */
+export function resolveFlange(loop, flange, res = DEFAULT_RES) {
   // Der Flanschrand ist ein Vieleck (res.flange Ecken): seine Kanten liegen innerhalb des Kreises.
   // Damit die Schale den Rand nicht berührt (sonst reicht das Loch der Vorderseite über den Rand,
   // die Fläche wird falsch trianguliert), mindestens FLANGE_MIN_RIM Rand außen herum
@@ -1116,7 +1123,7 @@ function roundEdges(b, s, r, envelope, steps = DEFAULT_RES.round) {
 }
 
 /** Ring aus n Punkten [x, h, z] um (cx, ch) in der Ebene z. */
-const ring = (cx, ch, radius, z, n) =>
+export const ring = (cx, ch, radius, z, n) =>
   Array.from({ length: n }, (_, k) => {
     const a = 2 * Math.PI * k / n;
     return [cx + radius * Math.cos(a), ch + radius * Math.sin(a), z];
@@ -1160,7 +1167,7 @@ function onSegment(p, a, b) {
 }
 
 /** Mantel zwischen zwei gleich langen, geschlossenen Ringen (ohne wiederholten Startpunkt). */
-const band = (a, b) => [[...a, a[0]], [...b, b[0]]];
+export const band = (a, b) => [[...a, a[0]], [...b, b[0]]];
 
 const ROUND_GAP = 0.3;   // so viel Platz bleibt neben einer Verrundung zu Schale, Rand und Nachbarn [mm]
 
@@ -1204,7 +1211,7 @@ const roundOutward = (rc, zc) => ([x, h, z]) => {
  * @param airLoop    Randzug des Luftvolumens am Throat (z = 0)
  * @param outerLoop  Randzug des Außenkörpers bei z = Dicke
  */
-function flangeSurfaces(flange, airLoop, outerLoop, res) {
+export function flangeSurfaces(flange, airLoop, outerLoop, res) {
   const { flange: nRim, hole: nHole, round: steps } = resOf(res);
   const holes = flange.centers;
   const r = flange.diameter / 2, rh = flange.holes.diameter / 2, d = flange.thickness;

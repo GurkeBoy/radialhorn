@@ -97,16 +97,17 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   const { s, rt, L, hMouth, curve, hypexT, fillet, profile, morph, showRaumecke, showWandstaerke, wandstaerke } = design;
   const wall = design.wall ?? 0, flange = wall > 0 ? design.flange ?? null : null;
   const trakOn = hasTraktrix(s);
+  const round = !!s.round;   // rundes Horn: nur ein Längsschnitt (das Draufsicht-Profil), kein Seitenriss
   const wallPts = planOutline(s);
-  const profPts = sideOutline(s, rt, profile, fillet);
+  const profPts = round ? [] : sideOutline(s, rt, profile, fillet);
   const halfMundB = Math.max(...wallPts.map(p => p[0]));
   const zShell = flange ? flange.thickness : 0;
   const planOuter = wall > 0 ? shellPlanOutline(s, rt, wall, zShell) : null;
-  const profOuter = wall > 0 ? shellProfileOutline(s, rt, profile, wall, zShell) : null;
+  const profOuter = wall > 0 && !round ? shellProfileOutline(s, rt, profile, wall, zShell) : null;
   const flangeHalf = flange ? flange.diameter / 2 : 0;
   const maxX = Math.max(halfMundB, flangeHalf, planOuter ? planOuter[planOuter.length - 1][0] : 0) * 2;
   const maxZ = s.zApex;
-  const profMaxH = Math.max(...profPts.map(p => p[1]), flangeHalf, profOuter ? profOuter[profOuter.length - 1][0] : 0) * 2;
+  const profMaxH = round ? 0 : Math.max(...profPts.map(p => p[1]), flangeHalf, profOuter ? profOuter[profOuter.length - 1][0] : 0) * 2;
 
   const massstab = SCALES.find(sc => Math.max(maxX, maxZ, profMaxH) / sc <= SHEET_MM) || 100;
   const mm2px = 96 / 25.4 / massstab;
@@ -147,7 +148,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   const spOX = spLeftPad, spOY = spH / 2;
   const spZStart = trakOn ? s.zInnerApex : 0;
   const spTopY = spOY - profMaxH / 2 - massstab * 5;
-  const spSVG = svg(spW, spH, `
+  const spSVG = round ? "" : svg(spW, spH, `
       <line x1="${spOX}" y1="${spOY}" x2="${spOX + maxZ}" y2="${spOY}" stroke="${C.axis}" stroke-width="0.2" stroke-dasharray="3 2"/>
       ${opts.seitenprofil && profOuter ? cuts(cutSections(profPts.map(([z, h]) => [h, z]), profOuter, flange), (h, z) => [spOX + z, spOY - h]) : ""}
       ${opts.seitenprofil ? [1, -1].map(sign => path(profPts.map(([z, h]) => [spOX + z, spOY - sign * h]), C.line)).join("") : ""}
@@ -161,7 +162,17 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
       ].join("") : ""}`);
 
   // ── Kennwerte ───────────────────────────────────────────────────
-  const kv = [
+  const kv = round ? [
+    [tr("pdf.openingAngle"),   s.openingAngle + " °"],
+    [tr("pdf.length"),         fmtLength(L) + " mm " + tr("geometry.lengthFromThroat")],
+    [tr("pdf.tractrixLength"), s.Lt.toFixed(0) + " mm"],
+    [tr("pdf.throat"),         (rt * 2).toFixed(1) + " mm"],
+    [tr("pdf.mouthDiameter"),  mundB + " mm"],
+    [tr("pdf.mouthArea"),      (mouthArea(s, 0) / 1e6).toFixed(4) + " m²"],
+    [tr("pdf.arcRadius"),      s.arcR.toFixed(1) + " mm"],
+    [tr("pdf.wall"),           showWandstaerke ? wandstaerke + " mm" : "–"],
+    ...(flange?.ribs ? [[tr("pdf.ribs"), tr("pdf.ribsValue", { n: flange.holes.count, w: flange.ribs.thickness, l: flange.ribs.length })]] : []),
+  ] : [
     [tr("pdf.openingHoriz"),   s.openingAngle + " °"],
     [tr("pdf.openingVert"),    verticalMouthAngle(s, profile).toFixed(1) + " °"],
     [tr("pdf.length"),         fmtLength(L) + " mm " + tr(showRaumecke ? "geometry.lengthFromCorner" : "geometry.lengthFromDriver")],
@@ -224,9 +235,9 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
         <table>${kvRows}</table>
       </div>
       <div>
-        ${opts.draufsicht || opts.mundbogen || opts.fokus ? `<div class="section-label">${tr("pdf.topView")}</div>
+        ${opts.draufsicht || opts.mundbogen || opts.fokus ? `<div class="section-label">${tr(round ? "pdf.sectionView" : "pdf.topView")}</div>
         <div class="drawing">${dsSVG}</div>` : ""}
-        ${opts.seitenprofil ? `<div class="section-label">${tr("pdf.sideView")}</div>
+        ${opts.seitenprofil && !round ? `<div class="section-label">${tr("pdf.sideView")}</div>
         <div class="drawing">${spSVG}</div>` : ""}
       </div>
     </div>
@@ -254,7 +265,7 @@ export async function exportPDF(design, opts, lang = "de") {
     return { status: "opened", name: "" };
   }
   if (await printInFrame(html)) return { status: "opened", name: "" };
-  const result = await downloadFile(html, `radialhorn_${design.s.openingAngle}deg_L${design.L}_${translate(lang, "pdf.fileName")}.html`, "text/html");
+  const result = await downloadFile(html, `radialhorn_${design.s.round ? "rund_" : ""}${design.s.openingAngle}deg_L${design.L}_${translate(lang, "pdf.fileName")}.html`, "text/html");
   return { ...result, html: true };
 }
 
