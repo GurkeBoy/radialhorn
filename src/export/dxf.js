@@ -91,9 +91,15 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
   if (opts.draufsicht) {
     const trak = traktrixPoints(s, TRAKTRIX_FIT_POINTS);
     const klo = clothoidPoints(s, CLOTHOID_FIT_POINTS);
+    // Kreisbogen als exakter ARC (Mittelpunkt von der Wand zur Krümmungsseite, Winkel in Grad gegen den Uhrzeigersinn)
+    const arc = s.clothoid?.kind === "arc" ? (() => {
+      const c = s.clothoid, R = 1 / c.kappa0;
+      return { cz: c.start[1] - R * Math.sin(c.theta0), cx: c.start[0] + R * Math.cos(c.theta0), R, a0: c.theta0 * 180 / Math.PI - 90, a1: s.alpha2 * 180 / Math.PI - 90 };
+    })() : null;
     mirrored(sign => {
       if (trak.length > 1) out.push(dxfSpline(trak.map(([x, z]) => [z, sign * x]), "Draufsicht_Traktrix"));
-      if (klo.length > 1) out.push(dxfSpline(klo.map(([x, z]) => [z, sign * x]), "Draufsicht_Klothoide"));
+      if (arc) out.push(sign > 0 ? dxfArc(arc.cz, arc.cx, arc.R, arc.a0, arc.a1, "Draufsicht_Kreisbogen") : dxfArc(arc.cz, -arc.cx, arc.R, -arc.a1, -arc.a0, "Draufsicht_Kreisbogen"));
+      else if (klo.length > 1) out.push(dxfSpline(klo.map(([x, z]) => [z, sign * x]), "Draufsicht_Klothoide"));
       out.push(dxfLine([s.zTrans, sign * s.xTrans], [s.zMouth, sign * s.xMouth], "Draufsicht_Gerade"));
     });
   }
@@ -109,7 +115,11 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
     const zFrom = fillet ? fillet.zT2 : (hasTraktrix(s) ? s.zInnerApex : 0);
     const profile = makeProfile(s, rt, hMouth, curve, hypexT);
     const flare = linspace(zFrom, s.zApex, FLARE_FIT_POINTS).map(z => [z, profile(z)]);
-    if (fillet) {
+    if (fillet?.kind === "clothoid") {
+      // Klothoiden-Verrundung: Spline durch Punkte der Tabelle, beide Seiten
+      const n = fillet.zs.length, pts = Array.from({ length: 41 }, (_, k) => Math.round((n - 1) * k / 40)).map(i => [fillet.zs[i], fillet.hs[i]]);
+      mirrored(sign => out.push(dxfSpline(pts.map(([z, h]) => [z, 0, sign * h]), "Seitenprofil_Verrundung")));
+    } else if (fillet) {
       const a2 = Math.atan2(fillet.hT2 - fillet.hc, fillet.zT2 - fillet.zc) * 180 / Math.PI;   // −90° … 0°
       out.push(dxfArc(fillet.zc,  fillet.hc, fillet.R, 270, 360 + a2, "Seitenprofil_Verrundung", [0, -1, 0]));
       out.push(dxfArc(fillet.zc, -fillet.hc, fillet.R, -a2, 90,       "Seitenprofil_Verrundung", [0, -1, 0]));

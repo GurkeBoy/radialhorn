@@ -6,7 +6,7 @@
 // rechnet nur neu, was er betrifft. Jedes Ergebnis trägt eine Version; die App behält bei gleicher
 // Version ihr bisheriges Objekt (adoptGeometry) – so bleiben memo/useMemo dahinter wirksam, auch
 // wenn die Daten als Kopie aus dem Worker kommen.
-import { createHornMath, computeFillet, makeProfile, throatMorph, mouthRounding, lengthOffset } from "./horn-math.js";
+import { createHornMath, computeFillet, computeFilletClothoid, makeProfile, throatMorph, mouthRounding, lengthOffset } from "./horn-math.js";
 import { shellPlanOutline, shellProfileOutline } from "./horn-mesh.js";
 import { layoutFlange } from "./bodies.js";
 import { linspace } from "./utils.js";
@@ -16,7 +16,7 @@ export const L_MAX = 1200;   // Obergrenze des L-Reglers [mm]; mit Raumecke gilt
 /** Reglerwerte, von denen die Geometrie abhängt (alles andere – Simulation, Ansicht – nicht). */
 export const GEOMETRY_KEYS = [
   "hornShape", "throatDiam", "openingAngle", "L", "Lt", "dw", "dh", "hMouth", "curve", "hypexT", "showRaumecke", "showWandstaerke",
-  "wandstaerke", "filletOn", "filletR", "clothoidOn", "clothoidLength", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "flangeOn", "flangeD",
+  "wandstaerke", "filletOn", "filletR", "filletClothoidOn", "filletClothoidLength", "clothoidOn", "clothoidLength", "arcOn", "arcRadius", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "flangeOn", "flangeD",
   "flangeT", "holeCount", "holeCircle", "holeD", "holeAngle", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "edgeOn", "edgeR",
 ];
 
@@ -46,11 +46,13 @@ export function createGeometryEngine() {
     // Rundes Horn (Rotationskörper): ohne Treiberabmessungen, Raumecke, vertikales Profil und Kantenrundungen; L zählt vom Throat
     const round = input.hornShape === "round";
     const p = round
-      ? { ...input, dw: 0, dh: 0, showRaumecke: false, filletOn: false, morphOn: false, mouthRoundOn: false, edgeOn: false }
+      ? { ...input, dw: 0, dh: 0, showRaumecke: false, filletOn: false, filletClothoidOn: false, morphOn: false, mouthRoundOn: false, edgeOn: false }
       : input;
     const rt = p.throatDiam / 2;
-    const math = stage("math", [p.openingAngle, p.clothoidOn ? p.clothoidLength : 0],
-      () => createHornMath(p.openingAngle, { clothoid: p.clothoidOn ? p.clothoidLength : 0 }));
+    // Übergang Traktrix → Gerade: Klothoide (Länge) oder Kreisbogen (Radius), nie beides
+    const blendClothoid = p.clothoidOn ? p.clothoidLength : 0, blendArc = !p.clothoidOn && p.arcOn ? p.arcRadius : 0;
+    const math = stage("math", [p.openingAngle, blendClothoid, blendArc],
+      () => createHornMath(p.openingAngle, { clothoid: blendClothoid, arc: blendArc }));
     const m = math.value;
     // Wandstärke vergrößert die Außenkante senkrecht zur Wand; ihre Projektion auf die
     // 45°-Raumecke verkleinert den verfügbaren Platz
@@ -68,9 +70,13 @@ export function createGeometryEngine() {
       LtMax:         m.maxLt(L, rt, p.dw, p.dh),
       LtMinRaumecke: p.showRaumecke ? m.minLtForRaumecke(L, rt, p.dw, p.dh, extraBreite) : null,
     })).value;
-    const LtMinClothoid = stage("ltClothoid", [math.version, rt], () => m.minLtForClothoid(rt)).value;
-    const LtMin     = Math.max(LtMinRaumecke ?? 0, LtMinClothoid);
-    const LtClamped = Math.min(Math.max(p.Lt, LtMin), LtMax);
+    // Untergrenze des Übergangsstücks (Klothoide passt, Kreisbogen beginnt hinter dem Throat) und Obergrenze (nur
+    // Kreisbogen: er schrumpft sonst auf 0); gibt es für den Kreisbogen kein Fenster, bleibt Lₜ = 0 (keine Traktrix)
+    const blendLimits = stage("ltBlend", [math.version, rt], () => ({ min: m.minLtForClothoid(rt), max: m.maxLtForBlend(rt) })).value;
+    const LtMinClothoid = Number.isFinite(blendLimits.min) ? blendLimits.min : 0;
+    const LtMaxAll   = Math.min(LtMax, blendLimits.max);
+    const LtMin     = Math.min(Math.max(LtMinRaumecke ?? 0, LtMinClothoid), LtMaxAll);
+    const LtClamped = Math.min(Math.max(p.Lt, LtMin), LtMaxAll);
     // Grenzen für L hängen am begrenzten Lₜ, nicht an L. LMaxForLt: mit diesem Lₜ (begrenzt nur,
     // wenn Lₜ nicht mehr folgen kann); LMaxRaumecke: Reglergrenze, mit folgendem Lₜ – hängt weder an L noch an Lₜ
     const { LMaxForLt, Lmin } = stage("lLimits", [...geo, LtClamped, p.showRaumecke, extraBreite], () => ({
@@ -86,8 +92,11 @@ export function createGeometryEngine() {
     });
     const sv = s.value;
 
-    const fillet = stage("fillet", [s.version, p.filletOn, p.hMouth, p.curve, p.hypexT, p.filletR],
-      () => p.filletOn && sv ? computeFillet(sv, rt, p.hMouth, p.curve, p.hypexT, p.filletR) : null);
+    // Verrundung des Übergangs Throat → Aufweitung im Seitenriss: Kreisbogen (Radius) oder Klothoide (Länge)
+    const fillet = stage("fillet", [s.version, p.filletOn, p.filletClothoidOn, p.hMouth, p.curve, p.hypexT, p.filletR, p.filletClothoidLength],
+      () => !sv ? null
+        : p.filletOn ? computeFillet(sv, rt, p.hMouth, p.curve, p.hypexT, p.filletR)
+        : p.filletClothoidOn ? computeFilletClothoid(sv, rt, p.hMouth, p.curve, p.hypexT, p.filletClothoidLength) : null);
     const profile = stage("profile", [s.version, fillet.version, p.hMouth, p.curve, p.hypexT],
       () => sv && makeProfile(sv, rt, p.hMouth, p.curve, p.hypexT, fillet.value));
     // Eckradius entlang der Wand: Übergang rund → eckig am Throat, auf das Machbare begrenzt, und/oder
@@ -124,13 +133,15 @@ export function createGeometryEngine() {
       values: {
         ...Object.fromEntries(VERSIONED.map(k => [k, stages[k].value])),
         // Längen angezeigt (ohne Raumecke ab der Treiberrückseite); LMaxRaumecke nur mit Raumecke, dort ist off = 0
-        LtMin, LtMax, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin: Lmin - off, Lmax: LMaxRaumecke ?? L_MAX,
+        LtMin, LtMax: LtMaxAll, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin: Lmin - off, Lmax: LMaxRaumecke ?? L_MAX,
         LClamped: LClamped - off, wall, edge,
         warnings: {
           raumecke:  LMaxRaumecke !== null && LMaxRaumecke < L_MAX && p.L >= LMaxRaumecke - 1,
-          ltMax:     p.Lt > LtMax,
+          ltMax:     p.Lt > LtMaxAll,
           ltFollows: LtMinRaumecke !== null && LtMinRaumecke >= LtMinClothoid && p.Lt < LtMinRaumecke - 1e-6,
-          clothoid:  LtMinClothoid > LtMax ? "zu lang" : p.Lt < LtMinClothoid ? "Lt" : null,
+          clothoid:  LtMinClothoid > LtMaxAll ? "zu lang" : p.Lt < LtMinClothoid ? "Lt" : null,
+          // Kreisbogen ohne zulässige Traktrix-Länge (Radius zu klein für den Winkel): keine Traktrix
+          arcNone:   blendArc > 0 && blendLimits.max <= 0,
         },
       },
       versions: Object.fromEntries(VERSIONED.map(k => [k, `${id}:${stages[k].version}`])),
