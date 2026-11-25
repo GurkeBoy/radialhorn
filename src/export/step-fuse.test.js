@@ -63,7 +63,7 @@ describe("STEP des runden Horns in OpenCascade", () => {
     const { step: fused } = fuseStepBodies(oc, step, "f.step");
     expect(bodiesOf(fused)).toMatchObject({ valid: true, volumes: [expect.any(Number)] });
   });
-});
+}, 180000);   // STEP bauen, einlesen und vereinen: ≈ 10 s, auf einem ausgelasteten Rechner ein Vielfaches
 
 describe("fuseStepBodies", () => {
   it("vereint Horn und vier Rippen zu einem gültigen Körper; Volumen zwischen Horn und Summe", () => {

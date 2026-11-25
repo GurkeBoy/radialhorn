@@ -180,6 +180,8 @@ export default {
   "volume.air": "Luftvolumen",
   "volume.shell": "Wandmaterial",
   "volume.outer": "Außenkörper",
+  "volume.centroidAir": "Schwerpunkt Luft",
+  "volume.centroidShell": "Schwerpunkt Schale",
   "volume.hint": "Aus dem 3D-Netz: Luftvolumen ab Throat ohne Treiberkammer; Wandmaterial inkl. Flansch",
   "volume.noWall": "Ohne Wandstärke nur das Luftvolumen (ab Throat, ohne Treiberkammer)",
 
@@ -220,6 +222,8 @@ export default {
   "view.3dShell": "3D · SCHALE · WANDSTÄRKE {mm} MM",
   "view.grid": "▦ Gitter",
   "view.gridTitle": "Flächen / Gitter",
+  "view.showCentroid": "⊕ Schwerpunkt",
+  "view.showCentroidTitle": "Schwerpunkt ein-/ausblenden (Schale bei Wandstärke, sonst Luftvolumen)",
   "view.showDriver": "◉ Treiber",
   "view.showDriverTitle": "Treiber ein-/ausblenden",
   "view.showCorner": "◿ Raumecke",

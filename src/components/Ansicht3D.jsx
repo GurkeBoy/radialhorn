@@ -141,6 +141,29 @@ function referenceGroup(s, dw, dh, top, showRaumecke, materials) {
 }
 
 /**
+ * Schwerpunkt als Kugel (Radius ≈ 1 % der Gesamtgröße) mit Achsenkreuz; ohne Tiefentest und über allem gezeichnet, damit er
+ * auch im Inneren des Horns zu sehen ist.
+ * @param c     [x, h, z] [mm]
+ * @param size  Gesamtgröße des Horns [mm]
+ */
+function centroidGroup(c, size) {
+  const group = new THREE.Group(), r = Math.max(2, size * 0.012);
+  const material = new THREE.MeshBasicMaterial({ color: 0xff3b5c, depthTest: false, transparent: true });
+  const line = new THREE.LineBasicMaterial({ color: 0xff3b5c, depthTest: false });
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), material);
+  ball.renderOrder = 999;
+  group.add(ball);
+  for (const [dx, dy, dz] of [[1, 0, 0], [0, 1, 0], [0, 0, 1]]) {
+    const axis = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-dx * 3 * r, -dy * 3 * r, -dz * 3 * r), new THREE.Vector3(dx * 3 * r, dy * 3 * r, dz * 3 * r)]), line);
+    axis.renderOrder = 999;
+    group.add(axis);
+  }
+  group.position.set(c[0], c[1], c[2]);
+  return group;
+}
+
+/**
  * Bohrungen, die nicht gebohrt werden können (in der Schale): rote Scheibe mit Ring auf der
  * Flanschrückseite und Ring an der Vorderseite, damit das Bohrbild trotzdem sichtbar ist.
  * @param materials  sceneMaterials
@@ -189,8 +212,9 @@ function frame(camera, controls, object) {
  * @param edgeR    Radius der gerundeten Längskanten außen [mm], 0 = scharf
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null, nur mit Schale
  * @param morph    Übergang rund → eckig am Throat (throatMorph) oder null
+ * @param centroid Schwerpunkt [x, h, z] des angezeigten Körpers (Schale bei Wandstärke, sonst Luftvolumen) oder null
  */
-export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, edgeR = 0, flange, morph = null, showRaumecke }) {
+export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, edgeR = 0, flange, morph = null, showRaumecke, centroid = null }) {
   const tr = useT();
   const containerRef = useRef(null);
   const { w, h } = useSize(containerRef);
@@ -198,6 +222,7 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
   const [wireframe, setWireframe] = useState(false);
   const [showDriver, setShowDriver] = useState(true);
   const [showCorner, setShowCorner] = useState(true);
+  const [showCentroid, setShowCentroid] = useState(true);
 
   const meshInput = useMemo(() => s ? {
     s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, morph,
@@ -286,6 +311,15 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
     t.render();
   }, [conflictKey]);    // eslint-disable-line react-hooks/exhaustive-deps -- conflictKey fasst die Werte zusammen
 
+  // Schwerpunkt: kleine Kugel mit Achsenkreuz, immer sichtbar (auch im Inneren des Horns)
+  const centroidKey = centroid && s ? JSON.stringify([centroid.map(v => Math.round(v * 100) / 100), s.zApex, top]) : "";
+  useEffect(() => {
+    const t = three.current;
+    if (!t) return;
+    replace(t, "centroid", centroidKey && centroidGroup(centroid, Math.max(s.zApex, 2 * top)));
+    t.render();
+  }, [centroidKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- centroidKey fasst die Werte zusammen
+
   // Darstellung umschalten
   useEffect(() => {
     const t = three.current;
@@ -295,8 +329,9 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
       if (o.userData.kind === "grid") o.visible = wireframe;
     });
     t.reference?.children.forEach(o => { o.visible = o.userData.kind === "driver" ? showDriver : showCorner; });
+    if (t.centroid) t.centroid.visible = showCentroid;
     t.render();
-  }, [sections, referenceKey, wireframe, showDriver, showCorner]);
+  }, [sections, referenceKey, centroidKey, wireframe, showDriver, showCorner, showCentroid]);
 
   const resetView = () => {
     const t = three.current;
@@ -313,6 +348,7 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
         <div style={{ display: "flex", gap: 4, flexShrink: 0, pointerEvents: "auto" }}>
           <ViewButton active={wireframe} onClick={() => setWireframe(v => !v)} title={tr("view.gridTitle")}>{tr("view.grid")}</ViewButton>
           <ViewButton active={showDriver} onClick={() => setShowDriver(v => !v)} title={tr("view.showDriverTitle")}>{tr("view.showDriver")}</ViewButton>
+          {centroid && <ViewButton active={showCentroid} onClick={() => setShowCentroid(v => !v)} title={tr("view.showCentroidTitle")}>{tr("view.showCentroid")}</ViewButton>}
           {showRaumecke && <ViewButton active={showCorner} onClick={() => setShowCorner(v => !v)} title={tr("view.showCornerTitle")}>{tr("view.showCorner")}</ViewButton>}
           <ViewButton onClick={resetView} title={tr("view.resetView")}>{tr("view.reset")}</ViewButton>
         </div>
