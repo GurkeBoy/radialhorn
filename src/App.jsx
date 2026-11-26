@@ -383,9 +383,11 @@ export default function App() {
             {!round && <Toggle label={t("construction.roundEdges")} checked={edgeOn} onChange={setEdgeOn} />}
             {!round && edgeOn && <Slider label={t("construction.edgeRadius")} value={Math.min(edgeR ?? wandstaerke, wandstaerke)} min={1} max={wandstaerke} step={1} unit="mm" onChange={setEdgeR} />}
             <Toggle label={t("construction.flange")} checked={flangeOn} onChange={setFlangeOn} />
-            {!round && <Toggle label={t("construction.vanes")} checked={vanesOn} onChange={setVanesOn} info={t("construction.vanesInfo")} />}
           </>}
-          {!round && vanesOn && vaneLimits && <Group title={t("vanes.title")}>
+          {/* Lamellen brauchen eine Wandstärke: ohne sie bleibt der Schalter sichtbar, aber ausgegraut (Zustand bleibt gespeichert) */}
+          {!round && <Toggle label={t("construction.vanes")} checked={vanesOn && showWandstaerke} disabled={!showWandstaerke} onChange={setVanesOn}
+            info={t("construction.vanesInfo")} hint={showWandstaerke ? null : t("construction.vanesNeedWall")} />}
+          {!round && showWandstaerke && vanesOn && vaneLimits && <Group title={t("vanes.title")}>
             <Slider label={t("vanes.count")} value={vaneCount} min={1} max={8} step={1} unit="" onChange={setVaneCount} />
             <Slider label={t("vanes.thickness")} value={vaneThickness} min={0.5} max={10} step={0.5} unit="mm" onChange={setVaneThickness} />
             <SegmentedButtons options={VANE_START_MODES} labels={{ z: t("vanes.mode.z"), channel: t("vanes.mode.channel") }}

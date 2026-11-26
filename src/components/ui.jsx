@@ -218,12 +218,12 @@ function Stepper({ onStep, label }) {
  * info nur auf Wunsch: ein Info-Knopf (ⓘ) hinter der Beschriftung blendet den Text darunter ein und aus
  * (für längere Erklärungen, die sonst Platz brauchen und ablenken).
  */
-export function Toggle({ label, checked, onChange, hint, info }) {
+export function Toggle({ label, checked, onChange, hint, info, disabled = false }) {
   const tr = useT();
   const [infoOpen, setInfoOpen] = useState(false);
   const switchButton = (
-      <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
-        style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", margin: info ? 0 : "0 0 8px", padding: 0, background: "none", border: "none", minHeight: 20 }}>
+      <button type="button" role="switch" aria-checked={checked} aria-disabled={disabled} disabled={disabled} onClick={() => onChange(!checked)}
+        style={{ display: "flex", alignItems: "center", gap: 10, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, margin: info ? 0 : "0 0 8px", padding: 0, background: "none", border: "none", minHeight: 20 }}>
         <span style={{
           width: 36, height: 20, borderRadius: 10, position: "relative", transition: "background 0.2s",
           background: checked ? UI.accent : UI.borderControl, flexShrink: 0,

@@ -98,6 +98,7 @@ export default {
   "construction.edgeRadius": "Edge radius",
   "construction.flange": "Throat flange",
   "construction.vanes": "Vanes",
+  "construction.vanesNeedWall": "Vanes need a wall thickness – switch on “Wall thickness” first.",
   "construction.vanesInfo": "Thin vertical plates that spread the sound further. They divide the wavefront into equal angular sectors: each vane follows the wavefronts, meets them at right angles everywhere and may start right at the throat. In the straight part of the wall they are rays from the focus, in the entrance they run curved towards them. They are anchored in the top and bottom panels. Radial horn only.",
   "vanes.title": "Vanes",
   "vanes.count": "Count",
