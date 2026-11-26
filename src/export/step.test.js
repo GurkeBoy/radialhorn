@@ -2,15 +2,16 @@ import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet, createHornMath, throatMorph, mouthRounding, maxMorphLength } from "../horn-math.js";
 import { buildBrep, hornPatches, ribPatches, stepFile, hornStep, circleOf } from "./step.js";
 import { layoutFlange } from "../bodies.js";
+import { resolveVanes } from "../vanes.js";
 
 const RT = 25.4, H = 200;
 const BMS = { diameter: null, fallback: 120, thickness: 10, holes: { count: 4, circle: 101.6, diameter: 6.6, angle: 0 } };
-const design = (s, curve = "exponential", R = 0, wall = 0, { edgeR = 0, morph = null, flange = null, mouth = 0 } = {}) => {
+const design = (s, curve = "exponential", R = 0, wall = 0, { edgeR = 0, morph = null, flange = null, mouth = 0, vanes = null } = {}) => {
   const fillet = R > 0 ? computeFillet(s, RT, H, curve, 0.5, R) : null;
   const profile = makeProfile(s, RT, H, curve, 0.5, fillet);
   const throat = morph && throatMorph(s, RT, morph === "max" ? maxMorphLength(s) : undefined);
   const m = mouth ? mouthRounding(s, profile, throat, mouth) : throat;
-  return { s, rt: RT, profile, fillet, wall, edgeR, morph: m,
+  return { s, rt: RT, profile, fillet, wall, edgeR, morph: m, vanes: vanes && resolveVanes(s, vanes),
            flange: flange && layoutFlange(s, RT, profile, fillet, wall, { ...BMS, ...flange }, edgeR, m) };
 };
 const std = () => solveHorn(500, 60, RT, 120, 100);
@@ -42,6 +43,10 @@ const CASES = {
   "Schale, Mundecken, e = t": design(std(), "exponential", 0, 12, { mouth: 30, edgeR: 12 }),
   "Schale, runder Throat + Mundecken": design(std(), "exponential", 0, 12, { morph: true, mouth: 30, edgeR: 12 }),
   "Flansch, Mundecken, Rippen": design(std(), "exponential", 0, 12, { mouth: 30, flange: { ribs: { thickness: 4, length: 30 } } }),
+  "Schale, Lamellen": design(std(), "exponential", 0, 12, { vanes: { count: 3, thickness: 2, start: { mode: "z", value: 160 }, end: { mode: "mouth", value: 0 } } }),
+  "Schale, Lamellen mit Spitzen": design(std(), "exponential", 0, 12, { vanes: { count: 3, thickness: 2, start: { mode: "z", value: 0 }, end: { mode: "mouth", value: 0 }, tip: { start: true, end: true, length: 10 } } }),
+  "Schale, Lamellen ab dem Throat": design(std(), "exponential", 0, 12, { vanes: { count: 3, thickness: 2, start: { mode: "z", value: 0 }, end: { mode: "mouth", value: 0 } } }),
+  "Schale, Lamellen, Verrundung, Mundecken, Flansch": design(std(), "exponential", 40, 12, { mouth: 30, flange: {}, vanes: { count: 4, thickness: 1.5, start: { mode: "width", value: 250 }, end: { mode: "channel", value: 120 } } }),
   "rund, Luft": design(rnd(60), "exponential", 0, 0),
   "rund ohne Traktrix, Luft": design(rnd(0, 70, 400), "exponential", 0, 0),
   "rund, Schale": design(rnd(60), "exponential", 0, 12),
@@ -235,6 +240,38 @@ describe("circleOf", () => {
     expect(circleOf(arc(50, 0, 3, 20).map(([x, y, z]) => [x, y, 30 + 0.9 * (z - 30)]))).toBeNull();
     expect(circleOf(arc(50, 0, 1, 4))).toBeNull();
     expect(circleOf(arc(50, 0, 3, 20).map(([x, y, z], k) => [x, y + 1e-3 * k, z]))).toBeNull();
+  });
+});
+
+describe("Lamellen im STEP", () => {
+  const d = CASES["Schale, Lamellen"];
+  const text = hornStep(d, { fileName: "test.step", date: "2026-10-13T12:00:00" });
+
+  it("Hauptkörper ohne Lamellen bleibt geschlossen; je Lamelle ein eigener geschlossener Körper mit eigenem Namen", () => {
+    expect(buildBrep(hornPatches(d)).problems).toEqual([]);
+    expect(text.match(/MANIFOLD_SOLID_BREP/g)).toHaveLength(1 + 3);
+    expect(text).toContain("Radialhorn Lamelle 1");
+    expect(text).toContain("Radialhorn Lamelle 3");
+    expect(text).not.toContain("Rippe");
+  });
+
+  it("jede Lamelle ist ein Vielflach aus ebenen Flächen: geschlossen, V − E + F = 2", () => {
+    const parts = ribPatches(d);
+    expect(parts).toHaveLength(3);
+    for (const patches of parts) {
+      const brep = buildBrep(patches);
+      expect(brep.problems).toEqual([]);
+      expect(brep.vertices.length - brep.edges.length + brep.faces.length).toBe(2);
+      expect(brep.faces.every(f => f.planar)).toBe(true);
+    }
+  });
+
+  it("Rippen und Lamellen nebeneinander: getrennt gezählt", () => {
+    const both = design(std(), "exponential", 0, 12, { flange: { ribs: { thickness: 4, length: 30 } }, vanes: { count: 2, thickness: 2, start: { mode: "z", value: 160 }, end: { mode: "mouth", value: 0 } } });
+    const t = hornStep(both);
+    expect(t.match(/MANIFOLD_SOLID_BREP/g)).toHaveLength(1 + 4 + 2);
+    expect(t).toContain("Radialhorn Rippe 4");
+    expect(t).toContain("Radialhorn Lamelle 2");
   });
 });
 

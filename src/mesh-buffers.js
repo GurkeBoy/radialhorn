@@ -6,7 +6,7 @@ import { triangulate, gridLines, DRAFT_RES } from "./horn-mesh.js";
 import { buildAir, buildShell } from "./bodies.js";
 
 /**
- * @param input  { s, rt, hMouth, curve, hypexT, fillet, wall, flange, edgeR, morph, sections, quality }
+ * @param input  { s, rt, hMouth, curve, hypexT, fillet, wall, flange, edgeR, morph, vanes, sections, quality }
  *               sections: Liste der gewünschten Sektionen (z.B. ohne die Kappen des Luftvolumens);
  *               quality "draft": grobes Netz (DRAFT_RES), flach schattiert – beim Ziehen; sonst fein
  *               und geglättet
@@ -14,11 +14,11 @@ import { buildAir, buildShell } from "./bodies.js";
  *   positions/normals: je Dreieck 9 Werte (Normalen geglättet, siehe smoothNormals); lines: je
  *   Gitterstrecke 6 Werte; buffers: zum Übertragen
  */
-export function meshBuffers({ s, rt, hMouth, curve, hypexT, fillet, wall, flange, edgeR = 0, morph = null, sections, quality = "fine" }) {
+export function meshBuffers({ s, rt, hMouth, curve, hypexT, fillet, wall, flange, edgeR = 0, morph = null, vanes = null, sections, quality = "fine" }) {
   const draft = quality === "draft", res = draft ? DRAFT_RES : undefined;
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
   const geometry = wall > 0
-    ? buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, res)
+    ? buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, res, vanes)
     : buildAir(s, rt, profile, fillet, morph, res);
 
   const out = [];

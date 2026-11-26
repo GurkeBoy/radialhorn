@@ -307,8 +307,8 @@ function patchesOf(surfaces) {
 export const ribPatches = design => ribPatchesOf(hornGeometry(design).surfaces);
 
 /**
- * Stützrippen des Flanschs (flange-ribs.js): je Rippe die Flächen eines eigenen geschlossenen
- * Körpers (ebene Vielecke), in CAD-Achsen. Sie durchdringen Platte und Wand ein Stück; das CAD
+ * Stützrippen des Flanschs (flange-ribs.js) und Lamellen (vanes.js): je Rippe bzw. Lamelle die Flächen eines eigenen
+ * geschlossenen Körpers (ebene Vielecke), in CAD-Achsen. Sie durchdringen Platte bzw. Wand ein Stück; das CAD
  * verschmilzt sie bei Bedarf.
  */
 function ribPatchesOf(surfaces) {
@@ -342,7 +342,8 @@ const list = items => `(${items.join(",")})`;
 
 /**
  * STEP-Datei (AP214) aus einem B-Rep (buildBrep) oder einer Liste davon (je ein geschlossener Körper;
- * der erste trägt den Namen, die weiteren – die Rippen – "Name Rippe n").
+ * der erste trägt den Namen, die weiteren – Rippen und Lamellen, je nach brep.kind "rib" (Standard) oder "vane" –
+ * "Name Rippe n" bzw. "Name Lamelle n").
  * @param model  brep | brep[]
  * @param {{ name?: string, fileName?: string, date?: string, author?: string }} meta
  */
@@ -417,7 +418,12 @@ export function stepFile(model, { name = "Radialhorn", fileName = "radialhorn.st
     const shell = add(`CLOSED_SHELL('',${list(faceRefs)})`);
     return add(`MANIFOLD_SOLID_BREP(${str(solidName)},${shell})`);
   };
-  const solids = breps.map((b, k) => writeSolid(b, k === 0 ? name : `${name} Rippe ${k}`));
+  const counts = { rib: 0, vane: 0 };
+  const solids = breps.map((b, k) => {
+    if (k === 0) return writeSolid(b, name);
+    const kind = b.kind === "vane" ? "vane" : "rib";
+    return writeSolid(b, `${name} ${kind === "vane" ? "Lamelle" : "Rippe"} ${++counts[kind]}`);
+  });
   const placement = add(`AXIS2_PLACEMENT_3D('',${point([0, 0, 0])},${direction([0, 0, 1])},${direction([1, 0, 0])})`);
   const rep = add(`ADVANCED_BREP_SHAPE_REPRESENTATION(${str(name)},(${placement},${solids.join(",")}),${gctx})`);
   add(`SHAPE_DEFINITION_REPRESENTATION(${pds},${rep})`);
@@ -445,19 +451,25 @@ function closedBrep(patches, what) {
 }
 
 /**
- * STEP-Inhalt: der geschlossene Körper, bei Stützrippen am Flansch dazu je Rippe ein eigener
+ * STEP-Inhalt: der geschlossene Körper, bei Stützrippen am Flansch und Lamellen dazu je Rippe bzw. Lamelle ein eigener
  * geschlossener Körper; wirft bei einem offenen Körper.
  */
 export function hornStep(design, meta) {
   const { surfaces } = hornGeometry(design);
   const body = closedBrep(patchesOf(surfaces), "Körper");
-  const ribs = ribPatchesOf(surfaces).map((patches, k) => closedBrep(patches, `Rippe ${k + 1}`));
-  return stepFile([body, ...ribs], meta);
+  const extras = surfaces.filter(f => f.rib);
+  const parts = ribPatchesOf(surfaces).map((patches, k) => {
+    const vane = !!extras[k].vane;
+    const brep = closedBrep(patches, `${vane ? "Lamelle" : "Rippe"} ${k + 1}`);
+    brep.kind = vane ? "vane" : "rib";
+    return brep;
+  });
+  return stepFile([body, ...parts], meta);
 }
 
 /**
  * @param design
- * @param fuse  true: Rippen und Horn zu einem Körper vereinen (step-fuse.js, im Worker); schlägt das fehl, wird die Datei
+ * @param fuse  true: Rippen, Lamellen und Horn zu einem Körper vereinen (step-fuse.js, im Worker); schlägt das fehl, wird die Datei
  *              mit getrennten Körpern geschrieben und das Ergebnis trägt warning
  * @returns Ergebnis wie downloadFile, bei misslungener Vereinigung zusätzlich { warning }
  */
@@ -468,7 +480,7 @@ export async function exportSTEP(design, { fuse = false } = {}) {
   let warning = null;
   const result = await downloadFile(async () => {
     const step = hornStep(design, { fileName: fname });
-    if (!fuse || !design.flange?.ribs) return step;
+    if (!fuse || !(design.flange?.ribs || design.vanes)) return step;
     try {
       const { fuseStepInWorker } = await import("./step-fuse-client.js");
       return (await fuseStepInWorker(step, fname)).step;

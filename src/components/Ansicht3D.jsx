@@ -8,7 +8,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { COLOR, FONT, UI } from "../theme.js";
 import { useSize } from "../hooks.js";
 
-const SECTION_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn, rim: COLOR.wand, flansch: COLOR.flansch };
+const SECTION_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn, rim: COLOR.wand, flansch: COLOR.flansch, lamellen: COLOR.lamelle };
 
 /** Dreiecke bzw. Strecken [p, …] als BufferGeometry (Punkte [x, h, z]). */
 function bufferGeometry(items) {
@@ -212,9 +212,10 @@ function frame(camera, controls, object) {
  * @param edgeR    Radius der gerundeten Längskanten außen [mm], 0 = scharf
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null, nur mit Schale
  * @param morph    Übergang rund → eckig am Throat (throatMorph) oder null
+ * @param vanes    Lamellen (vanes.js, resolveVanes) oder null
  * @param centroid Schwerpunkt [x, h, z] des angezeigten Körpers (Schale bei Wandstärke, sonst Luftvolumen) oder null
  */
-export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, edgeR = 0, flange, morph = null, showRaumecke, centroid = null }) {
+export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, edgeR = 0, flange, morph = null, showRaumecke, centroid = null, vanes = null }) {
   const tr = useT();
   const containerRef = useRef(null);
   const { w, h } = useSize(containerRef);
@@ -226,8 +227,8 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
 
   const meshInput = useMemo(() => s ? {
     s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, morph,
-    flange: wall > 0 ? flange : null, sections: Object.keys(SECTION_COLOR),
-  } : null, [s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, flange, morph]);
+    flange: wall > 0 ? flange : null, vanes: wall > 0 ? vanes : null, sections: Object.keys(SECTION_COLOR),
+  } : null, [s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, flange, morph, vanes]);
   const sections = useMeshWorker(meshInput);
 
   // Szene, Kamera, Renderer und Steuerung einmalig anlegen

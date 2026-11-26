@@ -4,6 +4,7 @@ import { useT } from "../i18n.js";
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
 import { svgPath, clipFromZ } from "../utils.js";
+import { vaneOutline } from "../vanes.js";
 import { topViewDims, dimsOverflow, raumeckeEndX as cornerEndX, DIM_FIRST, DIM_STEP } from "../dim-layout.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker, ViewTitle } from "./ui.jsx";
@@ -16,7 +17,7 @@ const CLOTHOID_SAMPLES = 120;
 const WALL_SAMPLES = 80;
 
 /** @param flange  aufgelöster Throat-Flansch (flangeLayout) oder null */
-export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange, shellOuter = null }) {
+export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange, shellOuter = null, vanes = null }) {
   const tr = useT();
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
@@ -193,6 +194,12 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           return <DimAligned p1={[toX(xE), toY(zE)]} p2={[mRx, mY]} offset={DIM_FIRST}
             color={COLOR.wand} marker="url(#arrH)" label={`${t} mm`} />;
         })()}
+        {/* Lamellen: Umriss entlang der Wellenfronten (mit Spitzen), mindestens als dünne Linie sichtbar */}
+        {vanes?.ok && vanes.paths.map((path, i) => {
+          const { left, right } = vaneOutline(path, vanes.widths[i]);
+          return <path key={i} d={svgPath([...left, ...right.slice().reverse()].map(([x, z]) => [toX(x), toY(z)])) + "Z"} fill={COLOR.lamelle}
+            stroke={COLOR.lamelle} strokeWidth={1} strokeLinejoin="round" />;
+        })}
         {flange && <FlanschSchnitt flange={flange} map={(x, z) => [toX(x), toY(z)]} inner={innerWall} />}
 
         {/* Übergangspunkte: Traktrix → (Klothoide →) gerade Wand */}
@@ -204,6 +211,45 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
         <path d={`M${cx+angleR*sinA},${fy+angleR*cosA} A${angleR},${angleR} 0 0 1 ${cx-angleR*sinA},${fy+angleR*cosA}`}
           fill="none" stroke={COLOR.dim} strokeWidth="0.8" />
         <text x={cx} y={fy + angleR * 0.5} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>{s.openingAngle}°</text>
+
+        {/* Kanalwinkel am Ende der Lamellen: der Winkel, in dem sich ein Kanal dort öffnet (2θ/(n + 1) der Wellenfront bei zEnd – am Mund
+            und im geraden Bereich der Sektorwinkel, im Traktrix-Eingang kleiner). Winkelmaß um den Mittelpunkt dieser Wellenfront
+            (am Mund der Fokus), Hilfslinien radial entlang der Lamellenenden. Bemaßungsregeln: Bogen 18 px hinter dem äußersten Punkt
+            (am Mund hinter der Wandstärke, sonst hinter den Lamellenenden), Hilfslinien gestrichelt (3 3, 0,35) von 2 px hinter dem Ende
+            der Lamelle bis 2 px über den Bogen, Betrag 8 px außen am Bogen, parallel zur Maßlinie, alles in der Farbe der Lamellen. Am Mund
+            wird ein Sektor bemaßt, der weder die senkrechten Hilfslinien der Mundbreite noch deren Maßlinie schneidet, sonst der äußerste;
+            davor (mit mindestens zwei Lamellen) ein Sektor zwischen zwei Lamellen. */}
+        {vanes?.ok && (() => {
+          const { zCenter, radius, halfAngle: th } = vanes.endWave, atMouth = vanes.zEnd >= s.zApex - 1e-6;
+          const vx = cx, vy = toY(zCenter), R = radius * scale, d = vanes.endAngle;
+          const [oxE, oyE] = shellOuter ? [toX(shellOuter[shellOuter.length - 1][0]), toY(shellOuter[shellOuter.length - 1][1])] : [mRx, mY];
+          const r = (atMouth ? Math.max(R, Math.hypot(oxE - vx, oyE - vy)) : R) + DIM_FIRST;
+          const cross = Math.asin(Math.min(1, Math.sin(th) * R / r)) - 0.02, axis = Math.acos(r / (r + 2)) + 0.02;
+          let k = atMouth ? 0 : Math.min(1, vanes.count - 1);
+          if (atMouth) for (let i = 0; i <= vanes.count; i++) if (th - i * d <= cross && th - (i + 1) * d >= axis) { k = i; break; }
+          const hi = th - k * d, lo = hi - d, mid = (hi + lo) / 2;
+          const pt = (ang, rr) => [vx + rr * Math.sin(ang), vy + rr * Math.cos(ang)];
+          const [tx, ty] = pt(mid, r + 8), [ax, ay] = pt(hi, r), [bx, by] = pt(lo, r);
+          const ext = ang => { const [x0, y0] = pt(ang, R + 2), [x1, y1] = pt(ang, r + 2); return <line key={ang} x1={x0} y1={y0} x2={x1} y2={y1} stroke={COLOR.lamelle} strokeWidth="0.35" strokeDasharray="3 3" />; };
+          // Kanalbreite am Ende: lichte Breite zwischen zwei benachbarten Lamellen (Sehne zwischen den Lamellenmitten − Dicke), auf der
+          // gegenüberliegenden Seite. Maßlinie parallel zur Sehne, 18 px
+          // hinter dem äußersten Punkt (wie der Winkelbogen), Hilfslinien/Text von DimAligned; Wand statt Lamelle als Begrenzung ohne Dickenabzug
+          const kc = k, edge = j => (j === 0 || j === vanes.count + 1 ? 0 : (vanes.thickness * scale) / 2);
+          const pa = pt(-(th - kc * d), R), pb = pt(-(th - (kc + 1) * d), R);
+          const len = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), u = [(pb[0] - pa[0]) / len, (pb[1] - pa[1]) / len];
+          let q1 = [pa[0] + u[0] * edge(kc), pa[1] + u[1] * edge(kc)], q2 = [pb[0] - u[0] * edge(kc + 1), pb[1] - u[1] * edge(kc + 1)];
+          const mx = (pa[0] + pb[0]) / 2 - vx, my = (pa[1] + pb[1]) / 2 - vy;
+          if (u[1] * mx - u[0] * my < 0) [q1, q2] = [q2, q1];   // Normale (uy, −ux) zeigt vom Mittelpunkt weg
+          const off = r - Math.hypot(mx, my);
+          const spanned = Math.hypot(q2[0] - q1[0], q2[1] - q1[1]) / scale;
+          return <g>
+            <DimAligned p1={q1} p2={q2} offset={off} color={COLOR.lamelle} marker="url(#arrH)" label={`${spanned.toFixed(1)} mm`} />
+            {ext(hi)}{ext(lo)}
+            <path d={`M${ax},${ay} A${r},${r} 0 0 1 ${bx},${by}`} fill="none" stroke={COLOR.lamelle} strokeWidth="0.8" />
+            <text x={tx} y={ty} transform={`rotate(${-mid * 180 / Math.PI} ${tx} ${ty})`} textAnchor="middle" dominantBaseline="central"
+              fontSize="9" fill={COLOR.lamelle} fontFamily={FONT}>{(d * 180 / Math.PI).toFixed(1)}°</text>
+          </g>;
+        })()}
 
         {/* Maße links, rechts, oben, unten: Lagen nach den Bemaßungsregeln (dim-layout.js) */}
         {dims.map(d => <Dim key={d.id} p1={d.p1} p2={d.p2} orient={d.orient} arrowPos={d.arrowPos}
@@ -217,7 +263,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           color={COLOR.arc} marker="url(#arrH)" label={`R ${s.arcR.toFixed(1)} mm`} />
       </svg>
 
-      <Legend showWandstaerke={showWandstaerke} blend={hasClothoid(s) ? s.clothoid.kind ?? "clothoid" : null} showFlange={!!flange} />
+      <Legend showWandstaerke={showWandstaerke} blend={hasClothoid(s) ? s.clothoid.kind ?? "clothoid" : null} showFlange={!!flange} showVanes={!!vanes?.ok} />
     </div>
   );
 });
@@ -236,7 +282,7 @@ function RightAngleMark({ x, y, dx, dy, size, color }) {
   return <path d={`M${x + dx*size},${y} L${x + dx*size},${y + dy*size} L${x},${y + dy*size}`} fill="none" stroke={color} strokeWidth="0.9" />;
 }
 
-function Legend({ showWandstaerke, blend, showFlange }) {
+function Legend({ showWandstaerke, blend, showFlange, showVanes }) {
   const tr = useT();
   const items = [
     { col: COLOR.trak,     label: tr("legend.tractrix") },
@@ -248,6 +294,7 @@ function Legend({ showWandstaerke, blend, showFlange }) {
     { col: COLOR.raum,     label: tr("legend.corner"),     dash: true },
     ...(showWandstaerke ? [{ col: COLOR.wand, label: tr("legend.wall") }] : []),
     ...(showFlange ? [{ col: COLOR.flansch, label: tr("legend.flange"), kind: "fill" }] : []),
+    ...(showVanes ? [{ col: COLOR.lamelle, label: tr("legend.vanes") }] : []),
     { col: COLOR.dim,      label: tr("legend.dimension") },
   ];
   return (

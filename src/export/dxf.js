@@ -6,6 +6,7 @@
 // damit CAD-Systeme glatte Körper daraus erzeugen.
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, makeProfile } from "../horn-math.js";
 import { buildShell } from "../bodies.js";
+import { vaneOutline } from "../vanes.js";
 import { linspace } from "../utils.js";
 import { fitBSpline } from "./bspline.js";
 import { downloadFile } from "./download.js";
@@ -80,11 +81,11 @@ export const dxfDocument = entities => `0\nSECTION\n2\nENTITIES\n${entities.join
 
 /**
  * Erzeugt den DXF-Text.
- * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange, morph, profile, wall, edgeR } (profile, wall, edgeR
- *                nur für die Stützrippen am Flansch)
+ * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange, morph, profile, wall, edgeR, vanes } (profile, wall, edgeR
+ *                nur für die Stützrippen am Flansch; vanes: aufgelöste Lamellen, nur mit wall > 0)
  * @param opts    Layer-Auswahl { draufsicht, mundbogen, fokus, seitenprofil, uebergang, flansch }
  */
-export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, morph = null, profile = null, wall = 0, edgeR = 0 }, opts) {
+export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, morph = null, profile = null, wall = 0, edgeR = 0, vanes = null }, opts) {
   const out = [];
   const mirrored = fn => [1, -1].forEach(fn);
 
@@ -102,6 +103,14 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
       else if (klo.length > 1) out.push(dxfSpline(klo.map(([x, z]) => [z, sign * x]), "Draufsicht_Klothoide"));
       out.push(dxfLine([s.zTrans, sign * s.xTrans], [s.zMouth, sign * s.xMouth], "Draufsicht_Gerade"));
     });
+    // Lamellen: Umriss jeder Platte in der Draufsicht (Seitenlinien und Stirnen entlang der Wellenfronten)
+    if (wall > 0 && vanes?.ok && !s.round) {
+      for (const center of vanes.paths) {
+        const { left, right } = vaneOutline(center, vanes.widths[vanes.paths.indexOf(center)]);
+        const box = [...left, ...right.slice().reverse()].map(([x, z]) => [z, x]);   // DXF der Draufsicht: [z, x]
+        box.forEach((p, i) => out.push(dxfLine(p, box[(i + 1) % box.length], "Draufsicht_Lamellen")));
+      }
+    }
   }
   if (opts.mundbogen) {
     const a = s.alpha2 * 180 / Math.PI;

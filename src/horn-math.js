@@ -764,6 +764,26 @@ export function wallArcLength(s, zWall) {
 }
 
 /**
+ * Wellenfront (Draufsicht) durch die Achsenstelle zAxis, an der ihr Bogen die Hornachse schneidet: Kreisbogen um (0, zCenter)
+ * mit Radius radius und Halbwinkel halbAngle, dazu die halbe Breite xWall an der Wand. Die Achsenstelle wächst mit der Wand
+ * (Traktrix, Klothoide, gerade Wand), so dass sie die Wellenfronten eindeutig kennzeichnet. Vor der Throat-Wellenfront gilt
+ * diese, hinter dem Mund der Mundbogen.
+ * @returns {{ zCenter, radius, halfAngle, zAxis, xWall }}
+ */
+export function wavefrontAtAxis(s, zAxis) {
+  const clothoid = denseClothoid(s);
+  const first = wavefrontAt(s, 0, clothoid);
+  if (zAxis <= first.zAxis) return first;
+  let lo = 0, hi = s.zMouth;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (mid === lo || mid === hi) break;
+    wavefrontAt(s, mid, clothoid).zAxis < zAxis ? (lo = mid) : (hi = mid);
+  }
+  return wavefrontAt(s, hi, clothoid);
+}
+
+/**
  * Wandpunkt bei zWall (0 … zMouth): Lage xWall, Bogenlänge sWall ab dem Throat und halbe Höhe
  * hWall an der Wand nach der Höhenregel des 3D-Körpers.
  */

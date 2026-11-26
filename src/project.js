@@ -7,6 +7,7 @@ import { CURVES, lengthOffset } from "./horn-math.js";
 import { PLACEHOLDER_DRIVER } from "./simulation.js";
 import { fmtLength } from "./utils.js";
 import { MATERIAL_KEYS } from "./wall-advice.js";
+import { VANE_START_MODES, VANE_END_MODES, VANE_STAGE_MODES } from "./vanes.js";
 
 export const PROJECT_FORMAT = "radialhorn-project";
 /** 2: L ohne Raumecke ab der Treiberrückseite (in Version 1 ab der Hut-Spitze, dw/2 dahinter). */
@@ -78,6 +79,24 @@ export const DESIGN_DEFAULTS = {
   holeAngle: 0,            // 0°: Bohrungen auf 3, 12, 9, 6 Uhr
   ribsOn: false,           // Stützrippen am Flansch, mittig zwischen den Bohrungen (so viele wie Bohrungen)
   ribThickness: 4,
+  vanesOn: false,          // Lamellen: senkrechte Platten durch den Fokus, teilen die Wellenfront in Sektoren (vanes.js)
+  vaneCount: 2,
+  vaneThickness: 2,
+  vaneStartMode: "z",      // Beginn: z (Abstand vom Throat) | width (Hornbreite) | channel (lichte Kanalbreite)
+  vaneStart: 150,
+  vaneEndMode: "mouth",    // Ende: mouth | z | channel (Kanalbreite, ab der die Lamellen enden dürfen)
+  vaneEnd: 250,
+  vaneTipStart: false,     // spitzer Beginn: die Dicke läuft über vaneTipLength auf 0,4 mm zu (druckbare Spitze)
+  vaneTipEnd: false,       // spitzes Ende
+  vaneTipLength: 10,       // Länge der Spitzen [mm]
+  vaneStagger: false,      // gestaffelter Beginn: weitere Lamellen setzen später in der Mitte jedes Kanals ein
+  vaneStages: 1,           // Stufen (1–3); jede verdoppelt die Sektoren
+  vaneStagesAuto: false,   // Stufen automatisch: so viele, wie bis zum Ende noch Platz haben (nur Kanalbreite)
+  vaneStageMode: "channel", // Beginn der Stufen: channel (lichte Kanalbreite der laufenden Lamellen) | z (feste Achsenstelle)
+  vaneStageChannel: 30,    // Kanalbreite [mm], ab der die nächste Stufe einsetzt
+  vaneStageZ1: 200,        // feste Achsenstellen der Stufen [mm]
+  vaneStageZ2: 300,
+  vaneStageZ3: 400,
   roundOn: false,          // Verrundungen auf der Hornseite des Flanschs (Plattenkanten, Rippen)
   roundR: 2,
   stepFuse: true,          // STEP: Rippen und Horn zu einem Körper vereinen (OpenCascade im Worker)
@@ -95,7 +114,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-export const ADDED_LATER = new Set(["arcOn", "arcRadius", "filletClothoidOn", "filletClothoidLength", "hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
+export const ADDED_LATER = new Set(["arcOn", "arcRadius", "filletClothoidOn", "filletClothoidLength", "hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd", "vaneTipStart", "vaneTipEnd", "vaneTipLength", "vaneStagger", "vaneStages", "vaneStagesAuto", "vaneStageMode", "vaneStageChannel", "vaneStageZ1", "vaneStageZ2", "vaneStageZ3", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);
@@ -104,6 +123,9 @@ const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);
 const CHOICES = {
   curve: CURVES,
   hornShape: ["radial", "round"],
+  vaneStartMode: VANE_START_MODES,
+  vaneEndMode: VANE_END_MODES,
+  vaneStageMode: VANE_STAGE_MODES,
   abstrahlung: ["auto", "4pi", "2pi", "pi", "pi/2"],
   "driver.massIs": ["Mmd", "Mms"],
   wallMaterial: MATERIAL_KEYS,

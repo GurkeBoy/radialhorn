@@ -9,6 +9,7 @@
 import { createHornMath, computeFillet, computeFilletClothoid, makeProfile, throatMorph, mouthRounding, lengthOffset } from "./horn-math.js";
 import { shellPlanOutline, shellProfileOutline } from "./horn-mesh.js";
 import { layoutFlange } from "./bodies.js";
+import { resolveVanes } from "./vanes.js";
 import { linspace } from "./utils.js";
 
 export const L_MAX = 1200;   // Obergrenze des L-Reglers [mm]; mit Raumecke gilt maxLWithRaumecke, falls kleiner
@@ -18,14 +19,16 @@ export const GEOMETRY_KEYS = [
   "hornShape", "throatDiam", "openingAngle", "L", "Lt", "dw", "dh", "hMouth", "curve", "hypexT", "showRaumecke", "showWandstaerke",
   "wandstaerke", "filletOn", "filletR", "filletClothoidOn", "filletClothoidLength", "clothoidOn", "clothoidLength", "arcOn", "arcRadius", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "flangeOn", "flangeD",
   "flangeT", "holeCount", "holeCircle", "holeD", "holeAngle", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "edgeOn", "edgeR",
+  "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd", "vaneTipStart", "vaneTipEnd", "vaneTipLength",
+  "vaneStagger", "vaneStages", "vaneStagesAuto", "vaneStageMode", "vaneStageChannel", "vaneStageZ1", "vaneStageZ2", "vaneStageZ3",
 ];
 
 /** Teilergebnisse mit Version (Objekte, deren Gleichheit nachgelagert zählt). */
-const VERSIONED = ["s", "fillet", "morph", "flange", "shellOuter", "shellCut"];
+const VERSIONED = ["s", "fillet", "morph", "flange", "vanes", "shellOuter", "shellCut"];
 
 /**
  * Rechenkern mit Zwischenspeichern. compute(params) → { params, values, versions }.
- * values: s, fillet, morph, flange, shellOuter (Draufsicht), shellCut (Seitenriss), Grenzen
+ * values: s, fillet, morph, flange, vanes (Lamellen, aufgelöst), shellOuter (Draufsicht), shellCut (Seitenriss), Grenzen
  * (LtMin, LtMax, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin, Lmax, LClamped – Längen wie angezeigt,
  * ohne Raumecke ab der Treiberrückseite; s rechnet intern ab der Hut-Spitze), warnings, wall, edge.
  * versions: je Eintrag aus VERSIONED, eindeutig über Kerne hinweg.
@@ -118,6 +121,16 @@ export function createGeometryEngine() {
       round: p.roundOn ? p.roundR : 0,
     }, edge, morph.value) : null);
 
+    // Lamellen nur an der Schale des Radialhorns; Beginn und Ende werden gegen die Lösung aufgelöst und begrenzt
+    const vanes = stage("vanes", [s.version, wall, round, p.vanesOn, p.vaneCount, p.vaneThickness, p.vaneStartMode, p.vaneStart, p.vaneEndMode, p.vaneEnd, p.vaneTipStart, p.vaneTipEnd, p.vaneTipLength,
+      p.vaneStagger, p.vaneStages, p.vaneStagesAuto, p.vaneStageMode, p.vaneStageChannel, p.vaneStageZ1, p.vaneStageZ2, p.vaneStageZ3],
+      () => sv && wall > 0 && !round && p.vanesOn ? resolveVanes(sv, {
+        count: p.vaneCount, thickness: p.vaneThickness,
+        start: { mode: p.vaneStartMode, value: p.vaneStart }, end: { mode: p.vaneEndMode, value: p.vaneEnd },
+        tip: { start: p.vaneTipStart, end: p.vaneTipEnd, length: p.vaneTipLength },
+        stagger: p.vaneStagger ? { stages: p.vaneStages, auto: p.vaneStagesAuto, mode: p.vaneStageMode, channel: p.vaneStageChannel, z: [p.vaneStageZ1, p.vaneStageZ2, p.vaneStageZ3] } : null,
+      }) : null);
+
     // Schalen-Umrisse der Ansichten (Schnitt durch die Wand), ab der Flanschebene
     const zShell = flange.value ? flange.value.thickness : 0;
     const shellOuter = stage("shellOuter", [s.version, wall, zShell],
@@ -127,7 +140,7 @@ export function createGeometryEngine() {
       outer: shellProfileOutline(sv, rt, profile.value, wall, zShell),
     } : null);
 
-    const stages = { s, fillet, morph, flange, shellOuter, shellCut };
+    const stages = { s, fillet, morph, flange, vanes, shellOuter, shellCut };
     return {
       params: input,
       values: {
