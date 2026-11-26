@@ -276,7 +276,7 @@ export default function App() {
   const vaneLimits = s && !round ? vaneRanges(s, vaneCount, vaneThickness) : null;
   const vaneModeValue = (mode, r) => Math.round(vaneValue(s, vaneCount, vaneThickness, mode, r));
   const changeVaneStartMode = mode => { if (vanes) setVaneStart(vaneModeValue(mode, vanes.zStart)); setVaneStartMode(mode); };
-  const changeVaneEndMode = mode => { if (vanes && mode !== "mouth") setVaneEnd(vaneModeValue(mode, vanes.zEnd)); setVaneEndMode(mode); };
+  const changeVaneEndMode = mode => { if (vanes && mode !== "mouth") setVaneEnd(mode === "channel" ? Math.round(vanes.channelEnd) : vaneModeValue(mode, vanes.zEnd)); setVaneEndMode(mode); };
   // Gespeicherte Betriebsart „Hornbreite“ gibt es nicht mehr: Beginn gleich, nur als z
   useEffect(() => { if (!VANE_START_MODES.includes(vaneStartMode)) changeVaneStartMode("z"); });
   const applyWallAdvice = () => { if (advice) { setShowWandstaerke(true); setWandstaerke(advice.tRecommended); } };
@@ -394,8 +394,12 @@ export default function App() {
               min={Math.floor(vaneLimits[vaneStartMode][0])} max={Math.ceil(vaneLimits[vaneStartMode][1])} step={1} unit="mm" onChange={setVaneStart} />
             <SegmentedButtons options={VANE_END_MODES} labels={{ mouth: t("vanes.mode.mouth"), z: t("vanes.mode.z"), channel: t("vanes.mode.channel") }}
               value={vaneEndMode} onChange={changeVaneEndMode} />
-            {vaneEndMode !== "mouth" && <Slider label={t("vanes.end." + vaneEndMode)} value={Math.min(Math.max(vaneEnd, Math.floor(vaneLimits[vaneEndMode][0])), Math.ceil(vaneLimits[vaneEndMode][1]))}
-              min={Math.floor(vaneLimits[vaneEndMode][0])} max={Math.ceil(vaneLimits[vaneEndMode][1])} step={1} unit="mm" onChange={setVaneEnd} />}
+            {vaneEndMode !== "mouth" && (() => {
+              // Ende nach Kanalbreite: Bereich des Kanals zwischen den Lamellen, die dort laufen (mit Staffelung nach den Stufen)
+              const [lo, hi] = vaneEndMode === "channel" && vanes?.endChannelRange ? vanes.endChannelRange : vaneLimits[vaneEndMode];
+              return <Slider label={t("vanes.end." + vaneEndMode)} value={Math.min(Math.max(vaneEnd, Math.floor(lo)), Math.ceil(hi))}
+                min={Math.floor(lo)} max={Math.ceil(hi)} step={1} unit="mm" onChange={setVaneEnd} />;
+            })()}
             <Toggle label={t("vanes.tipStart")} checked={vaneTipStart} onChange={setVaneTipStart} info={t("vanes.tipInfo")} />
             <Toggle label={t("vanes.tipEnd")} checked={vaneTipEnd} onChange={setVaneTipEnd} />
             {(vaneTipStart || vaneTipEnd) && <Slider label={t("vanes.tipLength")} value={vaneTipLength} min={2} max={40} step={1} unit="mm" onChange={setVaneTipLength} />}

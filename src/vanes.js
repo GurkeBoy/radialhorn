@@ -141,6 +141,34 @@ function staggerStarts(s, n, t, stagger, zStart, zEnd) {
 }
 
 /**
+ * Ende nach lichter Kanalbreite: die Stelle, an der der Kanal zwischen zwei benachbarten Lamellen, die dort gerade laufen,
+ * zum ersten Mal die Breite value erreicht. Mit Staffelung laufen nach jeder Stufe doppelt so viele Sektoren, der Kanal wird
+ * an der Stufenstelle schmaler (Sprung nach unten) und wächst dann wieder – gesucht wird je Abschnitt zwischen zwei Stufen.
+ * @param starts  Achsenstellen der Stufen (aufsteigend)
+ * @returns {{ z: number, limited: boolean, range: [number, number] }}  range = kleinste und größte Kanalbreite zwischen Beginn und Mund
+ */
+function endByChannel(s, n, t, value, zStart, zMouth, starts) {
+  const bounds = [zStart, ...starts.filter(z => z > zStart), zMouth];
+  const chan = (z, i) => measures(s, (n + 1) * 2 ** i - 1, t, z).channel;
+  const parts = [];
+  for (let i = 0; i + 1 < bounds.length; i++) if (bounds[i + 1] > bounds[i]) parts.push({ i, lo: bounds[i], hi: bounds[i + 1] });
+  const values = parts.flatMap(p => [chan(p.lo, p.i), chan(p.hi, p.i)]);
+  const range = [Math.min(...values), Math.max(...values)];
+  for (const { i, lo, hi } of parts) {
+    if (chan(hi, i) < value) continue;
+    if (chan(lo, i) >= value) return { z: lo, limited: lo === zStart && value < chan(lo, i) - LIMIT_TOLERANCE, range };
+    let a = lo, b = hi;
+    for (let k = 0; k < BISECTIONS; k++) {
+      const mid = (a + b) / 2;
+      if (mid === a || mid === b) break;
+      chan(mid, i) < value ? (a = mid) : (b = mid);
+    }
+    return { z: (a + b) / 2, limited: false, range };
+  }
+  return { z: zMouth, limited: value > range[1] + LIMIT_TOLERANCE, range };
+}
+
+/**
  * Lamellen zu einer Lösung auflösen und auf das Machbare begrenzen.
  * @param s     Lösung aus solveHorn
  * @param spec  { count, thickness, start: { mode: "z" | "channel", value }, end: { mode: "mouth" | "z" | "channel", value } }
@@ -150,7 +178,7 @@ function staggerStarts(s, n, t, stagger, zStart, zEnd) {
  *              laufen ab start; jede Stufe setzt in jeden Kanal eine weitere Lamelle in die Mitte (Sektoren verdoppeln sich)
  * @returns {object | null}  null ohne Lamellen (rundes Horn, Anzahl 0, Dicke 0); sonst
  *   { count, baseCount, thickness, fractions, stages, stageStarts, staggerLimited, delta, zStart, zEnd, atThroat, widthStart,
- *     widthEnd, channelStart, channelEnd, startLimited, endLimited, ok, paths, widths, tip } – Winkel im Bogenmaß, Längen
+ *     widthEnd, channelStart, channelEnd, startLimited, endLimited, endChannelRange, ok, paths, widths, tip } – Winkel im Bogenmaß, Längen
  *   in mm; count = tatsächliche Zahl der Lamellen (mit Staffelung (count + 1)·2^Stufen − 1, zu kurze entfallen); baseCount =
  *   Lamellen ab dem Beginn; stages = je Lamelle die Stufe (0 = ab dem Beginn); delta = Sektorwinkel am Mund; endAngle =
  *   Winkel, in dem sich ein Kanal am Ende der Lamellen öffnet (2θ/(count + 1) mit dem Halbwinkel θ der Wellenfront bei zEnd;
@@ -164,8 +192,14 @@ export function resolveVanes(s, spec) {
   if (!s || s.round || !spec || !(spec.count >= 1) || !(spec.thickness > 0)) return null;
   const n = Math.round(spec.count), t = spec.thickness, range = axisRange(s, n, t);
   const start = axisOf(s, n, t, spec.start.mode, spec.start.value, range);
-  const end = spec.end.mode === "mouth" ? { z: range[1], limited: false } : axisOf(s, n, t, spec.end.mode, spec.end.value, range);
-  const zStart = start.z, zEnd = end.z, ok = zEnd - zStart >= MIN_LENGTH, atThroat = zStart === range[0] && range[2] <= 0;
+  const zStart = start.z;
+  // Ende nach Kanalbreite: gemeint ist der Kanal zwischen den Lamellen, die dort laufen – mit Staffelung nach den Stufen; deren
+  // Beginn hängt nur vom Beginn ab (bei „automatisch“ gegen den Mund gerechnet)
+  const sizing = staggerStarts(s, n, t, spec.stagger, zStart, range[1]).starts;
+  const byChannel = endByChannel(s, n, t, spec.end.mode === "channel" ? spec.end.value : 0, zStart, range[1], sizing);
+  const end = spec.end.mode === "mouth" ? { z: range[1], limited: false }
+    : spec.end.mode === "channel" ? byChannel : axisOf(s, n, t, spec.end.mode, spec.end.value, range);
+  const zEnd = end.z, ok = zEnd - zStart >= MIN_LENGTH, atThroat = zStart === range[0] && range[2] <= 0;
   const stagger = ok ? staggerStarts(s, n, t, spec.stagger, zStart, zEnd) : { starts: [], limited: false };
   const S = stagger.starts.length, all = fractions((n + 1) * 2 ** S - 1);
 
@@ -212,7 +246,7 @@ export function resolveVanes(s, spec) {
     staggerLimited: stagger.limited, delta: 2 * s.alpha2 / (count + 1),
     endAngle: 2 * b.w.halfAngle / (count + 1), endWave: { zCenter: b.w.zCenter, radius: b.w.radius, halfAngle: b.w.halfAngle },
     zStart, zEnd, atThroat, widthStart: a.width, widthEnd: b.width, channelStart: a.channel, channelEnd: b.channel,
-    startLimited: start.limited, endLimited: end.limited,
+    startLimited: start.limited, endLimited: end.limited, endChannelRange: byChannel.range,
     ok, paths, widths, tip,
   };
 }

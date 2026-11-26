@@ -94,11 +94,12 @@ describe("resolveVanes: Anzahl, Anteile, Grenzen", () => {
     expect(resolveVanes(s, spec()).zEnd).toBeCloseTo(s.zApex, 9);
     const z = resolveVanes(s, spec({ end: { mode: "z", value: 250 } }));
     expect(z.zEnd).toBeCloseTo(250, 9);
-    const ch = resolveVanes(s, spec({ end: { mode: "channel", value: 100 } }));
+    const ch = resolveVanes(s, spec({ start: { mode: "z", value: 0 }, end: { mode: "channel", value: 100 } }));
     expect(ch.channelEnd).toBeCloseTo(100, 6);
+    expect(ch.zEnd).toBeGreaterThan(ch.zStart);
     expect(ch.endLimited).toBe(false);
     // so breit wird der Kanal nie: Ende am Mund, als begrenzt gemeldet
-    const wide = resolveVanes(s, spec({ end: { mode: "channel", value: 1e6 } }));
+    const wide = resolveVanes(s, spec({ start: { mode: "z", value: 0 }, end: { mode: "channel", value: 1e6 } }));
     expect(wide.zEnd).toBeCloseTo(s.zApex, 9);
     expect(wide.endLimited).toBe(true);
   });
@@ -234,6 +235,46 @@ describe("vaneBodies: Körper", () => {
     const b = vaneBodies(s, airTris(s, prof, fillet, morph), v, WALL);
     expect(b.count).toBe(4);
     for (const f of b.surfaces) expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 });
+  });
+});
+
+describe("Ende ab Kanalbreite: der Kanal zwischen den Lamellen, die dort laufen", () => {
+  const withEnd = (value, stagger) => spec({ count: 1, start: { mode: "z", value: 0 }, end: { mode: "channel", value }, stagger });
+  const stg = { stages: 1, mode: "channel", channel: 30, z: [] };
+
+  it("ohne Staffelung: Kanal zwischen n Lamellen (n + 1 Sektoren)", () => {
+    const v = resolveVanes(s, withEnd(60));
+    expect(vaneValue(s, 1, 2, "channel", v.zEnd)).toBeCloseTo(60, 6);
+    expect(v.channelEnd).toBeCloseTo(60, 6);
+  });
+
+  it("mit Staffelung zählen die Lamellen, die am Ende laufen: nach der Stufe sind die Kanäle schmaler, das Ende liegt weiter hinten", () => {
+    const plain = resolveVanes(s, withEnd(40)), v = resolveVanes(s, withEnd(40, stg));
+    expect(v.stageStarts).toHaveLength(1);
+    expect(v.stageStarts[0]).toBeLessThan(plain.zEnd);
+    expect(v.zEnd).toBeGreaterThan(v.stageStarts[0]);
+    expect(v.count).toBe(3);
+    // Kanal zwischen den dann 3 laufenden Lamellen (4 Sektoren) ist 40 mm breit – nicht der der ersten Lamelle allein
+    expect(vaneValue(s, 3, 2, "channel", v.zEnd)).toBeCloseTo(40, 6);
+    expect(v.channelEnd).toBeCloseTo(40, 6);
+    expect(vaneValue(s, 1, 2, "channel", v.zEnd)).toBeGreaterThan(40);
+    expect(v.zEnd).toBeGreaterThan(plain.zEnd);
+  });
+
+  it("wird die Breite schon vor der Stufe erreicht, enden die Lamellen vor ihr: keine Stufenlamellen", () => {
+    const v = resolveVanes(s, withEnd(25, stg));
+    expect(vaneValue(s, 1, 2, "channel", v.zEnd)).toBeCloseTo(25, 6);
+    expect(v.count).toBe(1);
+  });
+
+  it("der wählbare Bereich reicht von der Kanalbreite am Beginn bis zur größten vor dem Mund; nie erreicht: Ende am Mund, begrenzt", () => {
+    const v = resolveVanes(s, withEnd(25, stg));
+    const [lo, hi] = v.endChannelRange;
+    expect(lo).toBeLessThan(hi);
+    expect(hi).toBeGreaterThanOrEqual(30 - 1e-6);   // knapp vor der Stufe war der Kanal 30 mm breit
+    const never = resolveVanes(s, withEnd(hi + 50, stg));
+    expect(never.zEnd).toBeCloseTo(s.zApex, 9);
+    expect(never.endLimited).toBe(true);
   });
 });
 
