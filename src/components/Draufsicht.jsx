@@ -226,7 +226,15 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           const hi = a1 - k * d, lo = hi - d, mid = (hi + lo) / 2;
           const pt = (ang, rr) => [cx + rr * Math.sin(ang), fy + rr * Math.cos(ang)];
           const [tx, ty] = pt(mid, r + 8), [ax, ay] = pt(hi, r), [bx, by] = pt(lo, r);
-          const ext = ang => { const [x0, y0] = pt(ang, rp + 2), [x1, y1] = pt(ang, r + 2); return <line key={ang} x1={x0} y1={y0} x2={x1} y2={y1} stroke={COLOR.lamelle} strokeWidth="0.35" strokeDasharray="3 3" />; };
+          // Hilfslinie beginnt 2 px hinter dem Ende der Lamelle (endet sie vor dem Mund, läuft die Linie durchgehend von dort bis zum Bogen);
+          // die Wand (k = 0) endet am Mund
+          const startOf = ang => {
+            const i = vanes.fractions.findIndex(f => Math.abs(f * a1 - ang) < 1e-6);
+            if (i < 0 || !vanes.paths[i]) return rp;
+            const [ex, ez] = vanes.paths[i][vanes.paths[i].length - 1];
+            return Math.min(rp, Math.hypot(toX(ex) - cx, toY(ez) - fy));
+          };
+          const ext = ang => { const [x0, y0] = pt(ang, startOf(ang) + 2), [x1, y1] = pt(ang, r + 2); return <line key={ang} x1={x0} y1={y0} x2={x1} y2={y1} stroke={COLOR.lamelle} strokeWidth="0.35" strokeDasharray="3 3" />; };
           return <g>
             {ext(hi)}{ext(lo)}
             <path d={`M${ax},${ay} A${r},${r} 0 0 1 ${bx},${by}`} fill="none" stroke={COLOR.lamelle} strokeWidth="0.8" />
