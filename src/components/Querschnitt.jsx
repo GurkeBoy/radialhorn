@@ -2,6 +2,7 @@
 import { memo, useMemo, useRef } from "react";
 import { useT } from "../i18n.js";
 import { hasTraktrix, crossSection } from "../horn-math.js";
+import { vaneBlockage } from "../vane-blockage.js";
 import { COLOR, FONT, S } from "../theme.js";
 import { clamp, niceTicks, svgPath } from "../utils.js";
 import { useZoomPan } from "../hooks.js";
@@ -13,18 +14,20 @@ const pw = VW - ml - mr, ph = VH - mt - mb;
 const HEADROOM = 1.08;                           // Luft über dem Maximum
 const PART_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn };
 
-/** @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile) */
-export const Querschnitt = memo(function Querschnitt({ s, profile, morph }) {
+/** @param profile  z ↦ halbe Höhe inkl. Verrundung (makeProfile); vanes: Lamellen nehmen Fläche weg, die Kurve ohne sie gestrichelt */
+export const Querschnitt = memo(function Querschnitt({ s, profile, morph, vanes = null }) {
   const tr = useT();
   const svgRef = useRef(null);
   const zoom = useZoomPan(svgRef, {
     minZoom: 1,
     unitsPerPx: () => VW / (svgRef.current?.clientWidth || VW),
   });
-  const pts = useMemo(() => crossSection(s, profile, 100, null, morph), [s, profile, morph]);
+  const blockage = useMemo(() => vaneBlockage(s, vanes, profile), [s, vanes, profile]);
+  const pts = useMemo(() => crossSection(s, profile, 100, null, morph, blockage), [s, profile, morph, blockage]);
+  const bare = useMemo(() => blockage ? crossSection(s, profile, 100, null, morph) : null, [s, profile, morph, blockage]);
 
   const zStart = pts[0].z, zMouth = pts[pts.length - 1].z;
-  const peak = Math.max(...pts.map(p => p.A));
+  const peak = Math.max(...(bare ?? pts).map(p => p.A));
   const aMax = peak * HEADROOM;
   const zTrans = hasTraktrix(s) ? s.zInnerApex : null;
 
@@ -75,6 +78,7 @@ export const Querschnitt = memo(function Querschnitt({ s, profile, morph }) {
           <clipPath id="csPlot"><rect x={ml} y={mt} width={pw} height={ph} /></clipPath>
         </defs>
         <text x={ml} y={10} {...S.label} textAnchor="start" fontSize="8" fill={COLOR.text} letterSpacing="0.1em">{tr("cs.axes")}</text>
+        {bare && <text x={VW - mr} y={10} {...S.label} textAnchor="end" fontSize="7" fill={COLOR.tick}>{tr("cs.withoutVanes")}</text>}
         <line x1={axX} y1={mt} x2={axX} y2={VH-mb} stroke={COLOR.axis} strokeWidth="0.7" />
         <line x1={ml} y1={axY} x2={VW-mr} y2={axY} stroke={COLOR.axis} strokeWidth="0.7" />
         <g clipPath="url(#csPlot)">
@@ -85,6 +89,8 @@ export const Querschnitt = memo(function Querschnitt({ s, profile, morph }) {
               <title>{tr("cs.kinkTitle", { z: zTrans.toFixed(0) })}</title>
             </line>
           </>}
+          {bare && <path d={svgPath(bare.map(p => [gx(p.z), gy(p.A)]), 1)} fill="none" stroke={COLOR.tick} strokeWidth="0.8"
+            strokeDasharray="3 3" strokeLinejoin="round" />}
           {segments.map((seg, i) => (
             <path key={i} d={svgPath(seg.pts.map(p => [gx(p.z), gy(p.A)]), 1)} fill="none"
               stroke={PART_COLOR[seg.part]} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />

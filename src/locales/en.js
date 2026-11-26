@@ -281,6 +281,7 @@ export default {
   "fr.placeholder": "Placeholder driver – values not reliable",
   "fr.uncertain": "1D uncertain",
   "fr.uncertainTitle": "Above {f} Hz, cross modes can form in the throat (width = λ/2) – the 1D model (Webster) becomes uncertain. Rule of thumb, not a hard limit.",
+  "cs.withoutVanes": "dashed: without vanes",
   "cs.axes": "A = B·H [mm²] vs. z [mm]",
   "cs.kinkTitle": "Transition tractrix → straight wall (z = {z} mm). The kink in A(z) is geometric: the wall curvature in the top view jumps here, and the wavefront width depends on the wall's tangent angle.",
 

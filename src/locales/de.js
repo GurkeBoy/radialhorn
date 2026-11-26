@@ -281,6 +281,7 @@ export default {
   "fr.placeholder": "Platzhalter-Treiber – Werte nicht belastbar",
   "fr.uncertain": "1D unsicher",
   "fr.uncertainTitle": "Ab {f} Hz sind im Hals Querwellen möglich (Breite = λ/2) – das 1D-Modell (Webster) wird unsicher. Faustregel, keine harte Grenze.",
+  "cs.withoutVanes": "gestrichelt: ohne Lamellen",
   "cs.axes": "A = B·H [mm²] über z [mm]",
   "cs.kinkTitle": "Übergang Traktrix → gerade Wand (z = {z} mm). Der Knick in A(z) ist geometrisch bedingt: die Wandkrümmung in der Draufsicht springt hier, und die Wellenfrontbreite hängt vom Tangentenwinkel der Wand ab.",
 

@@ -7,6 +7,9 @@ import { solveHorn, makeProfile, computeFillet, throatMorph, mouthRounding, focu
 import { buildShellGeometry, triangulate, gridLines } from "./horn-mesh.js";
 import { buildAir } from "./bodies.js";
 import { computeVolumes } from "./volume.js";
+import { crossSection } from "./horn-math.js";
+import { vaneBlockage } from "./vane-blockage.js";
+import { areaCurve, createSimulationEngine, PLACEHOLDER_DRIVER } from "./simulation.js";
 import { resolveVanes, vaneBodies, vaneValue, vaneRanges, vaneOutline, airTriangles, VANE_SAMPLES, TIP_WIDTH } from "./vanes.js";
 import { edgeCheck, signedVolume } from "./test-helpers.js";
 
@@ -305,6 +308,63 @@ describe("Ende ab Kanalbreite: der Kanal zwischen den Lamellen, die dort laufen"
     const never = resolveVanes(s, withEnd(hi + 50, stg));
     expect(never.zEnd).toBeCloseTo(s.zApex, 9);
     expect(never.endLimited).toBe(true);
+  });
+});
+
+describe("Querschnitt mit Lamellen", () => {
+  const vanes = resolveVanes(s, spec({ count: 3, thickness: 2, start: { mode: "z", value: 160 } }));
+  const block = vaneBlockage(s, vanes, profile);
+
+  it("ohne Lamellen keine Abzugsfunktion", () => {
+    expect(vaneBlockage(s, null, profile)).toBeNull();
+    expect(vaneBlockage(s, resolveVanes(s, spec({ start: { mode: "z", value: 1e6 } })), profile)).toBeNull();
+  });
+
+  it("im geraden Bereich nehmen n Lamellen n·Dicke·2h weg (h konstant auf dem Bogen um den Fokus)", () => {
+    const wf = wavefrontAtAxis(s, 0.9 * s.zApex);
+    expect(wf.zCenter).toBeCloseTo(s.zFocus, 9);
+    expect(block(wf)).toBeCloseTo(3 * 2 * 2 * profile(s.zFocus + wf.radius), 6);
+  });
+
+  it("nur dort, wo die Lamellen laufen: davor und dahinter nichts; A + B ist die Fläche ohne Lamellen", () => {
+    const bare = crossSection(s, profile, 80), cut = crossSection(s, profile, 80, null, null, block);
+    expect(cut).toHaveLength(bare.length);
+    let inside = 0;
+    cut.forEach((p, i) => {
+      expect(p.A + p.B).toBeCloseTo(bare[i].A, 6);
+      if (p.z < vanes.zStart - 1e-6) expect(p.B).toBe(0);
+      if (p.z > vanes.zStart + 1 && p.z <= vanes.zEnd) { expect(p.B).toBeGreaterThan(0); inside++; }
+    });
+    expect(inside).toBeGreaterThan(10);
+    expect(Math.max(...cut.map(p => p.B / bare[cut.indexOf(p)].A))).toBeLessThan(0.1);   // wenige Prozent der Fläche
+  });
+
+  it("Spitzen: am Beginn nehmen die Lamellen weniger weg als weiter hinten", () => {
+    const tip = resolveVanes(s, spec({ count: 3, thickness: 4, start: { mode: "z", value: 160 }, tip: { start: true, end: true, length: 30 } }));
+    const b = vaneBlockage(s, tip, profile);
+    const early = b(wavefrontAtAxis(s, tip.zStart + 3)), late = b(wavefrontAtAxis(s, (tip.zStart + tip.zEnd) / 2));
+    expect(early).toBeGreaterThan(0);
+    expect(early).toBeLessThan(0.6 * late);
+  });
+
+  it("Flächenkurve der Simulation: kleiner mit Lamellen, am Hals schon abgezogen, wenn sie am Throat beginnen", () => {
+    const throat = resolveVanes(s, spec({ count: 3, thickness: 2, start: { mode: "z", value: 0 } }));
+    const plain = areaCurve(s, RT, profile), cut = areaCurve(s, RT, profile, undefined, null, vaneBlockage(s, throat, profile));
+    expect(cut.S[0]).toBeLessThan(plain.S[0]);
+    expect(cut.S.at(-1)).toBeLessThan(plain.S.at(-1));
+    expect(cut.S.every((v, i) => v <= plain.S[Math.min(i, plain.S.length - 1)] + 1e-9 || cut.x.length !== plain.x.length)).toBe(true);
+    expect(cut.S.every(v => v > 0 && Number.isFinite(v))).toBe(true);
+  });
+
+  it("Frequenzgang rechnet mit den Lamellen und ändert sich (leicht)", () => {
+    const geometry = { s, rt: RT, hMouth: H_MOUTH, curve: "exponential", hypexT: 0.5, fillet: null, morph: null };
+    const freqs = [200, 500, 1000, 2000, 5000];
+    const run = createSimulationEngine();
+    const a = run({ geoKey: "a", geometry, temp: 20, mouth: "2pi", driver: PLACEHOLDER_DRIVER, freqs }).result;
+    const b = run({ geoKey: "b", geometry: { ...geometry, vanes: resolveVanes(s, spec({ count: 3, thickness: 2, start: { mode: "z", value: 0 } })) }, temp: 20, mouth: "2pi", driver: PLACEHOLDER_DRIVER, freqs }).result;
+    expect(b.spl.every(Number.isFinite)).toBe(true);
+    expect(b.spl).not.toEqual(a.spl);
+    expect(Math.max(...b.spl.map((v, i) => Math.abs(v - a.spl[i])))).toBeLessThan(3);   // dB: eine kleine Wirkung, kein Umsturz
   });
 });
 

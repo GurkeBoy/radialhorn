@@ -250,9 +250,9 @@ export default function App() {
   // (useSimulation): beim Ziehen folgt die Kurve laufend, der Haupt-Thread zeichnet nur. S(x) hängt
   // nur an der Geometrie (geoKey aus den Versionen der Stufen): Treiber, Abstrahlung und Temperatur
   // rechnen dort nur die Kette neu.
-  const simGeoKey = JSON.stringify([geo.versions.s, geo.versions.fillet, geo.versions.morph, rt, g.hMouth, g.curve, g.hypexT]);
+  const simGeoKey = JSON.stringify([geo.versions.s, geo.versions.fillet, geo.versions.morph, geo.versions.vanes, rt, g.hMouth, g.curve, g.hypexT]);
   const simInput = useMemo(() => s && p.simOn ? {
-    geoKey: simGeoKey, geometry: { s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph },
+    geoKey: simGeoKey, geometry: { s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph, vanes: wall > 0 ? vanes : null },
     temp: p.simTemp, mouth: p.mouth, driver: p.driver, freqs: SIM_FREQS,
   } : null, [simGeoKey, p.simOn, p.simTemp, p.mouth, p.driver]);   // eslint-disable-line react-hooks/exhaustive-deps -- Geometrie über simGeoKey
   const sim = useSimulation(simInput);
@@ -495,7 +495,7 @@ export default function App() {
             material={wallMaterial} onMaterial={setWallMaterial} customE={wallE} onCustomE={setWallE}
             customRho={wallRho} onCustomRho={setWallRho} limit={wallLimit} onLimit={setWallLimit} />
           <Card title={t("card.crossSection")} id="querschnitt">
-            <Querschnitt s={s} profile={profile} morph={morph} />
+            <Querschnitt s={s} profile={profile} morph={morph} vanes={wall > 0 ? vanes : null} />
           </Card>
           <Card title={t("card.export")} id="export">
             <Note>{t("export.dxfHint")}</Note>

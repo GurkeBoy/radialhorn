@@ -189,7 +189,7 @@ function endByChannel(s, n, t, value, zStart, zMouth, starts) {
  *              Kanalbreite gilt dessen Wert auch für die Stufen, mode/channel sind dann ohne Wirkung): count Lamellen
  *              laufen ab start; jede Stufe setzt in jeden Kanal eine weitere Lamelle in die Mitte (Sektoren verdoppeln sich)
  * @returns {object | null}  null ohne Lamellen (rundes Horn, Anzahl 0, Dicke 0); sonst
- *   { count, baseCount, thickness, fractions, stages, stageStarts, staggerLimited, delta, zStart, zEnd, atThroat, widthStart,
+ *   { count, baseCount, thickness, fractions, stages, stageStarts, starts (Achsenstelle des Beginns je Lamelle), staggerLimited, delta, zStart, zEnd, atThroat, widthStart,
  *     widthEnd, channelStart, channelEnd, startLimited, endLimited, endChannelRange, ok, paths, widths, tip } – Winkel im Bogenmaß, Längen
  *   in mm; count = tatsächliche Zahl der Lamellen (mit Staffelung (count + 1)·2^Stufen − 1, zu kurze entfallen); baseCount =
  *   Lamellen ab dem Beginn; stages = je Lamelle die Stufe (0 = ab dem Beginn); delta = Sektorwinkel am Mund; endAngle =
@@ -255,7 +255,7 @@ export function resolveVanes(s, spec) {
     tip.length = shortest;
   }
   return {
-    count, baseCount: n, thickness: t, fractions: list.map(v => v.f), stages: list.map(v => v.stage), stageStarts: stagger.starts,
+    count, baseCount: n, thickness: t, fractions: list.map(v => v.f), stages: list.map(v => v.stage), stageStarts: stagger.starts, starts: list.map(v => v.z),
     staggerLimited: stagger.limited, delta: 2 * s.alpha2 / (count + 1),
     endAngle: 2 * b.w.halfAngle / (count + 1), endWave: { zCenter: b.w.zCenter, radius: b.w.radius, halfAngle: b.w.halfAngle },
     zStart, zEnd, atThroat, widthStart: a.width, widthEnd: b.width, channelStart: a.channel, channelEnd: b.channel,
