@@ -138,12 +138,28 @@ describe("Gesamtlänge und Raumecke", () => {
     for (const Lt of [10, 60, 150]) expect(compute({ ...SIMPLE, L: 700, Lt }).values.LClamped).toBe(700);
   });
 
-  it("ohne Raumecke zählt L ab der Treiberrückseite – dasselbe Horn wie L + dw/2 ab der Hut-Spitze", () => {
+  it("Untergrenze von L hängt nicht am eingestellten Lₜ: ein kurzes L lässt sich einstellen, Lₜ schrumpft mit und kehrt bei größerem L zurück", () => {
+    for (const showRaumecke of [false, true]) for (const extra of [{}, { clothoidOn: true, clothoidLength: 20 }]) {
+      const compute = createGeometryEngine();
+      const base = { ...SIMPLE, showRaumecke, Lt: 60, ...extra };
+      const { Lmin } = compute({ ...base, L: 500 }).values;
+      expect(Lmin).toBe(compute({ ...base, Lt: 0, L: 500 }).values.Lmin);   // dieselbe Untergrenze, egal welches Lₜ eingestellt ist
+      for (const L of [Lmin, Lmin + 5, Lmin + 40]) {
+        const v = compute({ ...base, L }).values;
+        expect(v.s).not.toBeNull();
+        expect(v.LClamped).toBe(L);
+        expect(v.LtClamped).toBeLessThanOrEqual(v.LtMax + 1e-9);
+      }
+      expect(compute({ ...base, L: 500 }).values.LtClamped).toBe(60);       // eingestelltes Lₜ gilt wieder
+    }
+  });
+
+  it("ohne Raumecke zählt L ab dem Flansch (Throat-Ebene) – dasselbe Horn wie L + dh + dw/2 ab der Hut-Spitze", () => {
     const off = createGeometryEngine()({ ...SIMPLE, showRaumecke: false, L: 409 }).values;
     expect(off.LClamped).toBe(409);
-    expect(off.s).toEqual(math.solveHorn(409 + 91, 60, rt, 182, 90));
-    expect(off.s.zApex - -90).toBeCloseTo(409, 9);             // Treiberrückseite (z = −dh) bis Mundscheitel
-    expect(off.Lmin).toBe(math.minL(60, rt, 182, 90) - 91);
+    expect(off.s).toEqual(math.solveHorn(409 + 90 + 91, 60, rt, 182, 90));
+    expect(off.s.zApex).toBeCloseTo(409, 9);                   // Throat-Ebene (z = 0) bis Mundscheitel
+    expect(off.Lmin).toBe(math.minL(0, rt, 182, 90) - 181);   // kürzestes Horn: Lₜ schrumpft mit
     expect(off.LMaxRaumecke).toBe(null);
   });
 });

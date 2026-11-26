@@ -135,10 +135,10 @@ export default function App() {
   const [simNoDelay,      setSimNoDelay]      = usePersistentState("simNoDelay", false);
   const [driver,          setDriver]          = usePersistentState("driver", D.driver);
   const setDriverValue = key => v => setDriver(d => ({ ...d, [key]: v }));
-  // L beginnt mit Raumecke an der Hut-Spitze, ohne an der Treiberrückseite (dw/2 davor): beim
+  // L beginnt mit Raumecke an der Hut-Spitze, ohne am Flansch (dh + dw/2 davor): beim
   // Umschalten wird L mit umgerechnet, das Horn bleibt dasselbe
   const toggleRaumecke = on => {
-    setL(l => l + lengthOffset(dw, !on) - lengthOffset(dw, on));
+    setL(l => l + lengthOffset(dw, dh, !on) - lengthOffset(dw, dh, on));
     setShowRaumecke(on);
   };
 
@@ -324,7 +324,7 @@ export default function App() {
         <Card title={t("card.geometry")} id="geometrie">
           <Slider label={t("geometry.openingAngle")} value={round ? roundAngle : openingAngle} min={round ? 10 : 60} max={160} step={1} unit="°" onChange={round ? setRoundAngle : setOpeningAngle} />
           <Slider label={t("geometry.length")} value={shown("L", LClamped)} min={Lmin} max={Lmax} step={5} unit="mm" onChange={round ? setRoundL : setL} />
-          <Note>{t(round ? "geometry.lengthFromThroat" : g.showRaumecke ? "geometry.lengthFromCorner" : "geometry.lengthFromDriver")}</Note>
+          <Note>{t(round ? "geometry.lengthFromThroat" : g.showRaumecke ? "geometry.lengthFromCorner" : "geometry.lengthFromFlange")}</Note>
           {warnings.raumecke && <Warn>{t("warn.cornerLimit", { mm: LMaxRaumecke.toFixed(0) })}</Warn>}
           <Slider label={t("geometry.tractrixLength")} value={shown("Lt", LtClamped)} min={LtMin} max={LtMax} step={1} unit="mm" onChange={round ? setRoundLt : setLt} />
           {warnings.ltMax && <Warn>{t("warn.ltMax", { mm: LtMax.toFixed(0) })}</Warn>}

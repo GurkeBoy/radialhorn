@@ -9,8 +9,8 @@
  *   - Horizontale Kontur: Traktrix-Eingang (0 … Lt) → gerade Wand unter dem halben
  *     Öffnungswinkel, radial zum Fokuspunkt → Mundbogen (Teilkreis um den Fokus).
  *   - Die Gesamtlänge L wird hier immer von der Hut-Spitze der Raumecke (hatTipZ = −dh − dw/2)
- *     bis zum Scheitel des Mundbogens gemessen. Die App zeigt L ohne Raumecke ab der
- *     Treiberrückseite (lengthOffset); geometry.js rechnet um.
+ *     bis zum Scheitel des Mundbogens gemessen. Die App zeigt L ohne Raumecke ab dem Flansch
+ *     (Throat-Ebene z = 0, lengthOffset); geometry.js rechnet um.
  *
  * Aufbau
  *   createHornMath(openingAngle) liefert die winkelabhängigen Funktionen (Solver und
@@ -44,10 +44,11 @@ export const focusRadius = (s, x, z) =>
 
 /**
  * Abstand [mm] der Hut-Spitze (Beginn von L in dieser Datei) hinter dem Beginn der angezeigten
- * Gesamtlänge: mit Raumecke 0 (L ab der Hut-Spitze), ohne dw/2 (L ab der Treiberrückseite –
- * eine unsichtbare Hut-Spitze wäre kein sinnvoller Bezug). Angezeigt = intern − lengthOffset.
+ * Gesamtlänge: mit Raumecke 0 (L ab der Hut-Spitze), ohne dh + dw/2 (L ab dem Flansch, der
+ * Throat-Ebene vor dem Treiber – eine unsichtbare Hut-Spitze wäre kein sinnvoller Bezug, und der
+ * Treiber gehört nicht zum Horn). Angezeigt = intern − lengthOffset.
  */
-export const lengthOffset = (dw, showRaumecke) => showRaumecke ? 0 : dw / 2;
+export const lengthOffset = (dw, dh, showRaumecke) => showRaumecke ? 0 : dh + dw / 2;
 
 /** Normierte Traktrix (r0 = 1), Parameter t: axiale Position und Radius. */
 export const zN = t => t - Math.tanh(t);

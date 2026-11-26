@@ -48,7 +48,7 @@ export default {
   "geometry.openingAngle": "Opening angle",
   "geometry.length": "Total length L",
   "geometry.lengthFromCorner": "from the tip of the room corner",
-  "geometry.lengthFromDriver": "from the back of the driver",
+  "geometry.lengthFromFlange": "from the flange (throat plane)",
   "geometry.lengthFromThroat": "from the throat to the mouth apex",
   "geometry.tractrixLength": "Tractrix length Lₜ",
   "geometry.blend": "Transition tractrix → straight",

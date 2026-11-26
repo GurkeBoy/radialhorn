@@ -126,19 +126,26 @@ describe("Projektdateien", () => {
   });
 });
 
-describe("Gesamtlänge ab der Treiberrückseite (Formatversion 2)", () => {
-  const v1 = design => JSON.stringify({ format: PROJECT_FORMAT, version: 1, design });
+describe("Gesamtlänge ab dem Flansch (Formatversion 3)", () => {
+  const file = (version, design) => JSON.stringify({ format: PROJECT_FORMAT, version, design });
+  const dh = DESIGN_DEFAULTS.dh;
 
-  it("Version 1 ohne Raumecke: L um dw/2 kürzer (dasselbe Horn), mit Raumecke unverändert", () => {
-    expect(parseProject(v1({ ...DESIGN_DEFAULTS, showRaumecke: false, L: 600, dw: 182 })).design.L).toBe(509);
-    expect(parseProject(v1({ ...DESIGN_DEFAULTS, showRaumecke: true, L: 600 })).design.L).toBe(600);
+  it("Version 1 ohne Raumecke: L um dw/2 (ab Treiberrückseite) und um dh (ab Flansch) kürzer, dasselbe Horn; mit Raumecke unverändert", () => {
+    expect(parseProject(file(1, { ...DESIGN_DEFAULTS, showRaumecke: false, L: 600, dw: 182 })).design.L).toBe(600 - 91 - dh);
+    expect(parseProject(file(1, { ...DESIGN_DEFAULTS, showRaumecke: true, L: 600 })).design.L).toBe(600);
     const noVersion = JSON.stringify({ format: PROJECT_FORMAT, design: { ...DESIGN_DEFAULTS, showRaumecke: false, L: 600, dw: 120 } });
-    expect(parseProject(noVersion).design.L).toBe(540);
+    expect(parseProject(noVersion).design.L).toBe(600 - 60 - dh);
   });
 
-  it("Version 2 bleibt, wie sie ist; neue Dateien sind Version 2", () => {
+  it("Version 2 ohne Raumecke: L um die Treibertiefe dh kürzer; mit Raumecke und beim runden Horn unverändert", () => {
+    expect(parseProject(file(2, { ...DESIGN_DEFAULTS, showRaumecke: false, L: 509 })).design.L).toBe(509 - dh);
+    expect(parseProject(file(2, { ...DESIGN_DEFAULTS, showRaumecke: true, L: 600 })).design.L).toBe(600);
+    expect(parseProject(file(2, { ...DESIGN_DEFAULTS, showRaumecke: false, hornShape: "round", L: 300 })).design.L).toBe(300);
+  });
+
+  it("Version 3 bleibt, wie sie ist; neue Dateien sind Version 3", () => {
     const text = buildProject({ ...DESIGN_DEFAULTS, showRaumecke: false, L: 509 });
-    expect(JSON.parse(text).version).toBe(2);
+    expect(JSON.parse(text).version).toBe(3);
     expect(parseProject(text).design.L).toBe(509);
   });
 
@@ -148,10 +155,14 @@ describe("Gesamtlänge ab der Treiberrückseite (Formatversion 2)", () => {
       key: i => [...data.keys()][i] ?? null, get length() { return data.size; } };
     st.setItem("radialhorn.v1.L", "600");
     st.setItem("radialhorn.v1.showRaumecke", "false");
-    migrateSettings(st);
-    expect(st.getItem("radialhorn.v1.L")).toBe("509");
+    migrateSettings(st);                                          // ohne Kennung (Stand 1): dw/2 und dh
+    expect(st.getItem("radialhorn.v1.L")).toBe(String(600 - 91 - dh));
     migrateSettings(st);                                          // kein zweites Mal
-    expect(st.getItem("radialhorn.v1.L")).toBe("509");
+    expect(st.getItem("radialhorn.v1.L")).toBe(String(600 - 91 - dh));
+    const v2 = new Map([["radialhorn.v1.L", "509"], ["radialhorn.v1.showRaumecke", "false"], ["radialhorn.v1.schema", "2"]]);
+    migrateSettings({ ...st, getItem: k => v2.get(k) ?? null, setItem: (k, v) => v2.set(k, String(v)) });   // Stand 2: nur dh
+    expect(v2.get("radialhorn.v1.L")).toBe(String(509 - dh));
+    expect(v2.get("radialhorn.v1.schema")).toBe("3");
     const fresh = new Map();
     const st2 = { ...st, getItem: k => fresh.get(k) ?? null, setItem: (k, v) => fresh.set(k, String(v)) };
     migrateSettings(st2);                                         // neue Installation: nur die Kennung

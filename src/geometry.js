@@ -61,9 +61,9 @@ export function createGeometryEngine() {
     // 45°-Raumecke verkleinert den verfügbaren Platz
     const extraBreite = p.showRaumecke && p.showWandstaerke ? (Math.cos(m.ALPHA2) + Math.sin(m.ALPHA2)) * p.wandstaerke : 0;
     const geo = [math.version, rt, p.dw, p.dh];
-    // Angezeigtes L beginnt ohne Raumecke an der Treiberrückseite, gerechnet wird ab der Hut-Spitze
-    // (dw/2 dahinter): L hier intern, Grenzen und LClamped gehen angezeigt zurück
-    const off = lengthOffset(p.dw, p.showRaumecke);
+    // Angezeigtes L beginnt ohne Raumecke am Flansch (Throat-Ebene), gerechnet wird ab der Hut-Spitze
+    // (dh + dw/2 dahinter): L hier intern, Grenzen und LClamped gehen angezeigt zurück
+    const off = lengthOffset(p.dw, p.dh, p.showRaumecke);
     const L = p.L + off;
 
     // Grenzen für Lₜ hängen an L, nicht an Lₜ; die Klothoiden-Grenze nur an rt. Lₜ folgt der
@@ -80,12 +80,14 @@ export function createGeometryEngine() {
     const LtMaxAll   = Math.min(LtMax, blendLimits.max);
     const LtMin     = Math.min(Math.max(LtMinRaumecke ?? 0, LtMinClothoid), LtMaxAll);
     const LtClamped = Math.min(Math.max(p.Lt, LtMin), LtMaxAll);
-    // Grenzen für L hängen am begrenzten Lₜ, nicht an L. LMaxForLt: mit diesem Lₜ (begrenzt nur,
+    // Obergrenze von L hängt am begrenzten Lₜ, nicht an L. LMaxForLt: mit diesem Lₜ (begrenzt nur,
     // wenn Lₜ nicht mehr folgen kann); LMaxRaumecke: Reglergrenze, mit folgendem Lₜ – hängt weder an L noch an Lₜ
-    const { LMaxForLt, Lmin } = stage("lLimits", [...geo, LtClamped, p.showRaumecke, extraBreite], () => ({
+    const { LMaxForLt } = stage("lLimits", [...geo, LtClamped, p.showRaumecke, extraBreite], () => ({
       LMaxForLt: p.showRaumecke ? m.maxLforRaumecke(LtClamped, rt, p.dw, p.dh, extraBreite) : null,
-      Lmin:      m.minL(LtClamped, rt, p.dw, p.dh),
     })).value;
+    // Untergrenze von L: das kürzeste Horn, das es gibt – Lₜ schrumpft dabei mit (LtMax folgt L), das eingestellte Lₜ bleibt
+    // gespeichert. Hinge sie am eingestellten Lₜ, ließe sich ein kurzes L nicht eintippen (die Eingabe sprang auf minL(Lₜ))
+    const Lmin = stage("lMin", [...geo, LtMinClothoid], () => m.minL(LtMinClothoid, rt, p.dw, p.dh)).value;
     const LMaxRaumecke = stage("lMaxRaumecke", [...geo, p.showRaumecke, extraBreite],
       () => p.showRaumecke ? m.maxLWithRaumecke(rt, p.dw, p.dh, extraBreite, L_MAX) : null).value;
     const LClamped = LMaxForLt !== null && L > LMaxForLt ? LMaxForLt : L;

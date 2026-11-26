@@ -33,7 +33,7 @@ export const Seitenriss = memo(function Seitenriss({ s, rt, dw, dh, L, hMouth, p
   // ── Abbildung Geometrie (z, h) → Bildschirm ───────────────────────
   const halfMax = Math.max(dw / 2, hMouth / 2 + wall, flange ? flange.diameter / 2 : 0) * 1.05;
   const zMin = s.hatTipZ - 10, zMax = s.zApex + 10;
-  const zLStart = showRaumecke ? s.hatTipZ : -dh;   // Beginn von L (ohne Raumecke: Treiberrückseite)
+  const zLStart = showRaumecke ? s.hatTipZ : 0;   // Beginn von L (ohne Raumecke: Flansch, Throat-Ebene)
   // Ränder [px]: oben Titel + zwei Maßlagen, unten mit Flansch zwei; brauchen die Maße mehr (mehr
   // Lagen, dim-layout.js), wachsen sie um genau so viel – ermittelt ohne Zoom
   const mapping = ({ mL, mR, mT, mB }, { k, tx, ty }) => {
