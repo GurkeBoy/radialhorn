@@ -48,7 +48,7 @@ export default {
   "geometry.openingAngle": "Öffnungswinkel",
   "geometry.length": "Gesamtlänge L",
   "geometry.lengthFromCorner": "ab der Spitze der Raumecke",
-  "geometry.lengthFromDriver": "ab der Treiberrückseite",
+  "geometry.lengthFromFlange": "ab dem Flansch (Throat-Ebene)",
   "geometry.lengthFromThroat": "ab dem Throat bis zum Mundscheitel",
   "geometry.tractrixLength": "Traktrix-Länge Lₜ",
   "geometry.clothoid": "Krümmungsstetiger Übergang",

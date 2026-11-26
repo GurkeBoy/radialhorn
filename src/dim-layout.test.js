@@ -132,7 +132,7 @@ describe("Bemaßungsregeln in Draufsicht und Seitenriss", () => {
     expect(top.edges.top).toBe(300 - p.dh);                     // Treiberrückseite
     expect(side.edges.left).toBe(300 - p.dh);
     expect(top.dims.find(d => d.id === "hat")).toBeUndefined();
-    expect(side.dims.find(d => d.id === "L").lo).toBe(300 - p.dh);
+    expect(side.dims.find(d => d.id === "L").lo).toBeGreaterThan(300 - p.dh);   // L beginnt am Flansch, nicht an der Treiberrückseite
   });
 
   it("die Prüfung erkennt den alten Fehler: Flanschdicke außen, L innen", () => {

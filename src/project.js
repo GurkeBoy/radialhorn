@@ -3,7 +3,7 @@
 // Karten, Export-Auswahl, Ansicht an/aus). Beim Öffnen wird jeder Wert nach denselben Regeln geprüft
 // wie gespeicherte Einstellungen (settings.js); ungültige oder fehlende Werte → Standard.
 import { checkSetting, readSetting, writeSetting } from "./settings.js";
-import { CURVES, lengthOffset } from "./horn-math.js";
+import { CURVES } from "./horn-math.js";
 import { PLACEHOLDER_DRIVER } from "./simulation.js";
 import { fmtLength } from "./utils.js";
 import { MATERIAL_KEYS } from "./wall-advice.js";
@@ -11,27 +11,38 @@ import { VANE_START_MODES, VANE_END_MODES, VANE_STAGE_MODES } from "./vanes.js";
 
 export const PROJECT_FORMAT = "radialhorn-project";
 /** 2: L ohne Raumecke ab der Treiberrückseite (in Version 1 ab der Hut-Spitze, dw/2 dahinter). */
-export const PROJECT_VERSION = 2;
+export const PROJECT_VERSION = 3;
 export const PROJECT_EXTENSION = ".radialhorn.json";
 
 /**
- * L aus der Zeit vor Version 2 umrechnen: ohne Raumecke zählte L ab der Hut-Spitze, jetzt ab der
+ * L aus der Zeit vor Version 2 umrechnen: ohne Raumecke zählte L ab der Hut-Spitze, dann ab der
  * Treiberrückseite – um dw/2 kürzer, das Horn bleibt dasselbe. Mit Raumecke unverändert.
  */
-export const legacyLength = (L, dw, showRaumecke) => L - lengthOffset(dw, showRaumecke);
+export const legacyLength = (L, dw, showRaumecke) => showRaumecke ? L : L - dw / 2;
+
+/**
+ * L aus der Zeit vor Version 3 umrechnen: ohne Raumecke zählte L ab der Treiberrückseite, jetzt ab dem
+ * Flansch (Throat-Ebene) – um die Treibertiefe dh kürzer, das Horn bleibt dasselbe. Mit Raumecke und beim
+ * runden Horn (zählte schon vom Throat) unverändert.
+ */
+export const legacyLength2 = (L, dh, showRaumecke, round = false) => showRaumecke || round ? L : L - dh;
 
 /**
  * Gespeicherte Einstellungen einmalig auf den aktuellen Stand bringen (Schlüssel "schema", fehlt =
  * Stand 1). Vor dem ersten Rendern aufrufen (main.jsx), nach initSettings.
  */
 export function migrateSettings(storage) {
-  if (readSetting("schema", 1, storage) >= 2) return;
+  const schema = readSetting("schema", 1, storage);
+  if (schema >= 3) return;
   const L = readSetting("L", null, storage);
   if (L !== null) {
-    writeSetting("L", legacyLength(L, readSetting("dw", DESIGN_DEFAULTS.dw, storage),
-      readSetting("showRaumecke", DESIGN_DEFAULTS.showRaumecke, storage)), storage);
+    const raumecke = readSetting("showRaumecke", DESIGN_DEFAULTS.showRaumecke, storage);
+    let l = L;
+    if (schema < 2) l = legacyLength(l, readSetting("dw", DESIGN_DEFAULTS.dw, storage), raumecke);
+    l = legacyLength2(l, readSetting("dh", DESIGN_DEFAULTS.dh, storage), raumecke, readSetting("hornShape", DESIGN_DEFAULTS.hornShape, storage) === "round");
+    writeSetting("L", l, storage);
   }
-  writeSetting("schema", 2, storage);
+  writeSetting("schema", 3, storage);
 }
 
 /**
@@ -188,7 +199,9 @@ export function parseProject(text) {
     }
     design[key] = checked;
   }
-  // vor Version 2 zählte L ohne Raumecke ab der Hut-Spitze (fehlende Version: die erste)
-  if (!(Number(data.version) >= 2)) design.L = legacyLength(design.L, design.dw, design.showRaumecke);
+  // vor Version 2 zählte L ohne Raumecke ab der Hut-Spitze, vor Version 3 ab der Treiberrückseite (fehlende Version: die erste)
+  const version = Number(data.version) >= 1 ? Number(data.version) : 1;
+  if (version < 2) design.L = legacyLength(design.L, design.dw, design.showRaumecke);
+  if (version < 3) design.L = legacyLength2(design.L, design.dh, design.showRaumecke, design.hornShape === "round");
   return { design, invalid, missing, newer: Number(data.version) > PROJECT_VERSION };
 }

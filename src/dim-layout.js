@@ -156,7 +156,7 @@ export function topViewOutline({ s, dw, dh, showRaumecke, flange, shellOuter }) 
     for (const [x, z] of shellOuter ?? []) pts.push([sx * x, z]);
     if (flange) pts.push([sx * flange.diameter / 2, 0], [sx * flange.diameter / 2, flange.thickness]);
   }
-  pts.push([0, s.zApex], [0, showRaumecke ? s.hatTipZ : -dh]);
+  pts.push([0, s.zApex], [0, showRaumecke ? s.hatTipZ : 0]);
   return pts;
 }
 
@@ -170,8 +170,8 @@ export function topViewOutline({ s, dw, dh, showRaumecke, flange, shellOuter }) 
 export function topViewDims({ s, rt, dw, dh, L, showRaumecke, flange, shellOuter, toX, toY }) {
   const cx = toX(0), hat = [cx, toY(s.hatTipZ)];
   const dims = [
-    // L beginnt mit Raumecke an der Hut-Spitze, ohne an der Ecke der Treiberrückseite auf der Seite des Maßes
-    { id: "L", side: "left", p1: showRaumecke ? hat : [toX(-dw / 2), toY(-dh)], p2: [cx, toY(s.zApex)],
+    // L beginnt mit Raumecke an der Hut-Spitze, ohne am Flansch (Throat-Ebene): an der Ecke der Treiberfront auf der Seite des Maßes
+    { id: "L", side: "left", p1: showRaumecke ? hat : [toX(-dw / 2), toY(0)], p2: [cx, toY(s.zApex)],
       color: COLOR.dimL, label: `L=${fmtLength(L)} mm`, sw: "0.8" },
     { id: "dh", side: "right", p1: [toX(dw / 2), toY(-dh)], p2: [toX(dw / 2), toY(0)], color: COLOR.dim, label: `${dh} mm` },
     { id: "throat", side: "top", p1: [toX(-rt), toY(0)], p2: [toX(rt), toY(0)], color: COLOR.trak, label: `Ø ${(rt * 2).toFixed(1)} mm` },
@@ -218,7 +218,7 @@ export function sideViewOutline({ s, dw, dh, hMouth, wall = 0, flange, shellCut,
  * @param toX, toY      Abbildung mm → Bildschirm (z, h)
  */
 export function sideViewDims({ s, rt, dw, dh, L, hMouth, profile, flange, wall = 0, shellCut, showRaumecke, raumeckeHalf, toX, toY }) {
-  const zLStart = showRaumecke ? s.hatTipZ : -dh;   // Beginn von L (ohne Raumecke: Treiberrückseite)
+  const zLStart = showRaumecke ? s.hatTipZ : 0;   // Beginn von L (ohne Raumecke: Flansch, Throat-Ebene)
   const zProfileStart = hasTraktrix(s) ? s.zInnerApex : 0;
   const dims = [
     { id: "mouth", side: "right", p1: [toX(s.zApex), toY(hMouth / 2)], p2: [toX(s.zApex), toY(-hMouth / 2)], color: COLOR.arc, label: `${hMouth} mm` },
