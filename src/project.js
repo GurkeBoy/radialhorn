@@ -86,6 +86,9 @@ export const DESIGN_DEFAULTS = {
   vaneStart: 150,
   vaneEndMode: "mouth",    // Ende: mouth | z | channel (Kanalbreite, ab der die Lamellen enden dürfen)
   vaneEnd: 250,
+  vaneTipStart: false,     // spitzer Beginn: die Dicke läuft über vaneTipLength auf 0,4 mm zu (druckbare Spitze)
+  vaneTipEnd: false,       // spitzes Ende
+  vaneTipLength: 10,       // Länge der Spitzen [mm]
   roundOn: false,          // Verrundungen auf der Hornseite des Flanschs (Plattenkanten, Rippen)
   roundR: 2,
   stepFuse: true,          // STEP: Rippen und Horn zu einem Körper vereinen (OpenCascade im Worker)
@@ -103,7 +106,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-export const ADDED_LATER = new Set(["arcOn", "arcRadius", "filletClothoidOn", "filletClothoidLength", "hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
+export const ADDED_LATER = new Set(["arcOn", "arcRadius", "filletClothoidOn", "filletClothoidLength", "hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd", "vaneTipStart", "vaneTipEnd", "vaneTipLength", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);

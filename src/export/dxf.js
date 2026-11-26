@@ -106,7 +106,7 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
     // Lamellen: Umriss jeder Platte in der Draufsicht (Seitenlinien und Stirnen entlang der Wellenfronten)
     if (wall > 0 && vanes?.ok && !s.round) {
       for (const center of vanes.paths) {
-        const { left, right } = vaneOutline(center, vanes.thickness);
+        const { left, right } = vaneOutline(center, vanes.widths[vanes.paths.indexOf(center)]);
         const box = [...left, ...right.slice().reverse()].map(([x, z]) => [z, x]);   // DXF der Draufsicht: [z, x]
         box.forEach((p, i) => out.push(dxfLine(p, box[(i + 1) % box.length], "Draufsicht_Lamellen")));
       }

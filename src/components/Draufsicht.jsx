@@ -4,6 +4,7 @@ import { useT } from "../i18n.js";
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, entrancePoints, linearWallPoints } from "../horn-math.js";
 import { COLOR, DOT, FONT, S, raumDash } from "../theme.js";
 import { svgPath, clipFromZ } from "../utils.js";
+import { vaneOutline } from "../vanes.js";
 import { topViewDims, dimsOverflow, raumeckeEndX as cornerEndX, DIM_FIRST, DIM_STEP } from "../dim-layout.js";
 import { useSize, useZoomPan } from "../hooks.js";
 import { ZoomControls, ArrowMarker, ViewTitle } from "./ui.jsx";
@@ -193,9 +194,12 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           return <DimAligned p1={[toX(xE), toY(zE)]} p2={[mRx, mY]} offset={DIM_FIRST}
             color={COLOR.wand} marker="url(#arrH)" label={`${t} mm`} />;
         })()}
-        {/* Lamellen: Mittellinien entlang der Wellenfronten, so dick wie die Platte */}
-        {vanes?.ok && vanes.paths.map((path, i) => <path key={i} d={svgPath(path.map(([x, z]) => [toX(x), toY(z)]))} fill="none"
-          stroke={COLOR.lamelle} strokeWidth={Math.max(1.4, vanes.thickness * scale)} />)}
+        {/* Lamellen: Umriss entlang der Wellenfronten (mit Spitzen), mindestens als dünne Linie sichtbar */}
+        {vanes?.ok && vanes.paths.map((path, i) => {
+          const { left, right } = vaneOutline(path, vanes.widths[i]);
+          return <path key={i} d={svgPath([...left, ...right.slice().reverse()].map(([x, z]) => [toX(x), toY(z)])) + "Z"} fill={COLOR.lamelle}
+            stroke={COLOR.lamelle} strokeWidth={1} strokeLinejoin="round" />;
+        })}
         {flange && <FlanschSchnitt flange={flange} map={(x, z) => [toX(x), toY(z)]} inner={innerWall} />}
 
         {/* Übergangspunkte: Traktrix → (Klothoide →) gerade Wand */}

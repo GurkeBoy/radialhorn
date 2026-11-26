@@ -44,6 +44,7 @@ const CASES = {
   "Schale, runder Throat + Mundecken": design(std(), "exponential", 0, 12, { morph: true, mouth: 30, edgeR: 12 }),
   "Flansch, Mundecken, Rippen": design(std(), "exponential", 0, 12, { mouth: 30, flange: { ribs: { thickness: 4, length: 30 } } }),
   "Schale, Lamellen": design(std(), "exponential", 0, 12, { vanes: { count: 3, thickness: 2, start: { mode: "z", value: 160 }, end: { mode: "mouth", value: 0 } } }),
+  "Schale, Lamellen mit Spitzen": design(std(), "exponential", 0, 12, { vanes: { count: 3, thickness: 2, start: { mode: "z", value: 0 }, end: { mode: "mouth", value: 0 }, tip: { start: true, end: true, length: 10 } } }),
   "Schale, Lamellen ab dem Throat": design(std(), "exponential", 0, 12, { vanes: { count: 3, thickness: 2, start: { mode: "z", value: 0 }, end: { mode: "mouth", value: 0 } } }),
   "Schale, Lamellen, Verrundung, Mundecken, Flansch": design(std(), "exponential", 40, 12, { mouth: 30, flange: {}, vanes: { count: 4, thickness: 1.5, start: { mode: "width", value: 250 }, end: { mode: "channel", value: 120 } } }),
   "rund, Luft": design(rnd(60), "exponential", 0, 0),

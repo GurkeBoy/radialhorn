@@ -19,7 +19,7 @@ export const GEOMETRY_KEYS = [
   "hornShape", "throatDiam", "openingAngle", "L", "Lt", "dw", "dh", "hMouth", "curve", "hypexT", "showRaumecke", "showWandstaerke",
   "wandstaerke", "filletOn", "filletR", "filletClothoidOn", "filletClothoidLength", "clothoidOn", "clothoidLength", "arcOn", "arcRadius", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "flangeOn", "flangeD",
   "flangeT", "holeCount", "holeCircle", "holeD", "holeAngle", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "edgeOn", "edgeR",
-  "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd",
+  "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd", "vaneTipStart", "vaneTipEnd", "vaneTipLength",
 ];
 
 /** Teilergebnisse mit Version (Objekte, deren Gleichheit nachgelagert zählt). */
@@ -121,10 +121,11 @@ export function createGeometryEngine() {
     }, edge, morph.value) : null);
 
     // Lamellen nur an der Schale des Radialhorns; Beginn und Ende werden gegen die Lösung aufgelöst und begrenzt
-    const vanes = stage("vanes", [s.version, wall, round, p.vanesOn, p.vaneCount, p.vaneThickness, p.vaneStartMode, p.vaneStart, p.vaneEndMode, p.vaneEnd],
+    const vanes = stage("vanes", [s.version, wall, round, p.vanesOn, p.vaneCount, p.vaneThickness, p.vaneStartMode, p.vaneStart, p.vaneEndMode, p.vaneEnd, p.vaneTipStart, p.vaneTipEnd, p.vaneTipLength],
       () => sv && wall > 0 && !round && p.vanesOn ? resolveVanes(sv, {
         count: p.vaneCount, thickness: p.vaneThickness,
         start: { mode: p.vaneStartMode, value: p.vaneStart }, end: { mode: p.vaneEndMode, value: p.vaneEnd },
+        tip: { start: p.vaneTipStart, end: p.vaneTipEnd, length: p.vaneTipLength },
       }) : null);
 
     // Schalen-Umrisse der Ansichten (Schnitt durch die Wand), ab der Flanschebene

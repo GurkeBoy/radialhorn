@@ -24,6 +24,8 @@ export const VANE_END_MODES = ["mouth", "z", "channel"];
 
 const MIN_LENGTH = 5;          // kürzeste Lamelle (Unterschied der Achsenstellen) [mm]
 const MIN_CHANNEL = 1;         // kleinste lichte Kanalbreite am Beginn [mm]
+export const TIP_WIDTH = 0.4;         // Breite der Spitze [mm]: eine Düsenbahn, so schmal druckt ein 0,4-mm-Drucker noch sauber
+export const TIP_MAX_SHARE = 0.4;     // eine Spitze nimmt höchstens diesen Anteil der Lamellenlänge ein
 export const VANE_SAMPLES = 32;       // Stützstellen entlang der Lamelle
 const EMBED_MAX = 3;           // Eintauchtiefe in die Wand, höchstens [mm]
 const EMBED_FRACTION = 0.4;    // … und höchstens dieser Anteil der Wandstärke
@@ -101,14 +103,17 @@ export function vaneRanges(s, count, thickness) {
 /**
  * Lamellen zu einer Lösung auflösen und auf das Machbare begrenzen.
  * @param s     Lösung aus solveHorn
- * @param spec  { count, thickness, start: { mode: "z" | "width" | "channel", value }, end: { mode: "mouth" | "z" | "channel", value } }
+ * @param spec  { count, thickness, start: { mode: "z" | "width" | "channel", value }, end: { mode: "mouth" | "z" | "channel", value },
+ *              tip?: { start: boolean, end: boolean, length } } – tip: Beginn/Ende laufen in der Draufsicht über length [mm] auf TIP_WIDTH zu
  *              Ende "channel": hier ist der Kanal so breit geworden, dass die Lamelle enden darf
  * @returns {object | null}  null ohne Lamellen (rundes Horn, Anzahl 0, Dicke 0); sonst
  *   { count, thickness, fractions, delta, zStart, zEnd, atThroat, widthStart, widthEnd, channelStart, channelEnd,
  *     startLimited, endLimited, ok, paths } – Winkel im Bogenmaß, Längen in mm; delta = Sektorwinkel am Mund; zStart/zEnd =
  *   Achsenstellen der ersten und letzten Wellenfront; atThroat: die Lamellen beginnen an der Throat-Wellenfront und sind
  *   bis in die Throat-Ebene (z = 0) verlängert; paths = je Lamelle die Mittellinie [[x, z], …] mit VANE_SAMPLES + 1 Punkten
- *   (atThroat: ein Punkt mehr, in der Throat-Ebene; leer, wenn nicht ok); ok = lang genug für eine Lamelle
+ *   (atThroat: ein Punkt mehr, in der Throat-Ebene; leer, wenn nicht ok); ok = lang genug für eine Lamelle;
+ *   widths = je Lamelle die Dicke an jedem Punkt des Weges; tip = { start, end, length } mit der wirksamen Spitzenlänge
+ *   (mit Spitze kommen Punkte am Ende der Spitze hinzu)
  */
 export function resolveVanes(s, spec) {
   if (!s || s.round || !spec || !(spec.count >= 1) || !(spec.thickness > 0)) return null;
@@ -132,12 +137,52 @@ export function resolveVanes(s, spec) {
       if (z0 > 1e-9) p.unshift([x0 - (x1 - x0) / ((z1 - z0) || 1) * z0, 0]);
     }
   }
+  const tip = { start: !!spec.tip?.start && t > TIP_WIDTH, end: !!spec.tip?.end && t > TIP_WIDTH, length: 0 };
+  let widths = paths.map(p => p.map(() => t));
+  if (ok && (tip.start || tip.end) && spec.tip.length > 0) {
+    let shortest = Infinity;
+    paths = paths.map((p, i) => {
+      const r = tapered(p, t, tip.start ? spec.tip.length : 0, tip.end ? spec.tip.length : 0);
+      widths[i] = r.widths;
+      shortest = Math.min(shortest, r.length);
+      return r.path;
+    });
+    tip.length = shortest;
+  }
   return {
     count: n, thickness: t, fractions: f, delta: 2 * s.alpha2 / (n + 1),
     zStart, zEnd, atThroat, widthStart: a.width, widthEnd: b.width, channelStart: a.channel, channelEnd: b.channel,
     startLimited: start.limited, endLimited: end.limited,
-    ok, paths,
+    ok, paths, widths, tip,
   };
+}
+
+/**
+ * Weg und Dicken mit Spitzen: die Dicke läuft vom Ende über die Länge L (höchstens TIP_MAX_SHARE der Weglänge) linear von
+ * TIP_WIDTH auf die volle Dicke; am Ende der Spitze kommt ein Punkt hinzu.
+ * @returns {{ path, widths, length }}  length = kürzeste wirksame Spitzenlänge
+ */
+function tapered(path, t, startL, endL) {
+  const cum = [0];
+  for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]));
+  const total = cum[cum.length - 1], cap = TIP_MAX_SHARE * total;
+  const ls = Math.min(startL, cap), le = Math.min(endL, cap);
+  const marks = [...cum];
+  if (ls > 1e-6) marks.push(ls);
+  if (le > 1e-6) marks.push(total - le);
+  marks.sort((a, b) => a - b);
+  const pts = [], widths = [];
+  let seg = 0;
+  for (const [i, a] of marks.entries()) {
+    if (i && a - marks[i - 1] < 1e-6) continue;
+    while (seg < path.length - 2 && cum[seg + 1] < a) seg++;
+    const span = cum[seg + 1] - cum[seg] || 1, u = Math.min(1, Math.max(0, (a - cum[seg]) / span));
+    pts.push({ a, p: [path[seg][0] + u * (path[seg + 1][0] - path[seg][0]), path[seg][1] + u * (path[seg + 1][1] - path[seg][1])] });
+    widths.push(Math.min(t,
+      ls > 0 ? TIP_WIDTH + (t - TIP_WIDTH) * a / ls : t,
+      le > 0 ? TIP_WIDTH + (t - TIP_WIDTH) * (total - a) / le : t));
+  }
+  return { path: pts.map(q => q.p), widths, length: Math.min(ls || Infinity, le || Infinity) };
 }
 
 /** Normalen der Mittellinie (senkrecht zur Tangente, nach +x), aus den Nachbarpunkten; Länge 1. */
@@ -149,12 +194,12 @@ function pathNormals(path) {
   });
 }
 
-/** Umriss der Lamelle in der Draufsicht: die beiden Seitenlinien (±Dicke/2 senkrecht zur Mittellinie) [[x, z], …]. */
+/** Umriss der Lamelle in der Draufsicht: die beiden Seitenlinien (±Dicke/2 senkrecht zur Mittellinie) [[x, z], …]; thickness: Zahl oder Dicke je Punkt. */
 export function vaneOutline(path, thickness) {
-  const n = pathNormals(path), h = thickness / 2;
+  const n = pathNormals(path), h = k => (Array.isArray(thickness) ? thickness[k] : thickness) / 2;
   return {
-    left: path.map(([x, z], k) => [x - h * n[k][0], z - h * n[k][1]]),
-    right: path.map(([x, z], k) => [x + h * n[k][0], z + h * n[k][1]]),
+    left: path.map(([x, z], k) => [x - h(k) * n[k][0], z - h(k) * n[k][1]]),
+    right: path.map(([x, z], k) => [x + h(k) * n[k][0], z + h(k) * n[k][1]]),
   };
 }
 
@@ -238,7 +283,8 @@ export function vaneBodies(s, airTris, vanes, wall) {
       rows.push({ top: hs.top + e, bottom: hs.bottom - e });
     }
 
-    const { left, right } = vaneOutline(path, t), norms = pathNormals(path);
+    const widths = vanes.widths?.[i] ?? path.map(() => t);
+    const { left, right } = vaneOutline(path, widths), norms = pathNormals(path);
     const corner = (side, k) => [side[k][0], 0, side[k][1]];
     const at = (side, k, h) => { const p = corner(side, k); p[1] = h; return p; };
     const rowsP = rows.map((r, k) => ({ top: at(right, k, r.top), bottom: at(right, k, r.bottom) }));
@@ -247,12 +293,14 @@ export function vaneBodies(s, airTris, vanes, wall) {
     const K = path.length - 1, same = k => Math.hypot(norms[k][0] - norms[k + 1][0], norms[k][1] - norms[k + 1][1]) < SAME_NORMAL;
 
     // Seitenflächen: aufeinanderfolgende Stücke mit gleicher Richtung bilden eine ebene Fläche
-    const side = (rowsS, dirOf) => {
+    const side = (rowsS, dirOf, line) => {
       const faces = [];
       let current = null;
+      const heading = k => { const dx = line[k + 1][0] - line[k][0], dz = line[k + 1][1] - line[k][1], l = Math.hypot(dx, dz) || 1; return [dx / l, dz / l]; };
       for (let k = 0; k < K; k++) {
         const a = rowsS[k], b = rowsS[k + 1], tris = quad(a.bottom, b.bottom, b.top, a.top, dirOf(k));
-        if (current && k > 0 && same(k - 1) && same(k)) current.push(...tris);
+        const [h0, h1] = k ? [heading(k - 1), heading(k)] : [[0, 0], [1, 1]];
+        if (current && Math.hypot(h0[0] - h1[0], h0[1] - h1[1]) < SAME_NORMAL) current.push(...tris);
         else faces.push(current = tris);
       }
       return faces;
@@ -272,18 +320,18 @@ export function vaneBodies(s, airTris, vanes, wall) {
     const tangent = k => { const a = path[Math.max(0, k - 1)], b = path[Math.min(K, k + 1)]; return [b[0] - a[0], 0, b[1] - a[1]]; };
 
     const faces = [
-      ...side(rowsP, faceDir(1)), ...side(rowsM, faceDir(-1)),
+      ...side(rowsP, faceDir(1), right), ...side(rowsM, faceDir(-1), left),
       ...lid("top", up), ...lid("bottom", down),
       cap(0, tangent(0).map(v => -v)), cap(K, tangent(K)),
     ].filter(f => f.length);
     const triangles = faces.flat();
     surfaces.push({ name: `vane${i}`, section: "lamellen", oriented: true, rib: true, vane: true, triangles, faces });
 
-    // Überlapp: 2e über die Länge der Mittellinie; Rest des Körpers liegt im Luftkanal
-    let length = 0;
-    for (let k = 0; k < K; k++) length += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]);
-    overlap += t * 2 * e * length;
-    cavity += volumeOf(triangles) - t * 2 * e * length;
+    // Überlapp: 2e über die Grundfläche; Rest des Körpers liegt im Luftkanal
+    let area = 0;   // Grundfläche der Lamelle in der Draufsicht (Länge × Dicke, mit Spitzen)
+    for (let k = 0; k < K; k++) area += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]) * (widths[k] + widths[k + 1]) / 2;
+    overlap += area * 2 * e;
+    cavity += volumeOf(triangles) - area * 2 * e;
   });
 
   return { surfaces, overlap, cavity, count: surfaces.length };

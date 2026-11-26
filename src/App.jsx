@@ -106,6 +106,9 @@ export default function App() {
   const [vaneStart,       setVaneStart]       = usePersistentState("vaneStart", D.vaneStart);
   const [vaneEndMode,     setVaneEndMode]     = usePersistentState("vaneEndMode", D.vaneEndMode);
   const [vaneEnd,         setVaneEnd]         = usePersistentState("vaneEnd", D.vaneEnd);
+  const [vaneTipStart,    setVaneTipStart]    = usePersistentState("vaneTipStart", D.vaneTipStart);
+  const [vaneTipEnd,      setVaneTipEnd]      = usePersistentState("vaneTipEnd", D.vaneTipEnd);
+  const [vaneTipLength,   setVaneTipLength]   = usePersistentState("vaneTipLength", D.vaneTipLength);
   const [roundOn,         setRoundOn]         = usePersistentState("roundOn", D.roundOn);
   const [roundR,          setRoundR]          = usePersistentState("roundR", D.roundR);
   const [wallMaterial,    setWallMaterial]    = usePersistentState("wallMaterial", D.wallMaterial);
@@ -135,7 +138,7 @@ export default function App() {
   const designValues = {
     hornShape, throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, edgeOn, edgeR, flangeOn, flangeD,
-    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd,
+    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength,
     roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, stepFuse, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
@@ -147,7 +150,7 @@ export default function App() {
     flangeOn: setFlangeOn, flangeD: setFlangeD, flangeT: setFlangeT, holeCount: setHoleCount,
     holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, ribsOn: setRibsOn, ribThickness: setRibThickness,
     ribLength: setRibLength, vanesOn: setVanesOn, vaneCount: setVaneCount, vaneThickness: setVaneThickness, vaneStartMode: setVaneStartMode,
-    vaneStart: setVaneStart, vaneEndMode: setVaneEndMode, vaneEnd: setVaneEnd, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
+    vaneStart: setVaneStart, vaneEndMode: setVaneEndMode, vaneEnd: setVaneEnd, vaneTipStart: setVaneTipStart, vaneTipEnd: setVaneTipEnd, vaneTipLength: setVaneTipLength, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
     wallLimit: setWallLimit, stepFuse: setStepFuse, abstrahlung: setSimMouth,
     simTemp: setSimTemp, driver: setDriver,
   };
@@ -214,10 +217,10 @@ export default function App() {
   const live = useMemo(() => ({
     hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle: round ? roundAngle : openingAngle, L: round ? roundL : L, Lt: round ? roundLt : Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
-    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd,
+    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength,
   }), [round, hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
-    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd]);
+    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength]);
   const p = useThrottledValue(live);
   // Abgeleitete Geometrie im Web Worker (geometry.js, useGeometry): beim Ziehen rechnet der
   // Haupt-Thread nicht, er zeichnet nur. Jede Stufe rechnet dort nur neu, was der Regler betrifft;
@@ -383,6 +386,9 @@ export default function App() {
               value={vaneEndMode} onChange={changeVaneEndMode} />
             {vaneEndMode !== "mouth" && <Slider label={t("vanes.end." + vaneEndMode)} value={Math.min(Math.max(vaneEnd, Math.floor(vaneLimits[vaneEndMode][0])), Math.ceil(vaneLimits[vaneEndMode][1]))}
               min={Math.floor(vaneLimits[vaneEndMode][0])} max={Math.ceil(vaneLimits[vaneEndMode][1])} step={1} unit="mm" onChange={setVaneEnd} />}
+            <Toggle label={t("vanes.tipStart")} checked={vaneTipStart} onChange={setVaneTipStart} info={t("vanes.tipInfo")} />
+            <Toggle label={t("vanes.tipEnd")} checked={vaneTipEnd} onChange={setVaneTipEnd} />
+            {(vaneTipStart || vaneTipEnd) && <Slider label={t("vanes.tipLength")} value={vaneTipLength} min={2} max={40} step={1} unit="mm" onChange={setVaneTipLength} />}
             {vanes?.ok && <Note>{t("vanes.summary", {
               sectors: vanes.count + 1, deg: (vanes.delta * 180 / Math.PI).toFixed(1), z0: vanes.atThroat ? "0" : vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0),
               c0: vanes.channelStart.toFixed(0), c1: vanes.channelEnd.toFixed(0),

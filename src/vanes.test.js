@@ -7,7 +7,7 @@ import { solveHorn, makeProfile, computeFillet, throatMorph, mouthRounding, focu
 import { buildShellGeometry, triangulate } from "./horn-mesh.js";
 import { buildAir } from "./bodies.js";
 import { computeVolumes } from "./volume.js";
-import { resolveVanes, vaneBodies, vaneValue, vaneRanges, vaneOutline, airTriangles, VANE_SAMPLES } from "./vanes.js";
+import { resolveVanes, vaneBodies, vaneValue, vaneRanges, vaneOutline, airTriangles, VANE_SAMPLES, TIP_WIDTH } from "./vanes.js";
 import { edgeCheck, signedVolume } from "./test-helpers.js";
 
 const RT = 25.4, H_MOUTH = 200, WALL = 6;
@@ -235,6 +235,85 @@ describe("vaneBodies: Körper", () => {
     expect(b.count).toBe(4);
     for (const f of b.surfaces) expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 });
   });
+});
+
+describe("Spitzen (druckbarer Keil an Beginn und Ende)", () => {
+  const length = p => p.slice(1).reduce((l, q, k) => l + Math.hypot(q[0] - p[k][0], q[1] - p[k][1]), 0);
+  const tip = (start, end, len = 12, over = {}) => spec({ count: 3, start: { mode: "z", value: 160 }, tip: { start, end, length: len }, ...over });
+
+  it("ohne Spitzen: überall volle Dicke, Wege unverändert", () => {
+    const plain = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } })), off = resolveVanes(s, tip(false, false));
+    expect(plain.widths.every(w => w.every(v => v === 2))).toBe(true);
+    expect(plain.tip).toEqual({ start: false, end: false, length: 0 });
+    expect(off.paths).toEqual(plain.paths);
+  });
+
+  it("spitzer Beginn und spitzes Ende: Dicke 0,4 mm an den Enden, nach der Spitzenlänge wieder voll, dazwischen linear", () => {
+    const v = resolveVanes(s, tip(true, true, 12));
+    expect(v.tip).toEqual({ start: true, end: true, length: 12 });
+    v.paths.forEach((p, i) => {
+      const w = v.widths[i];
+      expect(p).toHaveLength(w.length);
+      expect(w[0]).toBeCloseTo(TIP_WIDTH, 9);
+      expect(w.at(-1)).toBeCloseTo(TIP_WIDTH, 9);
+      expect(Math.max(...w)).toBeCloseTo(2, 9);
+      let a = 0;
+      p.forEach((q, k) => {
+        if (k) a += Math.hypot(q[0] - p[k - 1][0], q[1] - p[k - 1][1]);
+        const total = length(p), d = Math.min(a, total - a);
+        expect(w[k]).toBeCloseTo(d < 12 ? TIP_WIDTH + (2 - TIP_WIDTH) * d / 12 : 2, 6);
+      });
+    });
+  });
+
+  it("nur Beginn oder nur Ende; Weg und Form bleiben dieselbe Linie", () => {
+    const plain = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } }));
+    const a = resolveVanes(s, tip(true, false)), b = resolveVanes(s, tip(false, true));
+    a.widths.forEach(w => { expect(w[0]).toBeCloseTo(TIP_WIDTH, 9); expect(w.at(-1)).toBe(2); });
+    b.widths.forEach(w => { expect(w[0]).toBe(2); expect(w.at(-1)).toBeCloseTo(TIP_WIDTH, 9); });
+    for (const v of [a, b]) v.paths.forEach((p, i) => { expect(length(p)).toBeCloseTo(length(plain.paths[i]), 9); expect(p[0]).toEqual(plain.paths[i][0]); expect(p.at(-1)).toEqual(plain.paths[i].at(-1)); });
+  });
+
+  it("zu lange Spitzen: höchstens 40 % der Lamellenlänge; Dicke ≤ 0,4 mm bleibt unverändert", () => {
+    const v = resolveVanes(s, tip(true, true, 5000));
+    const shortest = Math.min(...v.paths.map(length));
+    expect(v.tip.length).toBeCloseTo(0.4 * shortest, 6);
+    expect(Math.max(...v.widths.flat())).toBeCloseTo(2, 9);
+    const thin = resolveVanes(s, tip(true, true, 12, { thickness: 0.4 }));
+    expect(thin.tip.start).toBe(false);
+    expect(thin.widths.flat().every(w => w === 0.4)).toBe(true);
+  });
+
+  it("Umriss: Abstand der Seitenlinien = Dicke an jedem Punkt", () => {
+    const v = resolveVanes(s, tip(true, true, 12));
+    v.paths.forEach((p, i) => {
+      const { left, right } = vaneOutline(p, v.widths[i]);
+      p.forEach((_, k) => expect(Math.hypot(left[k][0] - right[k][0], left[k][1] - right[k][1])).toBeCloseTo(v.widths[i][k], 9));
+    });
+  });
+
+  for (const [name, start] of [["gerader Bereich", 160], ["ab dem Throat", 0]]) {
+    it(`Körper (${name}): geschlossen, einheitlich orientiert, nur ebene Flächen; weniger Luftverdrängung als ohne Spitzen`, () => {
+      const sp = tip(true, true, 12, { start: { mode: "z", value: start } });
+      const v = resolveVanes(s, sp), plain = resolveVanes(s, { ...sp, tip: undefined });
+      const bodies = vaneBodies(s, airTris(), v, WALL), reference = vaneBodies(s, airTris(), plain, WALL);
+      expect(bodies.count).toBe(3);
+      for (const f of bodies.surfaces) {
+        expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 });
+        expect(signedVolume(f.triangles)).toBeGreaterThan(0);
+        for (const face of f.faces) {
+          const [a, b, c] = face[0];
+          const n = [(b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]), (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]), (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])];
+          const len = Math.hypot(...n);
+          for (const p of face.flat()) expect(Math.abs((n[0] * (p[0] - a[0]) + n[1] * (p[1] - a[1]) + n[2] * (p[2] - a[2])) / len)).toBeLessThan(1e-6);
+        }
+      }
+      expect(bodies.cavity).toBeLessThan(reference.cavity);
+      expect(bodies.cavity).toBeGreaterThan(0.8 * reference.cavity);
+      const total = bodies.surfaces.reduce((acc, f) => acc + signedVolume(f.triangles), 0);
+      expect(total - bodies.overlap).toBeCloseTo(bodies.cavity, 3);
+    });
+  }
 });
 
 describe("Schale und Volumen mit Lamellen", () => {

@@ -101,10 +101,10 @@ describe("buildDatasheet: Lamellen", () => {
   const vanes = resolveVanes(s, { count: 3, thickness: 2, start: { mode: "z", value: 160 }, end: { mode: "mouth", value: 0 } });
   const withWall = extra => design({ showWandstaerke: true, wandstaerke: 6, wall: 6, ...extra });
 
-  it("Kennwert mit Anzahl, Dicke, Bereich und Sektoren; je Lamelle eine Strecke in der Draufsicht", () => {
+  it("Kennwert mit Anzahl, Dicke, Bereich und Sektoren; je Lamelle ein gefüllter Umriss in der Draufsicht", () => {
     const html = buildDatasheet(withWall({ vanes }), ALL, DATE);
     expect(row(html, "Lamellen")).toBe("3 × 2 mm, z = 160 … " + vanes.zEnd.toFixed(0) + " mm, 4 Sektoren");
-    expect(html.match(/stroke-width="2"\/>/g) ?? []).toHaveLength(3);
+    expect(html.match(/Z" fill="[^"]+" stroke="[^"]+" stroke-width="0.2"\/>/g) ?? []).toHaveLength(3);
     expect(row(buildDatasheet(withWall({ vanes }), ALL, DATE, "en"), "Vanes")).toContain("4 sectors");
   });
 

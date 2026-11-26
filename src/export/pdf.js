@@ -9,6 +9,7 @@ import { LANGUAGES, translate } from "../i18n.js";
 import { FONT_CSS_EMBEDDED } from "../fonts.js";
 import { shellPlanOutline, shellProfileOutline, flangeSectionOutline } from "../horn-mesh.js";
 import { linspace, svgPath, clipFromZ, fmtLength } from "../utils.js";
+import { vaneOutline } from "../vanes.js";
 import { downloadFile } from "./download.js";
 
 const SCALES = [1, 2, 5, 10, 20, 50];
@@ -132,7 +133,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
       <line x1="${dsOX}" y1="${dsOY}" x2="${dsOX}" y2="${dsOY + maxZ}" stroke="${C.axis}" stroke-width="0.2" stroke-dasharray="3 2"/>
       ${opts.draufsicht && planOuter ? cuts(cutSections(wallPts, planOuter, flange), (x, z) => [dsOX + x, dsOY + z]) : ""}
       ${opts.draufsicht ? [1, -1].map(sign => path(wallPts.map(([x, z]) => [dsOX + sign * x, dsOY + z]), C.line)).join("") : ""}
-      ${opts.draufsicht && vanes ? vanes.paths.map(p => path(p.map(([x, z]) => [dsOX + x, dsOY + z]), C.line, vanes.thickness)).join("") : ""}
+      ${opts.draufsicht && vanes ? vanes.paths.map((p, i) => { const { left, right } = vaneOutline(p, vanes.widths[i]); return `<path d="${svgPath([...left, ...right.slice().reverse()].map(([x, z]) => [dsOX + x, dsOY + z]), 2)}Z" fill="${C.line}" stroke="${C.line}" stroke-width="0.2"/>`; }).join("") : ""}
       ${opts.mundbogen ? path(arcPts, C.arc) : ""}
       ${opts.fokus ? `<circle cx="${dsOX}" cy="${dsOY + s.zFocus}" r="0.7" fill="${C.arc}"/>` : ""}
       ${opts.bemassung ? [
