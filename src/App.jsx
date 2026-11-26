@@ -276,6 +276,8 @@ export default function App() {
   const vaneModeValue = (mode, r) => Math.round(vaneValue(s, vaneCount, vaneThickness, mode, r));
   const changeVaneStartMode = mode => { if (vanes) setVaneStart(vaneModeValue(mode, vanes.zStart)); setVaneStartMode(mode); };
   const changeVaneEndMode = mode => { if (vanes && mode !== "mouth") setVaneEnd(vaneModeValue(mode, vanes.zEnd)); setVaneEndMode(mode); };
+  // Gespeicherte Betriebsart „Hornbreite“ gibt es nicht mehr: Beginn gleich, nur als z
+  useEffect(() => { if (!VANE_START_MODES.includes(vaneStartMode)) changeVaneStartMode("z"); });
   const applyWallAdvice = () => { if (advice) { setShowWandstaerke(true); setWandstaerke(advice.tRecommended); } };
 
   const flangeOverRaumecke = flange && g.showRaumecke && flange.diameter / 2 > g.dw / 2 + g.dh;
