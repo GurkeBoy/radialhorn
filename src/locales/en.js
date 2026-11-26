@@ -176,6 +176,7 @@ export default {
   "key.mouthArea": "A(mouth)",
   "key.arcLength": "Arc length",
   "key.vertAngle": "Vert. angle",
+  "key.channelAngle": "Channel angle (vanes)",
   "key.horizAngle": "Horiz. angle",
   "key.frequencies": "Cutoff frequencies (approx.)",
   "key.fcLow": "fc_low — mouth (circumference = λ)",

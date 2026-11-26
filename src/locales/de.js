@@ -177,6 +177,7 @@ export default {
   "key.arcLength": "Bogenlänge",
   "key.vertAngle": "Vert. Winkel",
   "key.horizAngle": "Horiz. Winkel",
+  "key.channelAngle": "Kanalwinkel (Lamellen)",
   "key.frequencies": "Grenzfrequenzen (Näherung)",
   "key.fcLow": "fc_low — Mund (Umfang = λ)",
   "key.fcCut": "fc_cut — Horn-Cutoff",

@@ -212,6 +212,17 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           fill="none" stroke={COLOR.dim} strokeWidth="0.8" />
         <text x={cx} y={fy + angleR * 0.5} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>{s.openingAngle}°</text>
 
+        {/* Winkel der Kanalöffnungen am Mund: Sektor zwischen der rechten Wand und der äußersten Lamelle (alle Sektoren gleich) */}
+        {vanes?.ok && (() => {
+          const a1 = s.alpha2, a0 = a1 - vanes.delta, r = angleR * 2.2, mid = (a0 + a1) / 2, rl = r + 9;
+          const pt = (a, rr) => `${cx + rr * Math.sin(a)},${fy + rr * Math.cos(a)}`;
+          return <g>
+            <path d={`M${pt(a1, r)} A${r},${r} 0 0 0 ${pt(a0, r)}`} fill="none" stroke={COLOR.lamelle} strokeWidth="0.8" />
+            <text x={cx + rl * Math.sin(mid)} y={fy + rl * Math.cos(mid)} textAnchor="start" fontSize="9" fill={COLOR.lamelle} fontFamily={FONT}>
+              {(vanes.delta * 180 / Math.PI).toFixed(1)}°</text>
+          </g>;
+        })()}
+
         {/* Maße links, rechts, oben, unten: Lagen nach den Bemaßungsregeln (dim-layout.js) */}
         {dims.map(d => <Dim key={d.id} p1={d.p1} p2={d.p2} orient={d.orient} arrowPos={d.arrowPos}
           color={d.color} marker="url(#arrH)" label={d.label} sw={d.sw} textAt={d.text.at} />)}
