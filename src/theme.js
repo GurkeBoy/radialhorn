@@ -56,7 +56,7 @@ export const COLOR = {
   trans:        "#fca5a5",               // Übergangspunkte, Verrundung
   wand:         "#fcd34d",               // Wandstärke
   flansch:      "#c4b5fd",               // Throat-Flansch
-  lamelle:      "#5eead4",               // Lamellen
+  lamelle:      "#e879f9",               // Lamellen (Fuchsia: weder Mint der Wand noch Rosa der Traktrix)
   konflikt:     "#ef4444",               // Flanschbohrung im Konflikt mit der Schale
   dim:          "#5a5a78",               // allgemeine Bemaßung
   dimL:         "#6868a0",               // Gesamtlänge L

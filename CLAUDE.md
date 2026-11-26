@@ -230,7 +230,7 @@ Oberfläche, Ansichten und PDF-Datenblatt in Deutsch und Englisch (`i18n.js`, W�
 
 ## Farbschema
 
-Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint, Akzent Sandbeige `#d6cbb8`; Textstufen text/label/faint/muted mit Kontrast ≥ 4,3:1 auf `UI.card`, Texte ≥ 4,5:1) und `COLOR` (Zeichnungen: Traktrix Rosa, gerade Wand Mint, Mundbogen Sandbeige, Raumecke Orange, Übergänge Koralle, Wandstärke Gelb, Flansch Violett, Bemaßung Grau-Violett). Das PDF hat ein eigenes helles Schema in `export/pdf.js`.
+Alle Werte in `theme.js`: `UI` (Oberfläche, neutrales Grau ohne Blau-/Lila-Tint, Akzent Sandbeige `#d6cbb8`; Textstufen text/label/faint/muted mit Kontrast ≥ 4,3:1 auf `UI.card`, Texte ≥ 4,5:1) und `COLOR` (Zeichnungen: Traktrix Rosa, gerade Wand Mint, Mundbogen Sandbeige, Raumecke Orange, Übergänge Koralle, Wandstärke Gelb, Flansch Violett, Lamellen Fuchsia, Bemaßung Grau-Violett). Das PDF hat ein eigenes helles Schema in `export/pdf.js`.
 
 ## Bemaßungsregeln
 
