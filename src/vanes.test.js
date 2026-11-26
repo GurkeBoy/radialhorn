@@ -1,13 +1,13 @@
 /**
- * Lamellen: Auflösung (Winkel, Beginn und Ende nach z, Hornbreite oder Kanalbreite), Körper (geschlossen, im Luftkanal
- * gemessen) und ihr Einfluss auf Volumen und Netz.
+ * Lamellen: Auflösung (Winkelanteile, Beginn und Ende nach z, Hornbreite oder Kanalbreite, ab dem Throat), Körper
+ * (geschlossen, ebene Flächen, im Luftkanal gemessen) und ihr Einfluss auf Volumen und Netz.
  */
 import { describe, it, expect } from "vitest";
-import { solveHorn, makeProfile, computeFillet, throatMorph, mouthRounding } from "./horn-math.js";
+import { solveHorn, makeProfile, computeFillet, throatMorph, mouthRounding, focusRadius, createHornMath, wavefrontAtAxis } from "./horn-math.js";
 import { buildShellGeometry, triangulate } from "./horn-mesh.js";
 import { buildAir } from "./bodies.js";
 import { computeVolumes } from "./volume.js";
-import { resolveVanes, vaneBodies, vaneRadius, vaneValue, vaneRanges, airTriangles, VANE_SAMPLES } from "./vanes.js";
+import { resolveVanes, vaneBodies, vaneValue, vaneRanges, vaneOutline, airTriangles, VANE_SAMPLES } from "./vanes.js";
 import { edgeCheck, signedVolume } from "./test-helpers.js";
 
 const RT = 25.4, H_MOUTH = 200, WALL = 6;
@@ -15,8 +15,9 @@ const s = solveHorn(500, 60, RT, 182, 90);
 const profile = makeProfile(s, RT, H_MOUTH, "exponential", 0.5);
 const spec = (over = {}) => ({ count: 2, thickness: 2, start: { mode: "z", value: 200 }, end: { mode: "mouth", value: 0 }, ...over });
 const airTris = (sol = s, prof = profile, fillet = null, morph = null) => airTriangles(buildAir(sol, RT, prof, fillet, morph).surfaces);
+const zThroat = wavefrontAtAxis(s, -Infinity).zAxis;
 
-describe("resolveVanes: Anzahl, Winkel, Grenzen", () => {
+describe("resolveVanes: Anzahl, Anteile, Grenzen", () => {
   it("keine Lamellen ohne Anzahl, ohne Dicke und beim runden Horn", () => {
     expect(resolveVanes(s, spec({ count: 0 }))).toBeNull();
     expect(resolveVanes(s, spec({ thickness: 0 }))).toBeNull();
@@ -24,131 +25,212 @@ describe("resolveVanes: Anzahl, Winkel, Grenzen", () => {
     expect(resolveVanes(null, spec())).toBeNull();
   });
 
-  it("n Lamellen teilen den Öffnungswinkel in n + 1 gleich breite Sektoren, symmetrisch zur Achse", () => {
+  it("n Lamellen teilen jede Wellenfront in n + 1 gleiche Winkelsektoren, symmetrisch zur Achse", () => {
     for (const n of [1, 2, 3, 5]) {
       const v = resolveVanes(s, spec({ count: n }));
-      expect(v.phis).toHaveLength(n);
-      const edges = [-s.alpha2, ...v.phis, s.alpha2];
-      for (let i = 1; i < edges.length; i++) expect(edges[i] - edges[i - 1]).toBeCloseTo(2 * s.alpha2 / (n + 1), 12);
-      v.phis.forEach((phi, i) => expect(phi).toBeCloseTo(-v.phis[n - 1 - i], 12));
+      expect(v.fractions).toHaveLength(n);
+      const edges = [-1, ...v.fractions, 1];
+      for (let i = 1; i < edges.length; i++) expect(edges[i] - edges[i - 1]).toBeCloseTo(2 / (n + 1), 12);
+      v.fractions.forEach((f, i) => expect(f).toBeCloseTo(-v.fractions[n - 1 - i], 12));
+      expect(v.delta).toBeCloseTo(2 * s.alpha2 / (n + 1), 12);
     }
-    expect(resolveVanes(s, spec({ count: 1 })).phis[0]).toBeCloseTo(0, 12);
+    expect(resolveVanes(s, spec({ count: 1 })).fractions[0]).toBeCloseTo(0, 12);
   });
 
-  it("Beginn nach z: die Wellenfront schneidet die Achse dort; nie vor dem Ende des Eingangs, nie hinter dem Mund", () => {
-    const v = resolveVanes(s, spec({ start: { mode: "z", value: 200 } }));
+  it("Beginn nach z: die Wellenfront schneidet die Achse dort; die Mittellinie der mittleren Lamelle liegt auf der Achse", () => {
+    const v = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 200 } }));
     expect(v.zStart).toBeCloseTo(200, 9);
-    expect(v.rStart).toBeCloseTo(200 - s.zFocus, 9);
     expect(v.startLimited).toBe(false);
-    const early = resolveVanes(s, spec({ start: { mode: "z", value: 1 } }));
-    expect(early.rStart).toBeCloseTo(s.rInner, 9);
-    expect(early.startLimited).toBe(true);
-    const late = resolveVanes(s, spec({ start: { mode: "z", value: 5000 } }));
-    expect(late.rStart).toBeCloseTo(s.arcR, 9);
-    expect(late.ok).toBe(false);
+    const mid = v.paths[1];
+    expect(mid).toHaveLength(VANE_SAMPLES + 1);
+    expect(mid[0][0]).toBeCloseTo(0, 12);
+    expect(mid[0][1]).toBeCloseTo(200, 6);
+    for (const [x] of mid) expect(Math.abs(x)).toBeLessThan(1e-9);
+    expect(mid[VANE_SAMPLES][1]).toBeCloseTo(s.zApex, 6);   // Ende am Mund
   });
 
-  it("Ende am Mund, nach z oder bei einer Kanalbreite", () => {
-    expect(resolveVanes(s, spec()).rEnd).toBeCloseTo(s.arcR, 9);
-    const z = resolveVanes(s, spec({ end: { mode: "z", value: 250 } }));
-    expect(z.zEnd).toBeCloseTo(250, 9);
-    const ch = resolveVanes(s, spec({ end: { mode: "channel", value: 100 } }));
-    expect(ch.channelEnd).toBeCloseTo(100, 9);
-    expect(ch.endLimited).toBe(false);
-    // so breit wird der Kanal nie: Ende am Mund
-    expect(resolveVanes(s, spec({ end: { mode: "channel", value: 1e6 } })).rEnd).toBeCloseTo(s.arcR, 9);
-  });
-
-  it("Beginn bei einer Hornbreite bzw. Kanalbreite: die Maße stimmen mit den Angaben überein", () => {
-    const w = resolveVanes(s, spec({ start: { mode: "width", value: 300 } }));
-    expect(w.widthStart).toBeCloseTo(300, 9);
-    const c = resolveVanes(s, spec({ start: { mode: "channel", value: 60 } }));
-    expect(c.channelStart).toBeCloseTo(60, 9);
-    // Sehne zwischen den Wänden am Mund = 2·xMouth
-    expect(resolveVanes(s, spec()).widthEnd).toBeCloseTo(2 * s.xMouth, 6);
-  });
-
-  it("lichte Kanalbreite: nie weniger als 1 mm am Beginn, auch bei vielen dicken Lamellen", () => {
-    const v = resolveVanes(s, spec({ count: 9, thickness: 8, start: { mode: "z", value: 1 } }));
-    expect(v.channelStart).toBeGreaterThanOrEqual(1 - 1e-9);
-    expect(v.startLimited).toBe(true);
-  });
-
-  it("vaneRadius und vaneValue sind Umkehrungen; die Bereiche reichen vom Ende des Eingangs bis zum Mund", () => {
-    for (const mode of ["z", "width", "channel"]) {
-      const r = 260;
-      expect(vaneRadius(s, 3, 2, mode, vaneValue(s, 3, 2, mode, r))).toBeCloseTo(r, 9);
+  it("Lamellen dürfen am Throat beginnen: Beginn bei z = 0 liegt auf der Throat-Wellenfront, ohne Begrenzung", () => {
+    const v = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 0 } }));
+    expect(v.zStart).toBeCloseTo(zThroat, 9);
+    expect(v.atThroat).toBe(true);
+    expect(v.startLimited).toBe(false);
+    expect(v.ok).toBe(true);
+    // erster Punkt jeder Lamelle liegt in der Throat-Ebene und innerhalb der Wand (x < rt); die mittlere Lamelle ist bis dorthin verlängert
+    for (const p of v.paths) {
+      expect(p).toHaveLength(VANE_SAMPLES + 2);
+      expect(p[0][1]).toBe(0);
+      expect(Math.abs(p[0][0])).toBeLessThan(RT);
     }
-    const ranges = vaneRanges(s, 2, 2);
-    expect(ranges.z[0]).toBeCloseTo(s.zFocus + s.rInner, 6);
-    expect(ranges.z[1]).toBeCloseTo(s.zApex, 6);
-    expect(ranges.width[1]).toBeCloseTo(2 * s.xMouth, 6);
-  });
-});
-
-describe("vaneBodies: Körper", () => {
-  const vanes = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } }));
-  const bodies = vaneBodies(s, airTris(), vanes, WALL);
-
-  it("je Lamelle ein geschlossener, einheitlich orientierter Körper mit positivem Volumen", () => {
-    expect(bodies.count).toBe(3);
-    for (const f of bodies.surfaces) {
-      expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 });
-      expect(signedVolume(f.triangles)).toBeGreaterThan(0);
-      // ebene Flächen für STEP: jede für sich eben (keine Randpunkte außerhalb der Fläche)
-      expect(f.faces.flat()).toHaveLength(f.triangles.length);
-    }
+    expect(v.paths[0][0][0] * v.paths[2][0][0]).toBeLessThan(0);   // gegenüberliegende Seiten
+    // Anteil an der Throat-Breite: die äußeren Lamellen bei ±½ der halben Breite
+    expect(v.paths[2][0][0]).toBeCloseTo(RT * 0.5, 0);
+    expect(resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 200 } })).atThroat).toBe(false);
   });
 
-  it("Volumen = Dicke × Fläche in (r, h); Überlapp = Dicke × 2e × Länge; Luftanteil = Differenz", () => {
-    const e = Math.min(3, 0.4 * WALL), length = vanes.rEnd - vanes.rStart;
-    expect(bodies.overlap).toBeCloseTo(3 * vanes.thickness * 2 * e * length, 6);
-    // Fläche des Luftkanals in (r, h): ∫ 2·h(r) dr mit dem Profil – das Netz weicht nur um die Facetten ab
-    let area = 0;
-    const K = 4000;
-    for (let k = 0; k < K; k++) area += 2 * profile(s.zFocus + vanes.rStart + (k + 0.5) * length / K) * length / K;
-    expect(bodies.cavity / (3 * vanes.thickness * area)).toBeCloseTo(1, 2);
-    const total = bodies.surfaces.reduce((v, f) => v + signedVolume(f.triangles), 0);
-    expect(total - bodies.overlap).toBeCloseTo(bodies.cavity, 4);
+  it("im geraden Bereich sind die Lamellen Strahlen vom Fokus unter φ = f·α, am Mund auf dem Mundbogen", () => {
+    const v = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 200 } }));
+    v.paths.forEach((p, i) => {
+      for (const [x, z] of p) expect(Math.atan2(x, z - s.zFocus)).toBeCloseTo(v.fractions[i] * s.alpha2, 9);
+      const [xe, ze] = p[VANE_SAMPLES];
+      expect(Math.hypot(xe, ze - s.zFocus)).toBeCloseTo(s.arcR, 6);
+    });
   });
 
-  it("jede Lamelle liegt in ihrer Ebene durch den Fokus, ihre Dicke steht senkrecht dazu", () => {
-    bodies.surfaces.forEach((f, i) => {
-      const phi = vanes.phis[i], c = Math.cos(phi), sn = Math.sin(phi);
-      for (const [x, , z] of f.triangles.flat()) {
-        const side = x * c - (z - s.zFocus) * sn;   // Abstand zur Mittelebene
-        expect(Math.abs(side)).toBeLessThanOrEqual(vanes.thickness / 2 + 1e-9);
-        const r = x * sn + (z - s.zFocus) * c;
-        expect(r).toBeGreaterThanOrEqual(vanes.rStart - 1e-6);
-        expect(r).toBeLessThanOrEqual(s.arcR + 1e-6);
+  it("im Eingang folgen die Lamellen den Wellenfronten: jeder Punkt liegt bei f·θ auf dem Bogen, der Weg ist stetig", () => {
+    const v = resolveVanes(s, spec({ count: 2, start: { mode: "z", value: 0 }, end: { mode: "z", value: 150 } }));
+    v.paths.forEach((p, i) => {
+      const off = p.length - (VANE_SAMPLES + 1);   // verlängerter erster Punkt in der Throat-Ebene
+      for (let k = 0; k <= VANE_SAMPLES; k++) {
+        const w = wavefrontAtAxis(s, v.zStart + (v.zEnd - v.zStart) * k / VANE_SAMPLES);
+        const [x, z] = p[k + off];
+        expect(Math.hypot(x, z - w.zCenter)).toBeCloseTo(w.radius, 9);
+        expect(Math.atan2(x, z - w.zCenter)).toBeCloseTo(v.fractions[i] * w.halfAngle, 9);
+        if (k) expect(Math.hypot(x - p[k + off - 1][0], z - p[k + off - 1][1])).toBeLessThan(10);
       }
     });
   });
 
-  it("Höhe folgt dem Luftkanal: oben und unten genau e in die Wand, nie bis an die Außenfläche", () => {
-    const e = Math.min(3, 0.4 * WALL);
-    expect(e).toBeLessThan(WALL);
-    const f = bodies.surfaces[1], phi = vanes.phis[1];
-    const hs = f.triangles.flat().map(p => ({ r: p[0] * Math.sin(phi) + (p[2] - s.zFocus) * Math.cos(phi), h: p[1] }));
-    for (const { r, h } of hs) expect(Math.abs(h)).toBeLessThanOrEqual(profile(s.zFocus + r) + e + 0.05);
-    // Mitte der Lamelle: höchster Punkt bei r = Mitte ≈ Profil + e
-    const mid = (vanes.rStart + vanes.rEnd) / 2;
-    const near = hs.filter(p => Math.abs(p.r - mid) < 6).map(p => p.h);
-    expect(Math.max(...near)).toBeGreaterThan(profile(s.zFocus + mid) + e - 0.5);
+  it("Ende am Mund, nach z oder bei einer Kanalbreite", () => {
+    expect(resolveVanes(s, spec()).zEnd).toBeCloseTo(s.zApex, 9);
+    const z = resolveVanes(s, spec({ end: { mode: "z", value: 250 } }));
+    expect(z.zEnd).toBeCloseTo(250, 9);
+    const ch = resolveVanes(s, spec({ end: { mode: "channel", value: 100 } }));
+    expect(ch.channelEnd).toBeCloseTo(100, 6);
+    expect(ch.endLimited).toBe(false);
+    // so breit wird der Kanal nie: Ende am Mund, als begrenzt gemeldet
+    const wide = resolveVanes(s, spec({ end: { mode: "channel", value: 1e6 } }));
+    expect(wide.zEnd).toBeCloseTo(s.zApex, 9);
+    expect(wide.endLimited).toBe(true);
   });
 
+  it("Beginn bei einer Hornbreite bzw. Kanalbreite: die Maße stimmen mit den Angaben überein; Hornbreite am Mund = 2·xMouth", () => {
+    expect(resolveVanes(s, spec({ start: { mode: "width", value: 300 } })).widthStart).toBeCloseTo(300, 6);
+    expect(resolveVanes(s, spec({ start: { mode: "channel", value: 60 } })).channelStart).toBeCloseTo(60, 6);
+    expect(resolveVanes(s, spec()).widthEnd).toBeCloseTo(2 * s.xMouth, 6);
+    // Hornbreite am Throat = Throat-Durchmesser
+    expect(resolveVanes(s, spec({ start: { mode: "z", value: 0 } })).widthStart).toBeCloseTo(2 * RT, 6);
+  });
+
+  it("Begrenzung: vor dem Throat und hinter dem Mund; zu kurze Lamelle ist nicht ok und hat keine Wege", () => {
+    const early = resolveVanes(s, spec({ start: { mode: "z", value: -50 } }));
+    expect(early.zStart).toBeCloseTo(zThroat, 9);
+    expect(early.startLimited).toBe(true);
+    const late = resolveVanes(s, spec({ start: { mode: "z", value: 5000 } }));
+    expect(late.zStart).toBeCloseTo(s.zApex, 9);
+    expect(late.ok).toBe(false);
+    expect(late.paths).toEqual([]);
+  });
+
+  it("lichte Kanalbreite: nie weniger als 1 mm am Beginn, auch bei vielen dicken Lamellen am Throat", () => {
+    const v = resolveVanes(s, spec({ count: 9, thickness: 8, start: { mode: "z", value: 0 } }));
+    expect(v.channelStart).toBeGreaterThanOrEqual(1 - 1e-6);
+    expect(v.zStart).toBeGreaterThan(zThroat);
+    expect(v.startLimited).toBe(true);
+  });
+
+  it("vaneValue rechnet Betriebsarten um; die Bereiche reichen vom Throat bis zum Mund", () => {
+    for (const mode of ["width", "channel"]) {
+      const value = vaneValue(s, 3, 2, mode, 260);
+      expect(resolveVanes(s, spec({ count: 3, start: { mode, value } })).zStart).toBeCloseTo(260, 5);
+    }
+    const ranges = vaneRanges(s, 2, 2);
+    expect(ranges.z[0]).toBe(0);   // Beginn in der Throat-Ebene
+    expect(ranges.z[1]).toBeCloseTo(s.zApex, 6);
+    expect(ranges.width[0]).toBeCloseTo(2 * RT, 6);
+    expect(ranges.width[1]).toBeCloseTo(2 * s.xMouth, 6);
+  });
+
+  it("auch ohne Traktrix und mit Klothoide: Beginn am Throat gelöst, Wege innerhalb der Wand", () => {
+    for (const sol of [solveHorn(500, 0, RT, 182, 90), createHornMath(140, { clothoid: 30 }).solveHorn(500, 60, RT, 182, 90)]) {
+      const v = resolveVanes(sol, spec({ count: 4, start: { mode: "z", value: 0 } }));
+      expect(v.ok).toBe(true);
+      for (const p of v.paths) for (const [x, z] of p) {
+        expect(z).toBeGreaterThanOrEqual(-1e-9);
+        expect(Math.abs(x)).toBeLessThan(sol.xMouth + 1e-6);
+      }
+    }
+  });
+});
+
+describe("vaneOutline", () => {
+  it("zwei Seitenlinien im Abstand der Dicke, senkrecht zur Mittellinie", () => {
+    const { left, right } = vaneOutline([[0, 0], [0, 10], [0, 20]], 4);
+    expect(left.map(p => p[0])).toEqual([-2, -2, -2]);
+    expect(left.map(p => p[1])).toEqual([0, 10, 20]);
+    expect(right.map(p => p[0])).toEqual([2, 2, 2]);
+  });
+});
+
+describe("vaneBodies: Körper", () => {
+  for (const [name, vanes] of [
+    ["ab z = 160 (gerader Bereich)", resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } }))],
+    ["ab dem Throat (gekrümmt im Eingang)", resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 0 } }))],
+  ]) {
+    describe(name, () => {
+      const bodies = vaneBodies(s, airTris(), vanes, WALL);
+
+      it("je Lamelle ein geschlossener, einheitlich orientierter Körper mit positivem Volumen", () => {
+        expect(bodies.count).toBe(3);
+        for (const f of bodies.surfaces) {
+          expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 });
+          expect(signedVolume(f.triangles)).toBeGreaterThan(0);
+          expect(f.faces.flat()).toHaveLength(f.triangles.length);
+        }
+      });
+
+      it("jede Fläche ist eben (STEP): alle Ecken auf der Ebene des ersten Dreiecks", () => {
+        for (const f of bodies.surfaces) for (const face of f.faces) {
+          const [a, b, c] = face[0];
+          const n = [(b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]), (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]), (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])];
+          const len = Math.hypot(...n);
+          for (const p of face.flat()) expect(Math.abs((n[0] * (p[0] - a[0]) + n[1] * (p[1] - a[1]) + n[2] * (p[2] - a[2])) / len)).toBeLessThan(1e-6);
+        }
+      });
+
+      it("Luftanteil = Dicke × Fläche in (Weg, Höhe); Überlapp = Dicke × 2e × Weglänge", () => {
+        const e = Math.min(3, 0.4 * WALL);
+        let area = 0, length = 0;
+        for (const path of vanes.paths) {
+          // Fläche der Mittelebene: ∫ 2·h ds mit der Höhenregel des Netzes h(x, z) = Profil(zFocus + Abstand zum Fokus)
+          const K = 2000, segments = path.length - 1;
+          for (let k = 0; k < K; k++) {
+            const seg = (k + 0.5) / K * segments, i = Math.min(segments - 1, Math.floor(seg)), f = seg - i;
+            const x = path[i][0] + f * (path[i + 1][0] - path[i][0]), z = path[i][1] + f * (path[i + 1][1] - path[i][1]);
+            const ds = Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]) * segments / K;
+            area += 2 * profile(s.zFocus + focusRadius(s, x, z)) * ds;
+            length += ds;
+          }
+        }
+        expect(bodies.cavity / (vanes.thickness * area)).toBeCloseTo(1, 2);
+        expect(bodies.overlap / (vanes.thickness * 2 * e * length)).toBeCloseTo(1, 3);
+        const total = bodies.surfaces.reduce((v, f) => v + signedVolume(f.triangles), 0);
+        expect(total - bodies.overlap).toBeCloseTo(bodies.cavity, 3);
+      });
+
+      it("Höhe folgt dem Luftkanal: oben und unten höchstens e über dem Profil, nie bis an die Außenfläche", () => {
+        const e = Math.min(3, 0.4 * WALL);
+        expect(e).toBeLessThan(WALL);
+        for (const f of bodies.surfaces) for (const [x, h, z] of f.triangles.flat()) {
+          expect(z).toBeGreaterThanOrEqual(-vanes.thickness);
+          expect(Math.abs(h)).toBeLessThanOrEqual(profile(s.zFocus + focusRadius(s, x, z)) + e + 0.25);
+        }
+      });
+    });
+  }
+
   it("ohne Wandstärke oder mit unlösbarer Länge keine Körper", () => {
+    const vanes = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } }));
     expect(vaneBodies(s, airTris(), vanes, 0).count).toBe(0);
     expect(vaneBodies(s, airTris(), { ...vanes, ok: false }, WALL).count).toBe(0);
     expect(vaneBodies(s, airTris(), null, WALL).count).toBe(0);
   });
 
-  it("auch mit Verrundung, rundem Throat und gerundeten Mundecken geschlossen", () => {
+  it("auch mit Verrundung, rundem Throat und gerundeten Mundecken geschlossen, ab dem Throat", () => {
     const fillet = computeFillet(s, RT, H_MOUTH, "exponential", 0.5, 100);
     const prof = makeProfile(s, RT, H_MOUTH, "exponential", 0.5, fillet);
     const throat = throatMorph(s, RT, null);
     const morph = mouthRounding(s, prof, throat, 40);
-    const v = resolveVanes(s, spec({ count: 4, start: { mode: "z", value: 150 } }));
+    const v = resolveVanes(s, spec({ count: 4, start: { mode: "z", value: 0 } }));
     const b = vaneBodies(s, airTris(s, prof, fillet, morph), v, WALL);
     expect(b.count).toBe(4);
     for (const f of b.surfaces) expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 });
@@ -156,7 +238,7 @@ describe("vaneBodies: Körper", () => {
 });
 
 describe("Schale und Volumen mit Lamellen", () => {
-  const vanes = resolveVanes(s, spec({ count: 2, start: { mode: "z", value: 160 } }));
+  const vanes = resolveVanes(s, spec({ count: 2, start: { mode: "z", value: 0 } }));
   const base = { s, rt: RT, hMouth: H_MOUTH, curve: "exponential", hypexT: 0.5, fillet: null, wall: WALL };
 
   it("Lamellen stehen als eigene Flächen im Netz (Abschnitt lamellen), der Rest bleibt unverändert", () => {

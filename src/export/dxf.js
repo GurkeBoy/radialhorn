@@ -6,6 +6,7 @@
 // damit CAD-Systeme glatte Körper daraus erzeugen.
 import { hasTraktrix, hasClothoid, traktrixPoints, clothoidPoints, makeProfile } from "../horn-math.js";
 import { buildShell } from "../bodies.js";
+import { vaneOutline } from "../vanes.js";
 import { linspace } from "../utils.js";
 import { fitBSpline } from "./bspline.js";
 import { downloadFile } from "./download.js";
@@ -102,13 +103,12 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
       else if (klo.length > 1) out.push(dxfSpline(klo.map(([x, z]) => [z, sign * x]), "Draufsicht_Klothoide"));
       out.push(dxfLine([s.zTrans, sign * s.xTrans], [s.zMouth, sign * s.xMouth], "Draufsicht_Gerade"));
     });
-    // Lamellen: Umriss jeder Platte (Länge × Dicke) in der Draufsicht, Strahlen vom Fokus
+    // Lamellen: Umriss jeder Platte in der Draufsicht (Seitenlinien und Stirnen entlang der Wellenfronten)
     if (wall > 0 && vanes?.ok && !s.round) {
-      for (const phi of vanes.phis) {
-        const c = Math.cos(phi), sn = Math.sin(phi), hw = vanes.thickness / 2;
-        const at = (r, side) => [s.zFocus + r * c - side * sn, r * sn + side * c];
-        const box = [[vanes.rStart, hw], [vanes.rEnd, hw], [vanes.rEnd, -hw], [vanes.rStart, -hw]].map(([r, side]) => at(r, side));
-        box.forEach((p, i) => out.push(dxfLine(p, box[(i + 1) % 4], "Draufsicht_Lamellen")));
+      for (const center of vanes.paths) {
+        const { left, right } = vaneOutline(center, vanes.thickness);
+        const box = [...left, ...right.slice().reverse()].map(([x, z]) => [z, x]);   // DXF der Draufsicht: [z, x]
+        box.forEach((p, i) => out.push(dxfLine(p, box[(i + 1) % box.length], "Draufsicht_Lamellen")));
       }
     }
   }

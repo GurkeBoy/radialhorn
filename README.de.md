@@ -37,9 +37,9 @@ Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.
   Gitter, mit Treiber und Raumecke als Bezug.
 - **Ausführung:** Wandstärke, gerundete Außenkanten und ein runder Flansch am Throat mit Bohrbild zum Anschrauben des
   Treibers – optional mit Stützrippen zwischen den Bohrungen (so viele wie Bohrungen, auf der Hornseite) und
-  gerundetem Flanschrand. Optional Lamellen (Radialhorn): dünne senkrechte Platten durch den Fokus, die die Wellenfront
-  in gleich breite Sektoren teilen und den Schall weiter streuen; Anzahl, Dicke, Beginn und Ende nach z, Hornbreite
-  oder Kanalbreite einstellbar.
+  gerundetem Flanschrand. Optional Lamellen (Radialhorn): dünne senkrechte Platten, die den Wellenfronten vom Throat bis
+  zum Mund folgen und sie in gleiche Winkelsektoren teilen, um den Schall weiter zu streuen; Anzahl, Dicke, Beginn und
+  Ende nach z, Hornbreite oder Kanalbreite einstellbar.
 - **Frequenzgang (1D-Simulation):** Webster-Horngleichung per Transfermatrizen aus der Wellenfrontfläche S(x);
   Treiber mit Thiele-Small-Parametern und Kompressionskammer; Abstrahlung in 2π (exakt) oder 4π / π / π/2 (Näherung).
   SPL bei 1 m / 2,83 V und elektrische Impedanz als Diagramm, Export als CSV.

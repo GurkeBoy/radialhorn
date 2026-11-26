@@ -1285,7 +1285,7 @@ export function flangeSectionOutline(inner, R, d) {
  * rundet den Luftkanal (innen r) und die Außenkanten mit r + edgeR (outerRows).
  * @param vanes  Lamellen (vanes.js, resolveVanes) oder null
  * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[], ribs: { count, length, overlap, shapes, thickness } | null,
- *   vanes: { count, overlap, cavity, shapes, thickness } | null }}
+ *   vanes: { count, overlap, cavity, thickness } | null }}
  *   section: "traktrix" | "klothoide" | "linear" | "rim" | "flansch" | "lamellen"; ribs: Stützrippen des Flanschs (ihr
  *   Überlapp [mm³] mit Platte und Wand steckt doppelt im Netz-Volumen), vanes: Lamellen (overlap ebenso; cavity: ihr
  *   Volumen im Luftkanal)
@@ -1352,7 +1352,7 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
       ]),
     ],
     ribs: ribs && { count: ribs.count, length: ribs.length, overlap: ribs.overlap, shapes: ribs.shapes, thickness: layout.ribs.thickness },
-    vanes: vaneSet && vaneSet.count > 0 ? { count: vaneSet.count, overlap: vaneSet.overlap, cavity: vaneSet.cavity, shapes: vaneSet.shapes, thickness: vanes.thickness } : null,
+    vanes: vaneSet && vaneSet.count > 0 ? { count: vaneSet.count, overlap: vaneSet.overlap, cavity: vaneSet.cavity, thickness: vanes.thickness } : null,
   };
 }
 

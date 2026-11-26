@@ -377,14 +377,14 @@ export default function App() {
             <Slider label={t("vanes.thickness")} value={vaneThickness} min={0.5} max={10} step={0.5} unit="mm" onChange={setVaneThickness} />
             <SegmentedButtons options={VANE_START_MODES} labels={{ z: t("vanes.mode.z"), width: t("vanes.mode.width"), channel: t("vanes.mode.channel") }}
               value={vaneStartMode} onChange={changeVaneStartMode} />
-            <Slider label={t("vanes.start." + vaneStartMode)} value={Math.min(Math.max(vaneStart, Math.ceil(vaneLimits[vaneStartMode][0])), Math.floor(vaneLimits[vaneStartMode][1]))}
-              min={Math.ceil(vaneLimits[vaneStartMode][0])} max={Math.floor(vaneLimits[vaneStartMode][1])} step={1} unit="mm" onChange={setVaneStart} />
+            <Slider label={t("vanes.start." + vaneStartMode)} value={Math.min(Math.max(vaneStart, Math.floor(vaneLimits[vaneStartMode][0])), Math.ceil(vaneLimits[vaneStartMode][1]))}
+              min={Math.floor(vaneLimits[vaneStartMode][0])} max={Math.ceil(vaneLimits[vaneStartMode][1])} step={1} unit="mm" onChange={setVaneStart} />
             <SegmentedButtons options={VANE_END_MODES} labels={{ mouth: t("vanes.mode.mouth"), z: t("vanes.mode.z"), channel: t("vanes.mode.channel") }}
               value={vaneEndMode} onChange={changeVaneEndMode} />
-            {vaneEndMode !== "mouth" && <Slider label={t("vanes.end." + vaneEndMode)} value={Math.min(Math.max(vaneEnd, Math.ceil(vaneLimits[vaneEndMode][0])), Math.floor(vaneLimits[vaneEndMode][1]))}
-              min={Math.ceil(vaneLimits[vaneEndMode][0])} max={Math.floor(vaneLimits[vaneEndMode][1])} step={1} unit="mm" onChange={setVaneEnd} />}
+            {vaneEndMode !== "mouth" && <Slider label={t("vanes.end." + vaneEndMode)} value={Math.min(Math.max(vaneEnd, Math.floor(vaneLimits[vaneEndMode][0])), Math.ceil(vaneLimits[vaneEndMode][1]))}
+              min={Math.floor(vaneLimits[vaneEndMode][0])} max={Math.ceil(vaneLimits[vaneEndMode][1])} step={1} unit="mm" onChange={setVaneEnd} />}
             {vanes?.ok && <Note>{t("vanes.summary", {
-              sectors: vanes.count + 1, deg: (vanes.delta * 180 / Math.PI).toFixed(1), z0: vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0),
+              sectors: vanes.count + 1, deg: (vanes.delta * 180 / Math.PI).toFixed(1), z0: vanes.atThroat ? "0" : vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0),
               c0: vanes.channelStart.toFixed(0), c1: vanes.channelEnd.toFixed(0),
             })}</Note>}
             {vanes && !vanes.ok && <Warn>{t("warn.vanesNone")}</Warn>}

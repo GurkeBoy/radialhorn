@@ -113,7 +113,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   const massstab = SCALES.find(sc => Math.max(maxX, maxZ, profMaxH) / sc <= SHEET_MM) || 100;
   const mm2px = 96 / 25.4 / massstab;
   const { dimH, dimV, dimParallel } = dimensioning(massstab);
-  const path = (pts, color) => `<path d="${svgPath(pts, 2)}" fill="none" stroke="${color}" stroke-width="0.5"/>`;
+  const path = (pts, color, width = 0.5) => `<path d="${svgPath(pts, 2)}" fill="none" stroke="${color}" stroke-width="${width}"/>`;
   // Schnittflächen (Schale, Flansch): hell gefüllt, dünn umrandet, beide Seiten
   const cuts = (polys, map) => polys.flatMap(poly => [1, -1].map(sign =>
     `<path d="${svgPath(poly.map(([a, z]) => map(sign * a, z)), 2)} Z" fill="${C.cut}" stroke="${C.line}" stroke-width="0.3"/>`)).join("");
@@ -132,7 +132,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
       <line x1="${dsOX}" y1="${dsOY}" x2="${dsOX}" y2="${dsOY + maxZ}" stroke="${C.axis}" stroke-width="0.2" stroke-dasharray="3 2"/>
       ${opts.draufsicht && planOuter ? cuts(cutSections(wallPts, planOuter, flange), (x, z) => [dsOX + x, dsOY + z]) : ""}
       ${opts.draufsicht ? [1, -1].map(sign => path(wallPts.map(([x, z]) => [dsOX + sign * x, dsOY + z]), C.line)).join("") : ""}
-      ${opts.draufsicht && vanes ? vanes.phis.map(phi => `<line x1="${dsOX + vanes.rStart * Math.sin(phi)}" y1="${dsOY + s.zFocus + vanes.rStart * Math.cos(phi)}" x2="${dsOX + vanes.rEnd * Math.sin(phi)}" y2="${dsOY + s.zFocus + vanes.rEnd * Math.cos(phi)}" stroke="${C.line}" stroke-width="${vanes.thickness}"/>`).join("") : ""}
+      ${opts.draufsicht && vanes ? vanes.paths.map(p => path(p.map(([x, z]) => [dsOX + x, dsOY + z]), C.line, vanes.thickness)).join("") : ""}
       ${opts.mundbogen ? path(arcPts, C.arc) : ""}
       ${opts.fokus ? `<circle cx="${dsOX}" cy="${dsOY + s.zFocus}" r="0.7" fill="${C.arc}"/>` : ""}
       ${opts.bemassung ? [
@@ -190,7 +190,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
     [tr("pdf.corner"),         showRaumecke ? tr("pdf.yes") : tr("pdf.no")],
     [tr("pdf.wall"),           showWandstaerke ? wandstaerke + " mm" : "–"],
     ...(flange?.ribs ? [[tr("pdf.ribs"), tr("pdf.ribsValue", { n: flange.holes.count, w: flange.ribs.thickness, l: flange.ribs.length })]] : []),
-    ...(vanes ? [[tr("pdf.vanes"), tr("pdf.vanesValue", { n: vanes.count, t: vanes.thickness, z0: vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0), sectors: vanes.count + 1 })]] : []),
+    ...(vanes ? [[tr("pdf.vanes"), tr("pdf.vanesValue", { n: vanes.count, t: vanes.thickness, z0: vanes.atThroat ? "0" : vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0), sectors: vanes.count + 1 })]] : []),
   ];
   const kvRows = kv.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
 

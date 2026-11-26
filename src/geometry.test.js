@@ -196,8 +196,9 @@ describe("Lamellen", () => {
     expect(values.vanes.ok).toBe(true);
     expect(values.vanes.count).toBe(3);
     expect(values.vanes.zStart).toBeCloseTo(300, 9);
-    expect(values.vanes.rEnd).toBeCloseTo(values.s.arcR, 9);
-    expect(values.vanes.phis[1]).toBeCloseTo(0, 12);
+    expect(values.vanes.zEnd).toBeCloseTo(values.s.zApex, 9);
+    expect(values.vanes.fractions[1]).toBeCloseTo(0, 12);
+    expect(values.vanes.paths).toHaveLength(3);
   });
 
   it("ohne Wandstärke und beim runden Horn gibt es keine Lamellen", () => {

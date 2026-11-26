@@ -193,10 +193,8 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           return <DimAligned p1={[toX(xE), toY(zE)]} p2={[mRx, mY]} offset={DIM_FIRST}
             color={COLOR.wand} marker="url(#arrH)" label={`${t} mm`} />;
         })()}
-        {/* Lamellen: Strecken auf Strahlen vom Fokus, so dick wie die Platte */}
-        {vanes?.ok && vanes.phis.map(phi => <line key={phi}
-          x1={toX(vanes.rStart * Math.sin(phi))} y1={toY(s.zFocus + vanes.rStart * Math.cos(phi))}
-          x2={toX(vanes.rEnd * Math.sin(phi))} y2={toY(s.zFocus + vanes.rEnd * Math.cos(phi))}
+        {/* Lamellen: Mittellinien entlang der Wellenfronten, so dick wie die Platte */}
+        {vanes?.ok && vanes.paths.map((path, i) => <path key={i} d={svgPath(path.map(([x, z]) => [toX(x), toY(z)]))} fill="none"
           stroke={COLOR.lamelle} strokeWidth={Math.max(1.4, vanes.thickness * scale)} />)}
         {flange && <FlanschSchnitt flange={flange} map={(x, z) => [toX(x), toY(z)]} inner={innerWall} />}
 

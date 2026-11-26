@@ -37,8 +37,9 @@ each [release](https://github.com/GurkeBoy/radialhorn/releases). They are not co
   with driver and room corner as reference.
 - **Construction:** wall thickness, rounded outer edges, and a round throat flange with a bolt pattern for mounting
   the driver – optionally with support ribs between the bolt holes (as many as holes, on the horn side) and a rounded
-  flange rim. Optional vanes (radial horn): thin vertical plates through the focus that divide the wavefront into
-  equal sectors to spread the sound; count, thickness, start and end settable by z, horn width or channel width.
+  flange rim. Optional vanes (radial horn): thin vertical plates that follow the wavefronts from the throat to the mouth and
+  divide them into equal angular sectors to spread the sound; count, thickness, start and end settable by z, horn
+  width or channel width.
 - **Frequency response (1D simulation):** Webster horn equation solved by transfer matrices from the wavefront area
   S(x); driver from Thiele-Small parameters with throat (compression) chamber; radiation into 2π (exact) or 4π / π /
   π/2 (approximation). SPL at 1 m / 2.83 V and electrical impedance as a chart, export as CSV.
