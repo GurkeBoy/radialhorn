@@ -212,14 +212,26 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           fill="none" stroke={COLOR.dim} strokeWidth="0.8" />
         <text x={cx} y={fy + angleR * 0.5} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>{s.openingAngle}°</text>
 
-        {/* Winkel der Kanalöffnungen am Mund: Sektor zwischen der rechten Wand und der äußersten Lamelle (alle Sektoren gleich) */}
+        {/* Kanalwinkel am Mund (alle Sektoren sind dort gleich groß): Winkelmaß um den Fokus, nach den Bemaßungsregeln außerhalb der
+            Geometrie – Bogen 18 px hinter dem äußersten Punkt des Munds, Hilfslinien gestrichelt (3 3, 0,35) entlang der Lamellen
+            von 2 px hinter der Geometrie bis 2 px über den Bogen, Betrag 8 px außen am Bogen, parallel zur Maßlinie; alles in der
+            Farbe der Lamellen. Es wird ein Sektor bemaßt, der weder die Hilfslinien der Mundbreite (senkrecht über den Mundecken)
+            noch die Maßlinie unter dem Mund schneidet – sonst der äußerste. */}
         {vanes?.ok && (() => {
-          const a1 = s.alpha2, a0 = a1 - vanes.delta, r = angleR * 2.2, mid = (a0 + a1) / 2, rl = r + 9;
-          const pt = (a, rr) => `${cx + rr * Math.sin(a)},${fy + rr * Math.cos(a)}`;
+          const [oxE, oyE] = shellOuter ? [toX(shellOuter[shellOuter.length - 1][0]), toY(shellOuter[shellOuter.length - 1][1])] : [mRx, mY];
+          const r = Math.max(rp, Math.hypot(oxE - cx, oyE - fy)) + DIM_FIRST;
+          const a1 = s.alpha2, d = vanes.delta, cross = Math.asin(Math.min(1, Math.sin(a1) * rp / r)) - 0.02, axis = Math.acos(r / (r + 2)) + 0.02;
+          let k = 0;
+          for (let i = 0; i <= vanes.count; i++) if (a1 - i * d <= cross && a1 - (i + 1) * d >= axis) { k = i; break; }
+          const hi = a1 - k * d, lo = hi - d, mid = (hi + lo) / 2;
+          const pt = (ang, rr) => [cx + rr * Math.sin(ang), fy + rr * Math.cos(ang)];
+          const [tx, ty] = pt(mid, r + 8), [ax, ay] = pt(hi, r), [bx, by] = pt(lo, r);
+          const ext = ang => { const [x0, y0] = pt(ang, rp + 2), [x1, y1] = pt(ang, r + 2); return <line key={ang} x1={x0} y1={y0} x2={x1} y2={y1} stroke={COLOR.lamelle} strokeWidth="0.35" strokeDasharray="3 3" />; };
           return <g>
-            <path d={`M${pt(a1, r)} A${r},${r} 0 0 0 ${pt(a0, r)}`} fill="none" stroke={COLOR.lamelle} strokeWidth="0.8" />
-            <text x={cx + rl * Math.sin(mid)} y={fy + rl * Math.cos(mid)} textAnchor="start" fontSize="9" fill={COLOR.lamelle} fontFamily={FONT}>
-              {(vanes.delta * 180 / Math.PI).toFixed(1)}°</text>
+            {ext(hi)}{ext(lo)}
+            <path d={`M${ax},${ay} A${r},${r} 0 0 1 ${bx},${by}`} fill="none" stroke={COLOR.lamelle} strokeWidth="0.8" />
+            <text x={tx} y={ty} transform={`rotate(${-mid * 180 / Math.PI} ${tx} ${ty})`} textAnchor="middle" dominantBaseline="central"
+              fontSize="9" fill={COLOR.lamelle} fontFamily={FONT}>{(d * 180 / Math.PI).toFixed(1)}°</text>
           </g>;
         })()}
 
