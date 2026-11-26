@@ -6,7 +6,7 @@ import { useT } from "../i18n.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { COLOR, FONT, UI } from "../theme.js";
-import { useSize } from "../hooks.js";
+import { useSize, usePersistentState } from "../hooks.js";
 
 const SECTION_COLOR = { traktrix: COLOR.trak, klothoide: COLOR.klo, linear: COLOR.horn, rim: COLOR.wand, flansch: COLOR.flansch, lamellen: COLOR.lamelle };
 
@@ -220,10 +220,11 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
   const containerRef = useRef(null);
   const { w, h } = useSize(containerRef);
   const three = useRef(null);
-  const [wireframe, setWireframe] = useState(false);
-  const [showDriver, setShowDriver] = useState(true);
-  const [showCorner, setShowCorner] = useState(true);
-  const [showCentroid, setShowCentroid] = useState(true);
+  // Ansichtsschalter werden gespeichert: nach Strg+R oder Neustart gilt der letzte Zustand
+  const [wireframe, setWireframe] = usePersistentState("view3d.wireframe", false);
+  const [showDriver, setShowDriver] = usePersistentState("view3d.driver", true);
+  const [showCorner, setShowCorner] = usePersistentState("view3d.corner", true);
+  const [showCentroid, setShowCentroid] = usePersistentState("view3d.centroid", true);
 
   const meshInput = useMemo(() => s ? {
     s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, morph,
