@@ -277,7 +277,7 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
 
   const replace = (t, key, group) => {
     if (t[key]) { t.scene.remove(t[key]); disposeGroup(t[key]); }
-    t[key] = group;
+    t[key] = group || null;   // nie "" oder false: sonst scheitert t.reference?.children.forEach, wenn s fehlt (ungültige Parameter)
     if (group) t.scene.add(group);
   };
 
