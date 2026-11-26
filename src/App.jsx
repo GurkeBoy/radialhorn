@@ -411,7 +411,7 @@ export default function App() {
             {vanes?.ok && vanes.stageStarts.length > 0 && <Note>{t("vanes.staggerSummary", { total: vanes.count, base: vanes.baseCount, zs: vanes.stageStarts.map(z => z.toFixed(0)).join(" / ") })}</Note>}
             {vanes?.ok && vanes.staggerLimited && <Warn>{t("warn.vanesStaggerLimited")}</Warn>}
             {vanes?.ok && <Note>{t("vanes.summary", {
-              sectors: vanes.count + 1, deg: (vanes.delta * 180 / Math.PI).toFixed(1), z0: vanes.atThroat ? "0" : vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0),
+              sectors: vanes.count + 1, deg: (vanes.endAngle * 180 / Math.PI).toFixed(1), z0: vanes.atThroat ? "0" : vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0),
               c0: vanes.channelStart.toFixed(0), c1: vanes.channelEnd.toFixed(0),
             })}</Note>}
             {vanes && !vanes.ok && <Warn>{t("warn.vanesNone")}</Warn>}
@@ -555,7 +555,7 @@ const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroa
           <Stat label={t("key.arcLength")} value={s.arcLen.toFixed(1) + " mm"} />
           <Stat label={t("key.vertAngle")} value={verticalMouthAngle(s, profile).toFixed(1) + "°"} />
           <Stat label={t("key.horizAngle")} value={s.openingAngle + "°"} />
-          {vanes?.ok && <Stat label={t("key.channelAngle")} value={(vanes.delta * 180 / Math.PI).toFixed(1) + "°"} />}
+          {vanes?.ok && <Stat label={t("key.channelAngle")} value={(vanes.endAngle * 180 / Math.PI).toFixed(1) + "°"} />}
         </>}
       </div>
       <Group title={t("key.frequencies")}>

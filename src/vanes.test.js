@@ -237,6 +237,34 @@ describe("vaneBodies: Körper", () => {
   });
 });
 
+describe("Kanalwinkel am Ende der Lamellen", () => {
+  it("bis zum Mund (oder im geraden Bereich): der Sektorwinkel 2α/(n + 1)", () => {
+    const v = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 0 } }));
+    expect(v.endAngle).toBeCloseTo(2 * s.alpha2 / 4, 12);
+    expect(v.endAngle).toBeCloseTo(v.delta, 12);
+    expect(v.endWave.zCenter).toBeCloseTo(s.zFocus, 6);
+    expect(v.endWave.radius).toBeCloseTo(s.arcR, 6);
+    const straight = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 100 }, end: { mode: "z", value: 250 } }));
+    expect(straight.endAngle).toBeCloseTo(2 * s.alpha2 / 4, 9);
+  });
+
+  it("enden die Lamellen im Traktrix-Eingang, wird der Winkel kleiner: 2θ/(n + 1) mit dem Halbwinkel der Wellenfront dort", () => {
+    const v = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 0 }, end: { mode: "z", value: 30 } }));
+    expect(v.ok).toBe(true);
+    const w = wavefrontAtAxis(s, v.zEnd);
+    expect(w.halfAngle).toBeLessThan(s.alpha2);
+    expect(v.endAngle).toBeCloseTo(2 * w.halfAngle / 4, 12);
+    expect(v.endAngle).toBeLessThan(v.delta);
+    // die Enden der Lamellen liegen im Winkelabstand endAngle auf dem Bogen der Wellenfront
+    const ends = v.paths.map(p => p.at(-1));
+    const ang = ([px, pz]) => Math.atan2(px, pz - v.endWave.zCenter);
+    for (let i = 1; i < ends.length; i++) expect(ang(ends[i]) - ang(ends[i - 1])).toBeCloseTo(v.endAngle, 6);
+    // je weiter hinten sie enden, desto größer der Winkel
+    const later = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 0 }, end: { mode: "z", value: 60 } }));
+    expect(later.endAngle).toBeGreaterThan(v.endAngle);
+  });
+});
+
 describe("Spitzen (druckbarer Keil an Beginn und Ende)", () => {
   const length = p => p.slice(1).reduce((l, q, k) => l + Math.hypot(q[0] - p[k][0], q[1] - p[k][1]), 0);
   const tip = (start, end, len = 12, over = {}) => spec({ count: 3, start: { mode: "z", value: 160 }, tip: { start, end, length: len }, ...over });

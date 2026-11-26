@@ -146,7 +146,9 @@ function staggerStarts(s, n, t, stagger, zStart, zEnd) {
  *   { count, baseCount, thickness, fractions, stages, stageStarts, staggerLimited, delta, zStart, zEnd, atThroat, widthStart,
  *     widthEnd, channelStart, channelEnd, startLimited, endLimited, ok, paths, widths, tip } – Winkel im Bogenmaß, Längen
  *   in mm; count = tatsächliche Zahl der Lamellen (mit Staffelung (count + 1)·2^Stufen − 1, zu kurze entfallen); baseCount =
- *   Lamellen ab dem Beginn; stages = je Lamelle die Stufe (0 = ab dem Beginn); delta = Sektorwinkel am Mund; zStart/zEnd =
+ *   Lamellen ab dem Beginn; stages = je Lamelle die Stufe (0 = ab dem Beginn); delta = Sektorwinkel am Mund; endAngle =
+ *   Winkel, in dem sich ein Kanal am Ende der Lamellen öffnet (2θ/(count + 1) mit dem Halbwinkel θ der Wellenfront bei zEnd;
+ *   im geraden Bereich und am Mund gleich delta, im Eingang kleiner); endWave = { zCenter, radius, halfAngle } dieser Wellenfront; zStart/zEnd =
  *   Achsenstellen der ersten und letzten Wellenfront; atThroat: die Lamellen der Stufe 0 beginnen an der Throat-Wellenfront und
  *   sind bis in die Throat-Ebene (z = 0) verlängert; paths = je Lamelle die Mittellinie [[x, z], …] mit VANE_SAMPLES + 1 Punkten
  *   (atThroat: ein Punkt mehr, in der Throat-Ebene; mit Spitzen Punkte am Spitzenende; leer, wenn nicht ok); ok = lang genug für
@@ -202,6 +204,7 @@ export function resolveVanes(s, spec) {
   return {
     count, baseCount: n, thickness: t, fractions: list.map(v => v.f), stages: list.map(v => v.stage), stageStarts: stagger.starts,
     staggerLimited: stagger.limited, delta: 2 * s.alpha2 / (count + 1),
+    endAngle: 2 * b.w.halfAngle / (count + 1), endWave: { zCenter: b.w.zCenter, radius: b.w.radius, halfAngle: b.w.halfAngle },
     zStart, zEnd, atThroat, widthStart: a.width, widthEnd: b.width, channelStart: a.channel, channelEnd: b.channel,
     startLimited: start.limited, endLimited: end.limited,
     ok, paths, widths, tip,
