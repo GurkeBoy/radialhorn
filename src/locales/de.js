@@ -210,7 +210,6 @@ export default {
   "volume.air": "Luftvolumen",
   "volume.shell": "Wandmaterial",
   "volume.outer": "Außenkörper",
-  "volume.centroidAir": "Schwerpunkt Luft",
   "volume.centroidShell": "Schwerpunkt Schale",
   "volume.hint": "Aus dem 3D-Netz: Luftvolumen ab Throat ohne Treiberkammer; Wandmaterial inkl. Flansch",
   "volume.noWall": "Ohne Wandstärke nur das Luftvolumen (ab Throat, ohne Treiberkammer)",

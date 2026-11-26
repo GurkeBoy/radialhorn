@@ -210,7 +210,6 @@ export default {
   "volume.air": "Air volume",
   "volume.shell": "Wall material",
   "volume.outer": "Outer body",
-  "volume.centroidAir": "Centre of mass, air",
   "volume.centroidShell": "Centre of mass, shell",
   "volume.hint": "From the 3D mesh: air volume from the throat, without the driver chamber; wall material incl. flange",
   "volume.noWall": "Without wall thickness only the air volume (from the throat, without driver chamber)",

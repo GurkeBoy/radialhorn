@@ -521,7 +521,7 @@ export default function App() {
           </ViewPanel>
           <ViewPanel flex={1}>
             <Ansicht3D s={s} rt={rt} dw={s?.round ? 4 * rt : g.dw} dh={s?.round ? 2 * rt + 10 : g.dh} hMouth={s?.round ? 2 * s.xMouth : g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke && !s?.round} vanes={vanes}
-              centroid={wall > 0 ? volumes?.shellCentroid : volumes?.airCentroid} />
+              centroid={volumes?.shellCentroid} />
           </ViewPanel>
         </div>
         {(!round || sim) && <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
@@ -586,9 +586,7 @@ const Volumes = memo(function Volumes({ volumes, wall, t }) {
         <Stat label={t("volume.air")} value={litres(volumes?.air)} />
         <Stat label={t("volume.shell")} value={litres(volumes?.shell)} />
         <Stat label={t("volume.outer")} value={litres(volumes?.outer)} />
-        {(wall > 0 ? volumes?.shellCentroid : volumes?.airCentroid) && (
-          <Stat label={t(wall > 0 ? "volume.centroidShell" : "volume.centroidAir")} value={"z = " + (wall > 0 ? volumes.shellCentroid : volumes.airCentroid)[2].toFixed(1) + " mm"} />
-        )}
+        {wall > 0 && volumes?.shellCentroid && <Stat label={t("volume.centroidShell")} value={"z = " + volumes.shellCentroid[2].toFixed(1) + " mm"} />}
       </div>
       <Note>{volumes?.shell == null ? t("volume.noWall") : t("volume.hint")}</Note>
     </Card>

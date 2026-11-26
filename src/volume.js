@@ -35,18 +35,19 @@ const momentsOf = geometry => meshMoments(geometry.surfaces.flatMap(triangulate)
 
 /**
  * @param input  { s, rt, hMouth, curve, hypexT, fillet, morph, wall, flange, edgeR, vanes }
- * @returns {{ air: number, shell: number|null, outer: number|null, airCentroid: number[], shellCentroid: number[]|null }}
- *   Rauminhalte in mm³; shell (Wandmaterial inkl. Flansch) und outer (Luft + Wand) nur bei wall > 0; Schwerpunkte
- *   [x, h, z] in mm (Schale: gleichmäßige Dichte; Rippen überlappen die Wand ein wenig, ihr Überlapp zählt im Moment doppelt)
+ * @returns {{ air: number, shell: number|null, outer: number|null, shellCentroid: number[]|null }}
+ *   Rauminhalte in mm³; shell (Wandmaterial inkl. Flansch) und outer (Luft + Wand) nur bei wall > 0; Schwerpunkt der Schale
+ *   [x, h, z] in mm (gleichmäßige Dichte; Rippen und Lamellen überlappen die Wand ein wenig, ihr Überlapp zählt im Moment doppelt).
+ *   Einen Luftschwerpunkt gibt es nicht: ohne Wandstärke ist der Entwurf kein Bauteil, der Schwerpunkt wäre ohne Aussage.
  */
 export function computeVolumes({ s, rt, hMouth, curve, hypexT, fillet, morph = null, wall, flange = null, edgeR = 0, vanes = null }) {
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
-  const airMoments = momentsOf(buildAir(s, rt, profile, fillet, morph));
-  if (!(wall > 0)) return { air: airMoments.volume, shell: null, outer: null, airCentroid: airMoments.centroid, shellCentroid: null };
+  const airVolume = meshVolume(buildAir(s, rt, profile, fillet, morph).surfaces.flatMap(triangulate));
+  if (!(wall > 0)) return { air: airVolume, shell: null, outer: null, shellCentroid: null };
   const geometry = buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, undefined, vanes);
   const shellMoments = momentsOf(geometry);
   // Rippen und Lamellen reichen in Platte bzw. Wand hinein; Lamellen nehmen dem Luftkanal ihr Volumen
   const shell = shellMoments.volume - (geometry.ribs?.overlap ?? 0) - (geometry.vanes?.overlap ?? 0);
-  const air = airMoments.volume - (geometry.vanes?.cavity ?? 0);
-  return { air, shell, outer: air + shell, airCentroid: airMoments.centroid, shellCentroid: shellMoments.centroid };
+  const air = airVolume - (geometry.vanes?.cavity ?? 0);
+  return { air, shell, outer: air + shell, shellCentroid: shellMoments.centroid };
 }
