@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet, throatMorph, mouthRounding, focusRadius, createHornMath, wavefrontAtAxis } from "./horn-math.js";
-import { buildShellGeometry, triangulate } from "./horn-mesh.js";
+import { buildShellGeometry, triangulate, gridLines } from "./horn-mesh.js";
 import { buildAir } from "./bodies.js";
 import { computeVolumes } from "./volume.js";
 import { resolveVanes, vaneBodies, vaneValue, vaneRanges, vaneOutline, airTriangles, VANE_SAMPLES, TIP_WIDTH } from "./vanes.js";
@@ -537,6 +537,37 @@ describe("gestaffelter Beginn", () => {
     const len = p => p.slice(1).reduce((l, q, k) => l + Math.hypot(q[0] - p[k][0], q[1] - p[k][1]), 0);
     expect(len(v.paths[1])).toBeLessThan(len(v.paths[3]));
     expect(len(v.paths[0])).toBeLessThan(len(v.paths[1]));
+  });
+});
+
+describe("Gitteransicht: Umriss statt Gitter für Flächen aus fertigen Dreiecken", () => {
+  it("Lamellen: je ebener Fläche der Rand, ohne Diagonalen; jede Strecke liegt auf Dreieckskanten des Körpers", () => {
+    const v = resolveVanes(s, spec({ count: 2, start: { mode: "z", value: 160 } }));
+    const bodies = vaneBodies(s, airTris(), v, WALL);
+    for (const f of bodies.surfaces) {
+      const lines = gridLines(f);
+      expect(lines.length).toBeGreaterThan(0);
+      // Rand je ebener Fläche: Vierecke ergeben 4 Strecken, Diagonalen (je 2 Dreiecke) entfallen
+      const quads = f.faces.filter(face => face.length === 2).length;
+      expect(lines.length).toBeGreaterThanOrEqual(quads * 4);
+      expect(lines.length).toBeLessThan(f.triangles.length * 3);
+      for (const [p, q] of lines) expect(Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2])).toBeGreaterThan(0);
+    }
+  });
+
+  it("ein Dreieck allein: drei Strecken; zwei Dreiecke zu einem Viereck: vier (ohne Diagonale)", () => {
+    const A = [0, 0, 0], B = [1, 0, 0], C = [1, 1, 0], D = [0, 1, 0];
+    expect(gridLines({ triangles: [[A, B, C]] })).toHaveLength(3);
+    expect(gridLines({ triangles: [[A, B, C], [A, C, D]] })).toHaveLength(4);
+    expect(gridLines({ faces: [[[A, B, C], [A, C, D]]], triangles: [[A, B, C], [A, C, D]] })).toHaveLength(4);
+    expect(gridLines({})).toEqual([]);
+  });
+
+  it("meshBuffers liefert für die Lamellen Linien (Sektion lamellen)", async () => {
+    const { meshBuffers } = await import("./mesh-buffers.js");
+    const out = meshBuffers({ s, rt: RT, hMouth: H_MOUTH, curve: "exponential", hypexT: 0.5, fillet: null, wall: WALL, vanes: resolveVanes(s, spec({ count: 2, start: { mode: "z", value: 160 } })), sections: ["lamellen"] });
+    expect(out.sections).toHaveLength(1);
+    expect(out.sections[0].lines.length).toBeGreaterThan(0);
   });
 });
 

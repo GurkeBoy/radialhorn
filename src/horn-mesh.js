@@ -1385,10 +1385,28 @@ export function triangulate({ grid, triangles, outward, oriented }) {
   return tris;
 }
 
-/** Gitterlinien (Zeilen und Spalten) einer Fläche als Liste von Strecken [p, q]. */
-export function gridLines({ grid }) {
+/** Randkanten eines Dreiecksnetzes: die Strecken, die nur zu einem Dreieck gehören (innere Diagonalen entfallen). */
+function outlineEdges(tris) {
+  const key = p => p.map(v => Math.round(v * 1e5)).join(",");
+  const count = new Map();
+  for (const [p, q, r] of tris) for (const [u, v] of [[p, q], [q, r], [r, p]]) {
+    const k = [key(u), key(v)].sort().join("|"), e = count.get(k);
+    if (e) e.n++; else count.set(k, { n: 1, seg: [u, v] });
+  }
+  return [...count.values()].filter(e => e.n === 1).map(e => e.seg);
+}
+
+/**
+ * Gitterlinien einer Fläche als Liste von Strecken [p, q]: bei einem Gitter Zeilen und Spalten; sonst (fertige Dreiecke – Lamellen,
+ * Rippen, Flanschplatten, Endflächen) der Umriss: je ebener Fläche (`faces`) deren Rand, ohne `faces` der Rand des ganzen Netzes.
+ */
+export function gridLines({ grid, faces, triangles }) {
   const segs = [];
-  if (!grid) return segs;
+  if (!grid) {
+    const groups = faces?.length ? faces : triangles?.length ? [triangles] : [];
+    for (const group of groups) segs.push(...outlineEdges(group));
+    return segs;
+  }
   for (let i = 0; i < grid.length; i++) {
     for (let j = 0; j < grid[i].length; j++) {
       if (j + 1 < grid[i].length) segs.push([grid[i][j], grid[i][j + 1]]);
