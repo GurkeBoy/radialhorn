@@ -237,6 +237,44 @@ describe("vaneBodies: Körper", () => {
   });
 });
 
+describe("Stufen automatisch", () => {
+  const auto = (end, over = {}) => spec({ count: 1, start: { mode: "z", value: 0 }, end, stagger: { stages: 1, auto: true, mode: "channel", channel: 35, z: [], ...over } });
+  const upTo = z => ({ mode: "z", value: z });
+
+  it("so viele Stufen wie bis zum Ende Platz haben: je weiter das Ende Richtung Mund, desto mehr Lamellenfronten", () => {
+    const counts = [60, 120, 200, 300].map(z => resolveVanes(s, auto(upTo(z))).stageStarts.length);
+    for (let i = 1; i < counts.length; i++) expect(counts[i]).toBeGreaterThanOrEqual(counts[i - 1]);
+    expect(counts[0]).toBeLessThan(counts.at(-1));
+    expect(counts.at(-1)).toBeGreaterThan(0);
+  });
+
+  it("jede Stufe beginnt vor dem Ende (mindestens 5 mm Lamelle), bei der eingestellten Kanalbreite der vorigen Anordnung; keine Lamelle entfällt", () => {
+    const v = resolveVanes(s, auto({ mode: "mouth", value: 0 }));
+    const S = v.stageStarts.length;
+    expect(S).toBeGreaterThan(0);
+    expect(v.count).toBe(2 * 2 ** S - 1);
+    v.stageStarts.forEach((z, i) => {
+      expect(z).toBeLessThanOrEqual(v.zEnd - 5 + 1e-9);
+      expect(vaneValue(s, 2 ** (i + 1) - 1, 2, "channel", z)).toBeCloseTo(35, 4);
+    });
+    expect(v.staggerLimited).toBe(false);
+  });
+
+  it("verschiebt man das Ende, entstehen genau dann neue Fronten, wenn die nächste Stufe noch vor dem Ende beginnt", () => {
+    const full = resolveVanes(s, auto({ mode: "mouth", value: 0 }));
+    const cutAfter = full.stageStarts.at(-1) + 6, cutBefore = full.stageStarts.at(-1) + 2;
+    expect(resolveVanes(s, auto(upTo(cutAfter))).stageStarts).toHaveLength(full.stageStarts.length);
+    expect(resolveVanes(s, auto(upTo(cutBefore))).stageStarts).toHaveLength(full.stageStarts.length - 1);
+  });
+
+  it("höchstens vier Stufen; in der z-Betriebsart zählt die eingestellte Stufenzahl", () => {
+    const tiny = resolveVanes(s, auto({ mode: "mouth", value: 0 }, { channel: 8 }));
+    expect(tiny.stageStarts.length).toBeLessThanOrEqual(4);
+    const z = resolveVanes(s, auto({ mode: "mouth", value: 0 }, { mode: "z", stages: 2, z: [150, 250, 300] }));
+    expect(z.stageStarts).toEqual([150, 250]);
+  });
+});
+
 describe("Kanalwinkel am Ende der Lamellen", () => {
   it("bis zum Mund (oder im geraden Bereich): der Sektorwinkel 2α/(n + 1)", () => {
     const v = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 0 } }));

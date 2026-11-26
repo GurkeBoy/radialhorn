@@ -116,6 +116,8 @@ export default {
   "vanes.stagger": "Gestaffelter Beginn",
   "vanes.staggerInfo": "Weitere Lamellen setzen später ein: Jede Stufe stellt in die Mitte jedes Kanals eine neue Lamelle, die Sektoren verdoppeln sich (aus 2 Sektoren werden 4, dann 8). Eine Stufe beginnt, wenn der Kanal der gerade laufenden Lamellen die eingestellte lichte Breite erreicht hat – oder bei einer festen Achsenstelle z. Alle Lamellen enden zusammen am eingestellten Ende; die Anzahl oben gilt für die Lamellen ab dem Beginn.",
   "vanes.stages": "Stufen",
+  "vanes.stagesAuto": "Stufen automatisch",
+  "vanes.stagesAutoInfo": "Es kommen so viele Stufen dazu, wie bis zum Ende der Lamellen noch Platz haben: Rückt das Ende Richtung Mund, entstehen neue Lamellenfronten, sobald die Kanäle die eingestellte Breite erreichen (höchstens 4 Stufen). Nur beim Beginn nach Kanalbreite.",
   "vanes.stageChannel": "Neue Lamellen ab Kanalbreite",
   "vanes.stageZ": "Stufe {n} bei z",
   "vanes.staggerSummary": "{total} Lamellen insgesamt, davon {base} ab dem Beginn; weitere bei z = {zs} mm",

@@ -116,6 +116,8 @@ export default {
   "vanes.stagger": "Staggered start",
   "vanes.staggerInfo": "More vanes start later: each stage puts a new vane in the middle of every channel, doubling the sectors (2 become 4, then 8). A stage begins when the channel between the vanes already running has widened to the set clear width – or at a fixed axis position z. All vanes end together at the set end; the count above applies to the vanes from the start.",
   "vanes.stages": "Stages",
+  "vanes.stagesAuto": "Stages automatic",
+  "vanes.stagesAutoInfo": "As many stages are added as there is room for before the end of the vanes: when the end moves towards the mouth, new vane fronts appear as soon as the channels reach the set width (at most 4 stages). Only with the start by channel width.",
   "vanes.stageChannel": "New vanes at channel width",
   "vanes.stageZ": "Stage {n} at z",
   "vanes.staggerSummary": "{total} vanes in total, {base} from the start; more at z = {zs} mm",

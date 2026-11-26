@@ -31,6 +31,7 @@ export const VANE_SAMPLES = 32;       // Stützstellen entlang der Lamelle
 const EMBED_MAX = 3;           // Eintauchtiefe in die Wand, höchstens [mm]
 const EMBED_FRACTION = 0.4;    // … und höchstens dieser Anteil der Wandstärke
 const SAME_NORMAL = 1e-9;      // Normalen gelten als gleich (ebene Fläche)
+export const AUTO_MAX_STAGES = 4;   // Obergrenze der Stufen bei „automatisch“ (aus 1 Lamelle werden dann 31)
 const BISECTIONS = 60;
 const LIMIT_TOLERANCE = 0.5;   // so weit darf ein Maß außerhalb des Bereichs liegen, ohne dass eine Begrenzung gemeldet wird [mm]
 
@@ -108,10 +109,14 @@ const twos = j => { let c = 0; while (j > 0 && j % 2 === 0) { j /= 2; c++; } ret
  * Gestaffelter Beginn: Stufe s setzt in jeden Kanal der vorigen Anordnung (K Sektoren) eine Lamelle in die Mitte – danach 2·K
  * Sektoren. Beginn der Stufe: bei einer lichten Kanalbreite der vorigen Anordnung (mode "channel") oder bei einer festen
  * Achsenstelle z (mode "z"); nie vor der vorigen Stufe, nie dort, wo der neue Kanal unter MIN_CHANNEL fiele.
+ * Automatisch (stagger.auto, nur mode "channel"): so viele Stufen, wie vor dem Ende noch Platz haben – eine Stufe kommt dazu, solange
+ * ihr Beginn mindestens MIN_LENGTH vor dem Ende liegt und der Kanal der vorigen Anordnung die Breite noch nicht schon am Beginn
+ * der vorigen Stufe erreicht hatte; höchstens AUTO_MAX_STAGES.
  * @returns {{ starts: number[], limited: boolean }}  Achsenstellen der Stufen 1…S (leer ohne Staffelung)
  */
 function staggerStarts(s, n, t, stagger, zStart, zEnd) {
-  const stages = Math.min(3, Math.max(0, Math.round(stagger?.stages ?? 0)));
+  const auto = !!stagger?.auto && stagger.mode !== "z";
+  const stages = auto ? AUTO_MAX_STAGES : Math.min(3, Math.max(0, Math.round(stagger?.stages ?? 0)));
   const starts = [];
   let limited = false, prev = zStart;
   for (let k = 1; k <= stages; k++) {
@@ -124,6 +129,7 @@ function staggerStarts(s, n, t, stagger, zStart, zEnd) {
       lim = Math.abs(z - want) > LIMIT_TOLERANCE;
     } else {
       const r = axisOf(s, sectors - 1, t, "channel", stagger.channel, axisRange(s, sectors - 1, t));
+      if (auto && (r.z < floor - LIMIT_TOLERANCE || r.limited || r.z > zEnd - MIN_LENGTH)) break;   // Platz zu Ende
       z = Math.min(Math.max(r.z, floor), zEnd);
       lim = r.limited;
     }
@@ -140,7 +146,7 @@ function staggerStarts(s, n, t, stagger, zStart, zEnd) {
  * @param spec  { count, thickness, start: { mode: "z" | "channel", value }, end: { mode: "mouth" | "z" | "channel", value } }
  *              Ende "channel": hier ist der Kanal so breit geworden, dass die Lamelle enden darf
  *              tip?: { start: boolean, end: boolean, length } – Beginn/Ende laufen in der Draufsicht über length [mm] auf TIP_WIDTH zu
- *              stagger?: { stages: 0…3, mode: "channel" | "z", channel, z: [z1, z2, z3] } – gestaffelter Beginn: count Lamellen
+ *              stagger?: { stages: 0…3, auto?: boolean, mode: "channel" | "z", channel, z: [z1, z2, z3] } – gestaffelter Beginn: count Lamellen
  *              laufen ab start; jede Stufe setzt in jeden Kanal eine weitere Lamelle in die Mitte (Sektoren verdoppeln sich)
  * @returns {object | null}  null ohne Lamellen (rundes Horn, Anzahl 0, Dicke 0); sonst
  *   { count, baseCount, thickness, fractions, stages, stageStarts, staggerLimited, delta, zStart, zEnd, atThroat, widthStart,

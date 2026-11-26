@@ -91,6 +91,7 @@ export const DESIGN_DEFAULTS = {
   vaneTipLength: 10,       // Länge der Spitzen [mm]
   vaneStagger: false,      // gestaffelter Beginn: weitere Lamellen setzen später in der Mitte jedes Kanals ein
   vaneStages: 1,           // Stufen (1–3); jede verdoppelt die Sektoren
+  vaneStagesAuto: false,   // Stufen automatisch: so viele, wie bis zum Ende noch Platz haben (nur Kanalbreite)
   vaneStageMode: "channel", // Beginn der Stufen: channel (lichte Kanalbreite der laufenden Lamellen) | z (feste Achsenstelle)
   vaneStageChannel: 30,    // Kanalbreite [mm], ab der die nächste Stufe einsetzt
   vaneStageZ1: 200,        // feste Achsenstellen der Stufen [mm]
@@ -113,7 +114,7 @@ export const DESIGN_DEFAULTS = {
 // frühere Verhalten ergibt (runder Throat aus): fehlen sie in einer älteren Datei, wird still der
 // Standard eingesetzt – der Entwurf ist dann genau der gespeicherte, es gibt nichts zu melden.
 // Fehlt dagegen ein Wert, den es von Anfang an gab, ist die Datei beschädigt oder bearbeitet.
-export const ADDED_LATER = new Set(["arcOn", "arcRadius", "filletClothoidOn", "filletClothoidLength", "hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd", "vaneTipStart", "vaneTipEnd", "vaneTipLength", "vaneStagger", "vaneStages", "vaneStageMode", "vaneStageChannel", "vaneStageZ1", "vaneStageZ2", "vaneStageZ3", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
+export const ADDED_LATER = new Set(["arcOn", "arcRadius", "filletClothoidOn", "filletClothoidLength", "hornShape", "roundAngle", "roundL", "roundLt", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "stepFuse", "ribsOn", "ribThickness", "ribLength", "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd", "vaneTipStart", "vaneTipEnd", "vaneTipLength", "vaneStagger", "vaneStages", "vaneStagesAuto", "vaneStageMode", "vaneStageChannel", "vaneStageZ1", "vaneStageZ2", "vaneStageZ3", "roundOn", "roundR", "wallMaterial", "wallE", "wallRho", "wallLimit"]);
 
 // Werte, für die null „automatisch“ bedeutet; sonst ist null ungültig (ein Regler mit null bräche)
 const NULLABLE = new Set(["morphLength", "edgeR", "flangeD", "holeCircle"]);

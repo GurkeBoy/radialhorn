@@ -111,6 +111,7 @@ export default function App() {
   const [vaneTipLength,   setVaneTipLength]   = usePersistentState("vaneTipLength", D.vaneTipLength);
   const [vaneStagger,      setVaneStagger]     = usePersistentState("vaneStagger", D.vaneStagger);
   const [vaneStages,       setVaneStages]      = usePersistentState("vaneStages", D.vaneStages);
+  const [vaneStagesAuto,   setVaneStagesAuto]  = usePersistentState("vaneStagesAuto", D.vaneStagesAuto);
   const [vaneStageMode,    setVaneStageMode]   = usePersistentState("vaneStageMode", D.vaneStageMode);
   const [vaneStageChannel, setVaneStageChannel] = usePersistentState("vaneStageChannel", D.vaneStageChannel);
   const [vaneStageZ1,      setVaneStageZ1]     = usePersistentState("vaneStageZ1", D.vaneStageZ1);
@@ -145,7 +146,7 @@ export default function App() {
   const designValues = {
     hornShape, throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, edgeOn, edgeR, flangeOn, flangeD,
-    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength, vaneStagger, vaneStages, vaneStageMode, vaneStageChannel, vaneStageZ1, vaneStageZ2, vaneStageZ3,
+    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength, vaneStagger, vaneStages, vaneStagesAuto, vaneStageMode, vaneStageChannel, vaneStageZ1, vaneStageZ2, vaneStageZ3,
     roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, stepFuse, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
@@ -157,7 +158,7 @@ export default function App() {
     flangeOn: setFlangeOn, flangeD: setFlangeD, flangeT: setFlangeT, holeCount: setHoleCount,
     holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, ribsOn: setRibsOn, ribThickness: setRibThickness,
     ribLength: setRibLength, vanesOn: setVanesOn, vaneCount: setVaneCount, vaneThickness: setVaneThickness, vaneStartMode: setVaneStartMode,
-    vaneStart: setVaneStart, vaneEndMode: setVaneEndMode, vaneEnd: setVaneEnd, vaneTipStart: setVaneTipStart, vaneTipEnd: setVaneTipEnd, vaneTipLength: setVaneTipLength, vaneStagger: setVaneStagger, vaneStages: setVaneStages, vaneStageMode: setVaneStageMode, vaneStageChannel: setVaneStageChannel, vaneStageZ1: setVaneStageZ1, vaneStageZ2: setVaneStageZ2, vaneStageZ3: setVaneStageZ3, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
+    vaneStart: setVaneStart, vaneEndMode: setVaneEndMode, vaneEnd: setVaneEnd, vaneTipStart: setVaneTipStart, vaneTipEnd: setVaneTipEnd, vaneTipLength: setVaneTipLength, vaneStagger: setVaneStagger, vaneStages: setVaneStages, vaneStagesAuto: setVaneStagesAuto, vaneStageMode: setVaneStageMode, vaneStageChannel: setVaneStageChannel, vaneStageZ1: setVaneStageZ1, vaneStageZ2: setVaneStageZ2, vaneStageZ3: setVaneStageZ3, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
     wallLimit: setWallLimit, stepFuse: setStepFuse, abstrahlung: setSimMouth,
     simTemp: setSimTemp, driver: setDriver,
   };
@@ -224,10 +225,10 @@ export default function App() {
   const live = useMemo(() => ({
     hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle: round ? roundAngle : openingAngle, L: round ? roundL : L, Lt: round ? roundLt : Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
-    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength, vaneStagger, vaneStages, vaneStageMode, vaneStageChannel, vaneStageZ1, vaneStageZ2, vaneStageZ3,
+    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength, vaneStagger, vaneStages, vaneStagesAuto, vaneStageMode, vaneStageChannel, vaneStageZ1, vaneStageZ2, vaneStageZ3,
   }), [round, hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
-    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength, vaneStagger, vaneStages, vaneStageMode, vaneStageChannel, vaneStageZ1, vaneStageZ2, vaneStageZ3]);
+    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd, vaneTipStart, vaneTipEnd, vaneTipLength, vaneStagger, vaneStages, vaneStagesAuto, vaneStageMode, vaneStageChannel, vaneStageZ1, vaneStageZ2, vaneStageZ3]);
   const p = useThrottledValue(live);
   // Abgeleitete Geometrie im Web Worker (geometry.js, useGeometry): beim Ziehen rechnet der
   // Haupt-Thread nicht, er zeichnet nur. Jede Stufe rechnet dort nur neu, was der Regler betrifft;
@@ -400,8 +401,9 @@ export default function App() {
             {(vaneTipStart || vaneTipEnd) && <Slider label={t("vanes.tipLength")} value={vaneTipLength} min={2} max={40} step={1} unit="mm" onChange={setVaneTipLength} />}
             <Toggle label={t("vanes.stagger")} checked={vaneStagger} onChange={setVaneStagger} info={t("vanes.staggerInfo")} />
             {vaneStagger && <>
-              <Slider label={t("vanes.stages")} value={vaneStages} min={1} max={3} step={1} unit="" onChange={setVaneStages} />
               <SegmentedButtons options={VANE_STAGE_MODES} labels={{ z: t("vanes.mode.z"), channel: t("vanes.mode.channel") }} value={vaneStageMode} onChange={setVaneStageMode} />
+              {vaneStageMode === "channel" && <Toggle label={t("vanes.stagesAuto")} checked={vaneStagesAuto} onChange={setVaneStagesAuto} info={t("vanes.stagesAutoInfo")} />}
+              {!(vaneStageMode === "channel" && vaneStagesAuto) && <Slider label={t("vanes.stages")} value={vaneStages} min={1} max={3} step={1} unit="" onChange={setVaneStages} />}
               {vaneStageMode === "channel"
                 ? <Slider label={t("vanes.stageChannel")} value={vaneStageChannel} min={5} max={120} step={1} unit="mm" onChange={setVaneStageChannel} />
                 : [[vaneStageZ1, setVaneStageZ1], [vaneStageZ2, setVaneStageZ2], [vaneStageZ3, setVaneStageZ3]].slice(0, vaneStages).map(([value, set], i) =>

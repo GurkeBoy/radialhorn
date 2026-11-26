@@ -20,7 +20,7 @@ export const GEOMETRY_KEYS = [
   "wandstaerke", "filletOn", "filletR", "filletClothoidOn", "filletClothoidLength", "clothoidOn", "clothoidLength", "arcOn", "arcRadius", "morphOn", "morphLength", "mouthRoundOn", "mouthRoundR", "flangeOn", "flangeD",
   "flangeT", "holeCount", "holeCircle", "holeD", "holeAngle", "ribsOn", "ribThickness", "ribLength", "roundOn", "roundR", "edgeOn", "edgeR",
   "vanesOn", "vaneCount", "vaneThickness", "vaneStartMode", "vaneStart", "vaneEndMode", "vaneEnd", "vaneTipStart", "vaneTipEnd", "vaneTipLength",
-  "vaneStagger", "vaneStages", "vaneStageMode", "vaneStageChannel", "vaneStageZ1", "vaneStageZ2", "vaneStageZ3",
+  "vaneStagger", "vaneStages", "vaneStagesAuto", "vaneStageMode", "vaneStageChannel", "vaneStageZ1", "vaneStageZ2", "vaneStageZ3",
 ];
 
 /** Teilergebnisse mit Version (Objekte, deren Gleichheit nachgelagert zählt). */
@@ -123,12 +123,12 @@ export function createGeometryEngine() {
 
     // Lamellen nur an der Schale des Radialhorns; Beginn und Ende werden gegen die Lösung aufgelöst und begrenzt
     const vanes = stage("vanes", [s.version, wall, round, p.vanesOn, p.vaneCount, p.vaneThickness, p.vaneStartMode, p.vaneStart, p.vaneEndMode, p.vaneEnd, p.vaneTipStart, p.vaneTipEnd, p.vaneTipLength,
-      p.vaneStagger, p.vaneStages, p.vaneStageMode, p.vaneStageChannel, p.vaneStageZ1, p.vaneStageZ2, p.vaneStageZ3],
+      p.vaneStagger, p.vaneStages, p.vaneStagesAuto, p.vaneStageMode, p.vaneStageChannel, p.vaneStageZ1, p.vaneStageZ2, p.vaneStageZ3],
       () => sv && wall > 0 && !round && p.vanesOn ? resolveVanes(sv, {
         count: p.vaneCount, thickness: p.vaneThickness,
         start: { mode: p.vaneStartMode, value: p.vaneStart }, end: { mode: p.vaneEndMode, value: p.vaneEnd },
         tip: { start: p.vaneTipStart, end: p.vaneTipEnd, length: p.vaneTipLength },
-        stagger: p.vaneStagger ? { stages: p.vaneStages, mode: p.vaneStageMode, channel: p.vaneStageChannel, z: [p.vaneStageZ1, p.vaneStageZ2, p.vaneStageZ3] } : null,
+        stagger: p.vaneStagger ? { stages: p.vaneStages, auto: p.vaneStagesAuto, mode: p.vaneStageMode, channel: p.vaneStageChannel, z: [p.vaneStageZ1, p.vaneStageZ2, p.vaneStageZ3] } : null,
       }) : null);
 
     // Schalen-Umrisse der Ansichten (Schnitt durch die Wand), ab der Flanschebene
