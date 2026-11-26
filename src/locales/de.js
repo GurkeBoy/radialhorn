@@ -115,6 +115,7 @@ export default {
   "vanes.tipInfo": "Die Lamelle läuft am Beginn bzw. Ende in der Draufsicht keilförmig auf 0,4 mm zu – eine einzige Düsenbahn, die ein 0,4-mm-Drucker sauber druckt (eine echte Schneide mit 0 mm ließe sich nicht drucken). Je länger die Spitze, desto flacher der Keil; sie nimmt höchstens 40 % der Lamellenlänge ein. Bei Dicken bis 0,4 mm ändert sich nichts.",
   "vanes.stagger": "Gestaffelter Beginn",
   "vanes.staggerInfo": "Weitere Lamellen setzen später ein: Jede Stufe stellt in die Mitte jedes Kanals eine neue Lamelle, die Sektoren verdoppeln sich (aus 2 Sektoren werden 4, dann 8). Eine Stufe beginnt, wenn der Kanal der gerade laufenden Lamellen die eingestellte lichte Breite erreicht hat – oder bei einer festen Achsenstelle z. Alle Lamellen enden zusammen am eingestellten Ende; die Anzahl oben gilt für die Lamellen ab dem Beginn.",
+  "vanes.stageShared": "Beginn nach Kanalbreite gilt für alle: jede Stufe beginnt, sobald die Kanäle ihrer neuen Lamellen so breit sind wie am Beginn.",
   "vanes.stages": "Stufen",
   "vanes.stagesAuto": "Stufen automatisch",
   "vanes.stagesAutoInfo": "Es kommen so viele Stufen dazu, wie bis zum Ende der Lamellen noch Platz haben: Rückt das Ende Richtung Mund, entstehen neue Lamellenfronten, sobald die Kanäle die eingestellte Breite erreichen (höchstens 4 Stufen). Nur beim Beginn nach Kanalbreite.",

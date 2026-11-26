@@ -404,16 +404,20 @@ export default function App() {
             <Toggle label={t("vanes.tipEnd")} checked={vaneTipEnd} onChange={setVaneTipEnd} />
             {(vaneTipStart || vaneTipEnd) && <Slider label={t("vanes.tipLength")} value={vaneTipLength} min={2} max={40} step={1} unit="mm" onChange={setVaneTipLength} />}
             <Toggle label={t("vanes.stagger")} checked={vaneStagger} onChange={setVaneStagger} info={t("vanes.staggerInfo")} />
-            {vaneStagger && <>
-              <SegmentedButtons options={VANE_STAGE_MODES} labels={{ z: t("vanes.mode.z"), channel: t("vanes.mode.channel") }} value={vaneStageMode} onChange={setVaneStageMode} />
-              {vaneStageMode === "channel" && <Toggle label={t("vanes.stagesAuto")} checked={vaneStagesAuto} onChange={setVaneStagesAuto} info={t("vanes.stagesAutoInfo")} />}
-              {!(vaneStageMode === "channel" && vaneStagesAuto) && <Slider label={t("vanes.stages")} value={vaneStages} min={1} max={3} step={1} unit="" onChange={setVaneStages} />}
-              {vaneStageMode === "channel"
+            {vaneStagger && (() => {
+              // Beginn nach Kanalbreite gilt auch für die Stufen (ein Wert für alle): eigene Betriebsart und Breite der Stufen entfallen
+              const shared = vaneStartMode === "channel", byChannel = shared || vaneStageMode === "channel";
+              return <>
+              {shared ? <Note>{t("vanes.stageShared")}</Note>
+                : <SegmentedButtons options={VANE_STAGE_MODES} labels={{ z: t("vanes.mode.z"), channel: t("vanes.mode.channel") }} value={vaneStageMode} onChange={setVaneStageMode} />}
+              {byChannel && <Toggle label={t("vanes.stagesAuto")} checked={vaneStagesAuto} onChange={setVaneStagesAuto} info={t("vanes.stagesAutoInfo")} />}
+              {!(byChannel && vaneStagesAuto) && <Slider label={t("vanes.stages")} value={vaneStages} min={1} max={3} step={1} unit="" onChange={setVaneStages} />}
+              {shared ? null : byChannel
                 ? <Slider label={t("vanes.stageChannel")} value={vaneStageChannel} min={5} max={120} step={1} unit="mm" onChange={setVaneStageChannel} />
                 : [[vaneStageZ1, setVaneStageZ1], [vaneStageZ2, setVaneStageZ2], [vaneStageZ3, setVaneStageZ3]].slice(0, vaneStages).map(([value, set], i) =>
                   <Slider key={i} label={t("vanes.stageZ", { n: i + 1 })} value={Math.min(Math.max(value, Math.floor(vaneLimits.z[0])), Math.ceil(vaneLimits.z[1]))}
                     min={Math.floor(vaneLimits.z[0])} max={Math.ceil(vaneLimits.z[1])} step={1} unit="mm" onChange={set} />)}
-            </>}
+            </>; })()}
             {vanes?.ok && vanes.stageStarts.length > 0 && <Note>{t("vanes.staggerSummary", { total: vanes.count, base: vanes.baseCount, zs: vanes.stageStarts.map(z => z.toFixed(0)).join(" / ") })}</Note>}
             {vanes?.ok && vanes.staggerLimited && <Warn>{t("warn.vanesStaggerLimited")}</Warn>}
             {vanes?.ok && <Note>{t("vanes.summary", {

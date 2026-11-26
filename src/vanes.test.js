@@ -238,6 +238,36 @@ describe("vaneBodies: Körper", () => {
   });
 });
 
+describe("Beginn ab Kanalbreite gilt auch für die Stufen (ein Wert für alle)", () => {
+  const shared = (W, stagger = {}, over = {}) => spec({ count: 1, start: { mode: "channel", value: W }, stagger: { stages: 2, mode: "z", channel: 999, z: [50, 60, 70], ...stagger }, ...over });
+
+  it("jede Gruppe beginnt, sobald die Kanäle, die sie bildet, die Breite des Beginns haben; eigene Stufenwerte (z, Breite) sind ohne Wirkung", () => {
+    const v = resolveVanes(s, shared(30));
+    expect(v.stageStarts).toHaveLength(2);
+    // Beginn: 2 Sektoren (1 Lamelle), Stufe 1: 4 Sektoren (3 Lamellen), Stufe 2: 8 Sektoren (7 Lamellen) – jeweils 30 mm lichte Breite
+    expect(vaneValue(s, 1, 2, "channel", v.zStart)).toBeCloseTo(30, 6);
+    expect(vaneValue(s, 3, 2, "channel", v.stageStarts[0])).toBeCloseTo(30, 6);
+    expect(vaneValue(s, 7, 2, "channel", v.stageStarts[1])).toBeCloseTo(30, 6);
+    expect(v.stageStarts[0]).toBeGreaterThan(v.zStart);
+    expect(v.stageStarts[1]).toBeGreaterThan(v.stageStarts[0]);
+    expect(v.count).toBe(7);
+    expect(v.staggerLimited).toBe(false);
+    const other = resolveVanes(s, shared(30, { mode: "channel", channel: 5, z: [1, 2, 3] }));
+    expect(other.stageStarts).toEqual(v.stageStarts);
+  });
+
+  it("mit Beginn nach z gelten die eigenen Stufenwerte weiter", () => {
+    const v = resolveVanes(s, shared(30, { mode: "z", z: [200, 260, 300] }, { start: { mode: "z", value: 100 } }));
+    expect(v.stageStarts).toEqual([200, 260]);
+  });
+
+  it("automatisch: so viele Stufen, wie vor dem Ende Platz haben, alle ab derselben Kanalbreite", () => {
+    const v = resolveVanes(s, shared(30, { auto: true }));
+    expect(v.stageStarts.length).toBeGreaterThan(0);
+    v.stageStarts.forEach((z, i) => expect(vaneValue(s, 2 ** (i + 2) - 1, 2, "channel", z)).toBeCloseTo(30, 4));
+  });
+});
+
 describe("Ende ab Kanalbreite: der Kanal zwischen den Lamellen, die dort laufen", () => {
   const withEnd = (value, stagger) => spec({ count: 1, start: { mode: "z", value: 0 }, end: { mode: "channel", value }, stagger });
   const stg = { stages: 1, mode: "channel", channel: 30, z: [] };

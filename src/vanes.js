@@ -114,6 +114,14 @@ const twos = j => { let c = 0; while (j > 0 && j % 2 === 0) { j /= 2; c++; } ret
  * der vorigen Stufe erreicht hatte; höchstens AUTO_MAX_STAGES.
  * @returns {{ starts: number[], limited: boolean }}  Achsenstellen der Stufen 1…S (leer ohne Staffelung)
  */
+/**
+ * Beginn nach Kanalbreite gilt für alle Lamellen: dann beginnt jede Stufe, sobald die Kanäle, die ihre neuen Lamellen bilden,
+ * dieselbe Breite haben wie am Beginn der ersten Lamellen (formed) – ein Wert für alle.
+ */
+function effectiveStagger(spec) {
+  return spec.stagger && spec.start.mode === "channel" ? { ...spec.stagger, mode: "channel", channel: spec.start.value, formed: true } : spec.stagger;
+}
+
 function staggerStarts(s, n, t, stagger, zStart, zEnd) {
   const auto = !!stagger?.auto && stagger.mode !== "z";
   const stages = auto ? AUTO_MAX_STAGES : Math.min(3, Math.max(0, Math.round(stagger?.stages ?? 0)));
@@ -128,7 +136,9 @@ function staggerStarts(s, n, t, stagger, zStart, zEnd) {
       z = Math.min(Math.max(want, floor), zEnd);
       lim = Math.abs(z - want) > LIMIT_TOLERANCE;
     } else {
-      const r = axisOf(s, sectors - 1, t, "channel", stagger.channel, axisRange(s, sectors - 1, t));
+      // formed: die Kanalbreite nach dem Einsetzen (2·K Sektoren) – so misst auch der Beginn der ersten Lamellen; sonst die der laufenden
+      const m = stagger.formed ? 2 * sectors - 1 : sectors - 1;
+      const r = axisOf(s, m, t, "channel", stagger.channel, axisRange(s, m, t));
       if (auto && (r.z < floor - LIMIT_TOLERANCE || r.limited || r.z > zEnd - MIN_LENGTH)) break;   // Platz zu Ende
       z = Math.min(Math.max(r.z, floor), zEnd);
       lim = r.limited;
@@ -174,7 +184,8 @@ function endByChannel(s, n, t, value, zStart, zMouth, starts) {
  * @param spec  { count, thickness, start: { mode: "z" | "channel", value }, end: { mode: "mouth" | "z" | "channel", value } }
  *              Ende "channel": hier ist der Kanal so breit geworden, dass die Lamelle enden darf
  *              tip?: { start: boolean, end: boolean, length } – Beginn/Ende laufen in der Draufsicht über length [mm] auf TIP_WIDTH zu
- *              stagger?: { stages: 0…3, auto?: boolean, mode: "channel" | "z", channel, z: [z1, z2, z3] } – gestaffelter Beginn: count Lamellen
+ *              stagger?: { stages: 0…3, auto?: boolean, mode: "channel" | "z", channel, z: [z1, z2, z3] } – gestaffelter Beginn (bei Beginn nach
+ *              Kanalbreite gilt dessen Wert auch für die Stufen, mode/channel sind dann ohne Wirkung): count Lamellen
  *              laufen ab start; jede Stufe setzt in jeden Kanal eine weitere Lamelle in die Mitte (Sektoren verdoppeln sich)
  * @returns {object | null}  null ohne Lamellen (rundes Horn, Anzahl 0, Dicke 0); sonst
  *   { count, baseCount, thickness, fractions, stages, stageStarts, staggerLimited, delta, zStart, zEnd, atThroat, widthStart,
@@ -195,12 +206,13 @@ export function resolveVanes(s, spec) {
   const zStart = start.z;
   // Ende nach Kanalbreite: gemeint ist der Kanal zwischen den Lamellen, die dort laufen – mit Staffelung nach den Stufen; deren
   // Beginn hängt nur vom Beginn ab (bei „automatisch“ gegen den Mund gerechnet)
-  const sizing = staggerStarts(s, n, t, spec.stagger, zStart, range[1]).starts;
+  const stag = effectiveStagger(spec);
+  const sizing = staggerStarts(s, n, t, stag, zStart, range[1]).starts;
   const byChannel = endByChannel(s, n, t, spec.end.mode === "channel" ? spec.end.value : 0, zStart, range[1], sizing);
   const end = spec.end.mode === "mouth" ? { z: range[1], limited: false }
     : spec.end.mode === "channel" ? byChannel : axisOf(s, n, t, spec.end.mode, spec.end.value, range);
   const zEnd = end.z, ok = zEnd - zStart >= MIN_LENGTH, atThroat = zStart === range[0] && range[2] <= 0;
-  const stagger = ok ? staggerStarts(s, n, t, spec.stagger, zStart, zEnd) : { starts: [], limited: false };
+  const stagger = ok ? staggerStarts(s, n, t, stag, zStart, zEnd) : { starts: [], limited: false };
   const S = stagger.starts.length, all = fractions((n + 1) * 2 ** S - 1);
 
   // Lamelle j (1…N): Stufe S − (Zweierpotenz von j), Stufe 0 ab dem Beginn; zu kurze Stufenlamellen entfallen

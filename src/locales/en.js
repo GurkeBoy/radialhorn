@@ -115,6 +115,7 @@ export default {
   "vanes.tipInfo": "At the start or end the vane tapers to 0.4 mm in the plan view – a single nozzle line that a 0.4 mm printer prints cleanly (a true 0 mm edge cannot be printed). The longer the tip, the shallower the wedge; it takes at most 40 % of the vane length. Nothing changes for thicknesses up to 0.4 mm.",
   "vanes.stagger": "Staggered start",
   "vanes.staggerInfo": "More vanes start later: each stage puts a new vane in the middle of every channel, doubling the sectors (2 become 4, then 8). A stage begins when the channel between the vanes already running has widened to the set clear width – or at a fixed axis position z. All vanes end together at the set end; the count above applies to the vanes from the start.",
+  "vanes.stageShared": "Start by channel width applies to all: each stage begins as soon as the channels of its new vanes are as wide as at the start.",
   "vanes.stages": "Stages",
   "vanes.stagesAuto": "Stages automatic",
   "vanes.stagesAutoInfo": "As many stages are added as there is room for before the end of the vanes: when the end moves towards the mouth, new vane fronts appear as soon as the channels reach the set width (at most 4 stages). Only with the start by channel width.",
