@@ -16,7 +16,7 @@ const CLOTHOID_SAMPLES = 120;
 const WALL_SAMPLES = 80;
 
 /** @param flange  aufgelöster Throat-Flansch (flangeLayout) oder null */
-export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange, shellOuter = null }) {
+export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaumecke, showWandstaerke, wandstaerke, flange, shellOuter = null, vanes = null }) {
   const tr = useT();
   const containerRef = useRef(null);
   const { w: VW, h: VH } = useSize(containerRef);
@@ -193,6 +193,11 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           return <DimAligned p1={[toX(xE), toY(zE)]} p2={[mRx, mY]} offset={DIM_FIRST}
             color={COLOR.wand} marker="url(#arrH)" label={`${t} mm`} />;
         })()}
+        {/* Lamellen: Strecken auf Strahlen vom Fokus, so dick wie die Platte */}
+        {vanes?.ok && vanes.phis.map(phi => <line key={phi}
+          x1={toX(vanes.rStart * Math.sin(phi))} y1={toY(s.zFocus + vanes.rStart * Math.cos(phi))}
+          x2={toX(vanes.rEnd * Math.sin(phi))} y2={toY(s.zFocus + vanes.rEnd * Math.cos(phi))}
+          stroke={COLOR.lamelle} strokeWidth={Math.max(1.4, vanes.thickness * scale)} />)}
         {flange && <FlanschSchnitt flange={flange} map={(x, z) => [toX(x), toY(z)]} inner={innerWall} />}
 
         {/* Übergangspunkte: Traktrix → (Klothoide →) gerade Wand */}
@@ -217,7 +222,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           color={COLOR.arc} marker="url(#arrH)" label={`R ${s.arcR.toFixed(1)} mm`} />
       </svg>
 
-      <Legend showWandstaerke={showWandstaerke} blend={hasClothoid(s) ? s.clothoid.kind ?? "clothoid" : null} showFlange={!!flange} />
+      <Legend showWandstaerke={showWandstaerke} blend={hasClothoid(s) ? s.clothoid.kind ?? "clothoid" : null} showFlange={!!flange} showVanes={!!vanes?.ok} />
     </div>
   );
 });
@@ -236,7 +241,7 @@ function RightAngleMark({ x, y, dx, dy, size, color }) {
   return <path d={`M${x + dx*size},${y} L${x + dx*size},${y + dy*size} L${x},${y + dy*size}`} fill="none" stroke={color} strokeWidth="0.9" />;
 }
 
-function Legend({ showWandstaerke, blend, showFlange }) {
+function Legend({ showWandstaerke, blend, showFlange, showVanes }) {
   const tr = useT();
   const items = [
     { col: COLOR.trak,     label: tr("legend.tractrix") },
@@ -248,6 +253,7 @@ function Legend({ showWandstaerke, blend, showFlange }) {
     { col: COLOR.raum,     label: tr("legend.corner"),     dash: true },
     ...(showWandstaerke ? [{ col: COLOR.wand, label: tr("legend.wall") }] : []),
     ...(showFlange ? [{ col: COLOR.flansch, label: tr("legend.flange"), kind: "fill" }] : []),
+    ...(showVanes ? [{ col: COLOR.lamelle, label: tr("legend.vanes") }] : []),
     { col: COLOR.dim,      label: tr("legend.dimension") },
   ];
   return (

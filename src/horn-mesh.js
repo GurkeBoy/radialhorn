@@ -27,6 +27,7 @@ import { hasTraktrix, hasClothoid, entrancePoints, focusRadius, wallArcLength, c
 import { ShapeUtils, Vector2 } from "three";
 import { linspace } from "./utils.js";
 import { flangeRibs } from "./flange-ribs.js";
+import { vaneBodies, airTriangles } from "./vanes.js";
 
 // Auflösung: Gitter (angular, radial, axial), Viertelkreise der Rundungen (round: runder Throat und
 // gerundete Längskanten), Flanschrand und Bohrungen als Vieleck (flange, hole)
@@ -1282,11 +1283,14 @@ export function flangeSectionOutline(inner, R, d) {
  * aufgelöster Flansch (flangeLayout) wird direkt verwendet. edgeR > 0 rundet die vier äußeren
  * Längskanten (Seitenwand ↔ Deckel/Boden) mit diesem Radius, höchstens t. morph (throatMorph)
  * rundet den Luftkanal (innen r) und die Außenkanten mit r + edgeR (outerRows).
- * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[], ribs: { count, length, overlap, shapes, thickness } | null }}
- *   section: "traktrix" | "klothoide" | "linear" | "rim" | "flansch"; ribs: Stützrippen des Flanschs (ihr
- *   Überlapp [mm³] mit Platte und Wand steckt doppelt im Netz-Volumen)
+ * @param vanes  Lamellen (vanes.js, resolveVanes) oder null
+ * @returns {{ surfaces: { name, section, grid?, triangles?, outward }[], ribs: { count, length, overlap, shapes, thickness } | null,
+ *   vanes: { count, overlap, cavity, shapes, thickness } | null }}
+ *   section: "traktrix" | "klothoide" | "linear" | "rim" | "flansch" | "lamellen"; ribs: Stützrippen des Flanschs (ihr
+ *   Überlapp [mm³] mit Platte und Wand steckt doppelt im Netz-Volumen), vanes: Lamellen (overlap ebenso; cavity: ihr
+ *   Volumen im Luftkanal)
  */
-export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edgeR = 0, morph = null, res = DEFAULT_RES) {
+export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edgeR = 0, morph = null, res = DEFAULT_RES, vanes = null) {
   const hAt = r => profile(s.zFocus + r);
   const air = body(s, rt, 0, (x, z) => hAt(focusRadius(s, x, z)), fillet, res, 0, morph);
   const outer = outerBody(s, rt, profile, fillet, t, res, flange ? flange.thickness : 0, edgeR, morph);
@@ -1301,6 +1305,9 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
   // Stützrippen: eigene geschlossene Körper, im Außenkörper verankert (flange-ribs.js)
   const ribs = layout?.ribs
     ? flangeRibs(surfacesOf(outer), layout, resOf(res).flange, t, flangeRounds(layout, resOf(res).flange).rim) : null;
+
+  // Lamellen: eigene geschlossene Körper, aus dem Luftkanal gemessen und in Deckel und Boden verankert (vanes.js)
+  const vaneSet = vanes ? vaneBodies(s, airTriangles(surfacesOf(air)), vanes, t) : null;
 
   const radialOut = ([x, , z]) => [x, 0, z - s.zFocus];
   const am = air.mouth, om = outer.mouth;
@@ -1329,6 +1336,7 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
       ...surfacesOf(air, true).map(f => ({ ...f, name: "inner." + f.name })),
       ...throatEnd,
       ...(ribs?.surfaces ?? []),
+      ...(vaneSet?.surfaces ?? []),
       ...(rim ? [
         { name: "rimMouthTop",    section: "rim", grid: [rim.inner.top, rim.outer.top],       outward: radialOut },
         { name: "rimMouthBottom", section: "rim", grid: [rim.inner.bottom, rim.outer.bottom], outward: radialOut },
@@ -1344,6 +1352,7 @@ export function buildShellGeometry(s, rt, profile, fillet, t, flange = null, edg
       ]),
     ],
     ribs: ribs && { count: ribs.count, length: ribs.length, overlap: ribs.overlap, shapes: ribs.shapes, thickness: layout.ribs.thickness },
+    vanes: vaneSet && vaneSet.count > 0 ? { count: vaneSet.count, overlap: vaneSet.overlap, cavity: vaneSet.cavity, shapes: vaneSet.shapes, thickness: vanes.thickness } : null,
   };
 }
 

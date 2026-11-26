@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet } from "../horn-math.js";
 import { buildDatasheet } from "./pdf.js";
+import { resolveVanes } from "../vanes.js";
 
 const RT = 25.4, H_MOUTH = 200;
 const s = solveHorn(500, 60, RT, 120, 100);
@@ -93,5 +94,22 @@ describe("buildDatasheet", () => {
     const h = buildDatasheet(design({ wall: 20, flange }), ALL, DATE);
     expect(cuts(h)).toBe(8);
     expect(cuts(buildDatasheet(design({ wall: 0, flange }), ALL, DATE))).toBe(0);
+  });
+});
+
+describe("buildDatasheet: Lamellen", () => {
+  const vanes = resolveVanes(s, { count: 3, thickness: 2, start: { mode: "z", value: 160 }, end: { mode: "mouth", value: 0 } });
+  const withWall = extra => design({ showWandstaerke: true, wandstaerke: 6, wall: 6, ...extra });
+
+  it("Kennwert mit Anzahl, Dicke, Bereich und Sektoren; je Lamelle eine Strecke in der Draufsicht", () => {
+    const html = buildDatasheet(withWall({ vanes }), ALL, DATE);
+    expect(row(html, "Lamellen")).toBe("3 × 2 mm, z = 160 … " + vanes.zEnd.toFixed(0) + " mm, 4 Sektoren");
+    expect(html.match(/stroke-width="2"\/>/g) ?? []).toHaveLength(3);
+    expect(row(buildDatasheet(withWall({ vanes }), ALL, DATE, "en"), "Vanes")).toContain("4 sectors");
+  });
+
+  it("ohne Wandstärke oder ohne Lamellen kein Eintrag", () => {
+    expect(row(buildDatasheet(design({ wall: 0, vanes }), ALL, DATE), "Lamellen")).toBeUndefined();
+    expect(row(buildDatasheet(withWall({}), ALL, DATE), "Lamellen")).toBeUndefined();
   });
 });

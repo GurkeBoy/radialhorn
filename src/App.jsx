@@ -15,6 +15,7 @@ import { Ansicht3D } from "./components/Ansicht3D.jsx";
 import { Frequenzgang } from "./components/Frequenzgang.jsx";
 import { useGeometry, usePersistentState, useSimulation, useThrottledValue, useUndo, useVolumes } from "./hooks.js";
 import { GEOMETRY_KEYS } from "./geometry.js";
+import { VANE_START_MODES, VANE_END_MODES, vaneRanges, vaneValue } from "./vanes.js";
 import { LANGUAGES, LanguageContext, detectLanguage, translate } from "./i18n.js";
 import { clearSettings } from "./settings.js";
 import { DESIGN_DEFAULTS as D, ProjectError, buildProject, parseProject, projectFileName } from "./project.js";
@@ -98,6 +99,13 @@ export default function App() {
   const [ribsOn,          setRibsOn]          = usePersistentState("ribsOn", D.ribsOn);
   const [ribThickness,    setRibThickness]    = usePersistentState("ribThickness", D.ribThickness);
   const [ribLength,       setRibLength]       = usePersistentState("ribLength", D.ribLength);
+  const [vanesOn,         setVanesOn]         = usePersistentState("vanesOn", D.vanesOn);
+  const [vaneCount,       setVaneCount]       = usePersistentState("vaneCount", D.vaneCount);
+  const [vaneThickness,   setVaneThickness]   = usePersistentState("vaneThickness", D.vaneThickness);
+  const [vaneStartMode,   setVaneStartMode]   = usePersistentState("vaneStartMode", D.vaneStartMode);
+  const [vaneStart,       setVaneStart]       = usePersistentState("vaneStart", D.vaneStart);
+  const [vaneEndMode,     setVaneEndMode]     = usePersistentState("vaneEndMode", D.vaneEndMode);
+  const [vaneEnd,         setVaneEnd]         = usePersistentState("vaneEnd", D.vaneEnd);
   const [roundOn,         setRoundOn]         = usePersistentState("roundOn", D.roundOn);
   const [roundR,          setRoundR]          = usePersistentState("roundR", D.roundR);
   const [wallMaterial,    setWallMaterial]    = usePersistentState("wallMaterial", D.wallMaterial);
@@ -127,7 +135,8 @@ export default function App() {
   const designValues = {
     hornShape, throatDiam, throatCustom: throatCustomOn, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke,
     showWandstaerke, wandstaerke, filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, edgeOn, edgeR, flangeOn, flangeD,
-    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, stepFuse, abstrahlung: simMouth, simTemp, driver,
+    flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd,
+    roundOn, roundR, wallMaterial, wallE, wallRho, wallLimit, stepFuse, abstrahlung: simMouth, simTemp, driver,
   };
   const designSetters = {
     hornShape: setHornShape, throatDiam: setThroatDiam, throatCustom: setThroatCustomOn, morphOn: setMorphOn, morphLength: setMorphLength, mouthRoundOn: setMouthRoundOn, mouthRoundR: setMouthRoundR,
@@ -137,7 +146,8 @@ export default function App() {
     clothoidOn: setClothoidOn, clothoidLength: setClothoidLength, arcOn: setArcOn, arcRadius: setArcRadius, edgeOn: setEdgeOn, edgeR: setEdgeR,
     flangeOn: setFlangeOn, flangeD: setFlangeD, flangeT: setFlangeT, holeCount: setHoleCount,
     holeCircle: setHoleCircle, holeD: setHoleD, holeAngle: setHoleAngle, ribsOn: setRibsOn, ribThickness: setRibThickness,
-    ribLength: setRibLength, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
+    ribLength: setRibLength, vanesOn: setVanesOn, vaneCount: setVaneCount, vaneThickness: setVaneThickness, vaneStartMode: setVaneStartMode,
+    vaneStart: setVaneStart, vaneEndMode: setVaneEndMode, vaneEnd: setVaneEnd, roundOn: setRoundOn, roundR: setRoundR, wallMaterial: setWallMaterial, wallE: setWallE, wallRho: setWallRho,
     wallLimit: setWallLimit, stepFuse: setStepFuse, abstrahlung: setSimMouth,
     simTemp: setSimTemp, driver: setDriver,
   };
@@ -204,10 +214,10 @@ export default function App() {
   const live = useMemo(() => ({
     hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle: round ? roundAngle : openingAngle, L: round ? roundL : L, Lt: round ? roundLt : Lt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
-    edgeOn, edgeR, simOn, mouth, simTemp, driver,
+    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd,
   }), [round, hornShape, throatDiam, morphOn, morphLength, mouthRoundOn, mouthRoundR, openingAngle, L, Lt, roundAngle, roundL, roundLt, dw, dh, hMouth, curve, hypexT, showRaumecke, showWandstaerke, wandstaerke,
     filletOn, filletR, filletClothoidOn, filletClothoidLength, clothoidOn, clothoidLength, arcOn, arcRadius, flangeOn, flangeD, flangeT, holeCount, holeCircle, holeD, holeAngle, ribsOn, ribThickness, ribLength, roundOn, roundR,
-    edgeOn, edgeR, simOn, mouth, simTemp, driver]);
+    edgeOn, edgeR, simOn, mouth, simTemp, driver, vanesOn, vaneCount, vaneThickness, vaneStartMode, vaneStart, vaneEndMode, vaneEnd]);
   const p = useThrottledValue(live);
   // Abgeleitete Geometrie im Web Worker (geometry.js, useGeometry): beim Ziehen rechnet der
   // Haupt-Thread nicht, er zeichnet nur. Jede Stufe rechnet dort nur neu, was der Regler betrifft;
@@ -220,7 +230,7 @@ export default function App() {
   const g = geo.params;
   const rt = g.throatDiam / 2;
   const {
-    s, fillet, morph, flange, shellOuter, shellCut, wall, edge,
+    s, fillet, morph, flange, vanes, shellOuter, shellCut, wall, edge,
     LtMin, LtMax, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin, Lmax, LClamped, warnings,
   } = geo.values;
   // Profil als Funktion (nicht übertragbar): hier aus s und Verrundung, billig
@@ -241,9 +251,9 @@ export default function App() {
     : sim.result), [sim, simNoDelay]);
 
   // Volumen aus den geschlossenen 3D-Netzen, im Web Worker (useVolumes); hängt nur an der Geometrie
-  const volKey = JSON.stringify([geo.versions.s, geo.versions.fillet, geo.versions.morph, geo.versions.flange, rt, g.hMouth, g.curve, g.hypexT, wall, edge]);
+  const volKey = JSON.stringify([geo.versions.s, geo.versions.fillet, geo.versions.morph, geo.versions.flange, geo.versions.vanes, rt, g.hMouth, g.curve, g.hypexT, wall, edge]);
   const volInput = useMemo(() => s ? {
-    s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph, wall, flange, edgeR: edge,
+    s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph, wall, flange, edgeR: edge, vanes,
   } : null, [volKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- Geometrie über volKey
   const volumes = useVolumes(volInput);
   // Wandstärke-Empfehlung: reine Rechnung (wall-advice.js, ≈ 3 ms), gilt für die Schale; Luftsteifigkeit bei der Simulationstemperatur
@@ -251,11 +261,16 @@ export default function App() {
   const advice = useMemo(() => s && profile
     ? wallAdvice({ s, profile, morph, material: materialOf(wallMaterial, wallE, wallRho), K: airK, tMM: wall > 0 ? wall : null, nuMax: wallLimit })
     : null, [s, profile, morph, wallMaterial, wallE, wallRho, airK, wall, wallLimit]);
+  // Lamellen: Maße für die Regler. Beim Wechsel der Betriebsart bleibt die Lamelle dieselbe – der Wert wird umgerechnet.
+  const vaneLimits = s && !round ? vaneRanges(s, vaneCount, vaneThickness) : null;
+  const vaneModeValue = (mode, r) => Math.round(vaneValue(s, vaneCount, vaneThickness, mode, r));
+  const changeVaneStartMode = mode => { if (vanes) setVaneStart(vaneModeValue(mode, vanes.rStart)); setVaneStartMode(mode); };
+  const changeVaneEndMode = mode => { if (vanes && mode !== "mouth") setVaneEnd(vaneModeValue(mode, vanes.rEnd)); setVaneEndMode(mode); };
   const applyWallAdvice = () => { if (advice) { setShowWandstaerke(true); setWandstaerke(advice.tRecommended); } };
 
   const flangeOverRaumecke = flange && g.showRaumecke && flange.diameter / 2 > g.dw / 2 + g.dh;
   const design = {
-    s, rt, L: LClamped, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, profile, wall, flange,
+    s, rt, L: LClamped, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, profile, wall, flange, vanes,
     showRaumecke: g.showRaumecke, showWandstaerke: g.showWandstaerke, wandstaerke: g.wandstaerke, edgeR: edge, morph,
   };
   // Während eines Zugs zeigt der Regler den Live-Wert, sonst den (ggf. begrenzten) gerechneten
@@ -355,7 +370,26 @@ export default function App() {
             {!round && <Toggle label={t("construction.roundEdges")} checked={edgeOn} onChange={setEdgeOn} />}
             {!round && edgeOn && <Slider label={t("construction.edgeRadius")} value={Math.min(edgeR ?? wandstaerke, wandstaerke)} min={1} max={wandstaerke} step={1} unit="mm" onChange={setEdgeR} />}
             <Toggle label={t("construction.flange")} checked={flangeOn} onChange={setFlangeOn} />
+            {!round && <Toggle label={t("construction.vanes")} checked={vanesOn} onChange={setVanesOn} info={t("construction.vanesInfo")} />}
           </>}
+          {!round && vanesOn && vaneLimits && <Group title={t("vanes.title")}>
+            <Slider label={t("vanes.count")} value={vaneCount} min={1} max={8} step={1} unit="" onChange={setVaneCount} />
+            <Slider label={t("vanes.thickness")} value={vaneThickness} min={0.5} max={10} step={0.5} unit="mm" onChange={setVaneThickness} />
+            <SegmentedButtons options={VANE_START_MODES} labels={{ z: t("vanes.mode.z"), width: t("vanes.mode.width"), channel: t("vanes.mode.channel") }}
+              value={vaneStartMode} onChange={changeVaneStartMode} />
+            <Slider label={t("vanes.start." + vaneStartMode)} value={Math.min(Math.max(vaneStart, Math.ceil(vaneLimits[vaneStartMode][0])), Math.floor(vaneLimits[vaneStartMode][1]))}
+              min={Math.ceil(vaneLimits[vaneStartMode][0])} max={Math.floor(vaneLimits[vaneStartMode][1])} step={1} unit="mm" onChange={setVaneStart} />
+            <SegmentedButtons options={VANE_END_MODES} labels={{ mouth: t("vanes.mode.mouth"), z: t("vanes.mode.z"), channel: t("vanes.mode.channel") }}
+              value={vaneEndMode} onChange={changeVaneEndMode} />
+            {vaneEndMode !== "mouth" && <Slider label={t("vanes.end." + vaneEndMode)} value={Math.min(Math.max(vaneEnd, Math.ceil(vaneLimits[vaneEndMode][0])), Math.floor(vaneLimits[vaneEndMode][1]))}
+              min={Math.ceil(vaneLimits[vaneEndMode][0])} max={Math.floor(vaneLimits[vaneEndMode][1])} step={1} unit="mm" onChange={setVaneEnd} />}
+            {vanes?.ok && <Note>{t("vanes.summary", {
+              sectors: vanes.count + 1, deg: (vanes.delta * 180 / Math.PI).toFixed(1), z0: vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0),
+              c0: vanes.channelStart.toFixed(0), c1: vanes.channelEnd.toFixed(0),
+            })}</Note>}
+            {vanes && !vanes.ok && <Warn>{t("warn.vanesNone")}</Warn>}
+            {vanes?.ok && (vanes.startLimited || vanes.endLimited) && <Warn>{t("warn.vanesLimited")}</Warn>}
+          </Group>}
           {flange && <Group title={t("flange.title")}>
             <Slider label={t("flange.diameter")} value={shown("flangeD", Math.round(flange.diameter))} min={Math.ceil(flange.minDiameter)} max={400} step={1} unit="mm" onChange={setFlangeD} />
             {flange.limited && <Note>{t("flange.minDiameter", { mm: Math.ceil(flange.minDiameter) })}</Note>}
@@ -430,7 +464,7 @@ export default function App() {
             <Note>{t("export.dxfHint")}</Note>
             <Toggle label={t("export.dimensions")} checked={pdfDimensions} onChange={setPdfDimensions} hint={t("export.dimensionsHint")} />
             {flange?.invalidHoles > 0 && <Warn>{conflictText(flange.invalidHoles)}: {t("export.conflictCard")}</Warn>}
-            {flange?.ribs && <Toggle label={t("export.stepFuse")} checked={stepFuse} onChange={setStepFuse} info={t("export.stepFuseInfo")} />}
+            {(flange?.ribs || vanes?.ok) && <Toggle label={t("export.stepFuse")} checked={stepFuse} onChange={setStepFuse} info={t("export.stepFuseInfo")} />}
             <div style={{ marginTop: 4 }}>
               <Button primary onClick={() => reportSave(() => exportDXF(design), "dxf")}>{t("export.dxf")}</Button>
               <Button onClick={() => reportSave(() => exportPDF(design, { ...ALL_LAYERS, bemassung: pdfDimensions }, lang), "pdf")}>{t("export.pdf")}</Button>
@@ -446,10 +480,10 @@ export default function App() {
         <div style={{ flex: 6, display: "flex", gap: 8, minHeight: 0 }}>
           <ViewPanel flex={1}>
             <Draufsicht s={s} rt={rt} dw={s?.round ? 0 : g.dw} dh={s?.round ? 0 : g.dh} L={LClamped}
-              showRaumecke={g.showRaumecke && !s?.round} showWandstaerke={g.showWandstaerke} wandstaerke={g.wandstaerke} flange={flange} shellOuter={shellOuter} />
+              showRaumecke={g.showRaumecke && !s?.round} showWandstaerke={g.showWandstaerke} wandstaerke={g.wandstaerke} flange={flange} shellOuter={shellOuter} vanes={wall > 0 ? vanes : null} />
           </ViewPanel>
           <ViewPanel flex={1}>
-            <Ansicht3D s={s} rt={rt} dw={s?.round ? 4 * rt : g.dw} dh={s?.round ? 2 * rt + 10 : g.dh} hMouth={s?.round ? 2 * s.xMouth : g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke && !s?.round}
+            <Ansicht3D s={s} rt={rt} dw={s?.round ? 4 * rt : g.dw} dh={s?.round ? 2 * rt + 10 : g.dh} hMouth={s?.round ? 2 * s.xMouth : g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke && !s?.round} vanes={vanes}
               centroid={wall > 0 ? volumes?.shellCentroid : volumes?.airCentroid} />
           </ViewPanel>
         </div>

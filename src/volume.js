@@ -34,17 +34,19 @@ export function meshMoments(tris) {
 const momentsOf = geometry => meshMoments(geometry.surfaces.flatMap(triangulate));
 
 /**
- * @param input  { s, rt, hMouth, curve, hypexT, fillet, morph, wall, flange, edgeR }
+ * @param input  { s, rt, hMouth, curve, hypexT, fillet, morph, wall, flange, edgeR, vanes }
  * @returns {{ air: number, shell: number|null, outer: number|null, airCentroid: number[], shellCentroid: number[]|null }}
  *   Rauminhalte in mm³; shell (Wandmaterial inkl. Flansch) und outer (Luft + Wand) nur bei wall > 0; Schwerpunkte
  *   [x, h, z] in mm (Schale: gleichmäßige Dichte; Rippen überlappen die Wand ein wenig, ihr Überlapp zählt im Moment doppelt)
  */
-export function computeVolumes({ s, rt, hMouth, curve, hypexT, fillet, morph = null, wall, flange = null, edgeR = 0 }) {
+export function computeVolumes({ s, rt, hMouth, curve, hypexT, fillet, morph = null, wall, flange = null, edgeR = 0, vanes = null }) {
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
-  const airMoments = momentsOf(buildAir(s, rt, profile, fillet, morph)), air = airMoments.volume;
-  if (!(wall > 0)) return { air, shell: null, outer: null, airCentroid: airMoments.centroid, shellCentroid: null };
-  const geometry = buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph);
+  const airMoments = momentsOf(buildAir(s, rt, profile, fillet, morph));
+  if (!(wall > 0)) return { air: airMoments.volume, shell: null, outer: null, airCentroid: airMoments.centroid, shellCentroid: null };
+  const geometry = buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, undefined, vanes);
   const shellMoments = momentsOf(geometry);
-  const shell = shellMoments.volume - (geometry.ribs?.overlap ?? 0);   // Rippen reichen in Platte und Wand hinein
+  // Rippen und Lamellen reichen in Platte bzw. Wand hinein; Lamellen nehmen dem Luftkanal ihr Volumen
+  const shell = shellMoments.volume - (geometry.ribs?.overlap ?? 0) - (geometry.vanes?.overlap ?? 0);
+  const air = airMoments.volume - (geometry.vanes?.cavity ?? 0);
   return { air, shell, outer: air + shell, airCentroid: airMoments.centroid, shellCentroid: shellMoments.centroid };
 }

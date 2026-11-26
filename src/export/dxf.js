@@ -80,11 +80,11 @@ export const dxfDocument = entities => `0\nSECTION\n2\nENTITIES\n${entities.join
 
 /**
  * Erzeugt den DXF-Text.
- * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange, morph, profile, wall, edgeR } (profile, wall, edgeR
- *                nur für die Stützrippen am Flansch)
+ * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange, morph, profile, wall, edgeR, vanes } (profile, wall, edgeR
+ *                nur für die Stützrippen am Flansch; vanes: aufgelöste Lamellen, nur mit wall > 0)
  * @param opts    Layer-Auswahl { draufsicht, mundbogen, fokus, seitenprofil, uebergang, flansch }
  */
-export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, morph = null, profile = null, wall = 0, edgeR = 0 }, opts) {
+export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, morph = null, profile = null, wall = 0, edgeR = 0, vanes = null }, opts) {
   const out = [];
   const mirrored = fn => [1, -1].forEach(fn);
 
@@ -102,6 +102,15 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
       else if (klo.length > 1) out.push(dxfSpline(klo.map(([x, z]) => [z, sign * x]), "Draufsicht_Klothoide"));
       out.push(dxfLine([s.zTrans, sign * s.xTrans], [s.zMouth, sign * s.xMouth], "Draufsicht_Gerade"));
     });
+    // Lamellen: Umriss jeder Platte (Länge × Dicke) in der Draufsicht, Strahlen vom Fokus
+    if (wall > 0 && vanes?.ok && !s.round) {
+      for (const phi of vanes.phis) {
+        const c = Math.cos(phi), sn = Math.sin(phi), hw = vanes.thickness / 2;
+        const at = (r, side) => [s.zFocus + r * c - side * sn, r * sn + side * c];
+        const box = [[vanes.rStart, hw], [vanes.rEnd, hw], [vanes.rEnd, -hw], [vanes.rStart, -hw]].map(([r, side]) => at(r, side));
+        box.forEach((p, i) => out.push(dxfLine(p, box[(i + 1) % 4], "Draufsicht_Lamellen")));
+      }
+    }
   }
   if (opts.mundbogen) {
     const a = s.alpha2 * 180 / Math.PI;

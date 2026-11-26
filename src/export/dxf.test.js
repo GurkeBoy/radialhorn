@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { solveHorn, computeFillet, makeProfile, createHornMath } from "../horn-math.js";
 import { flangeLayout } from "../horn-mesh.js";
 import { buildDXF } from "./dxf.js";
+import { resolveVanes } from "../vanes.js";
 
 const RT = 25.4, H_MOUTH = 200;
 const s = solveHorn(500, 60, RT, 120, 100);
@@ -148,5 +149,25 @@ describe("DXF mit Klothoide", () => {
     expect(splines("Draufsicht_Traktrix")).toHaveLength(2);    // je links/rechts
     expect(splines("Draufsicht_Klothoide")).toHaveLength(2);
     expect(dxf).not.toMatch(/POLYLINE/);
+  });
+});
+
+describe("buildDXF: Lamellen", () => {
+  const vanes = resolveVanes(s, { count: 3, thickness: 2, start: { mode: "z", value: 160 }, end: { mode: "mouth", value: 0 } });
+  const lines = (d, opts = ALL) => parse(buildDXF(d, opts)).filter(e => e.type === "LINE" && layerOf(e) === "Draufsicht_Lamellen");
+
+  it("je Lamelle ein Rechteck (4 Strecken) in der Draufsicht, Länge × Dicke, auf Strahlen vom Fokus", () => {
+    const rects = lines(design({ wall: 6, vanes }));
+    expect(rects).toHaveLength(3 * 4);
+    // erste Lamelle: Mittellinie unter φ = −α·½ (n = 3: −α/2, 0, α/2); Längskanten sind so lang wie die Lamelle
+    const long = rects.slice(0, 4).map(e => Math.hypot(get(e, "11")[0] - get(e, "10")[0], get(e, "21")[0] - get(e, "20")[0]));
+    expect(Math.max(...long)).toBeCloseTo(vanes.rEnd - vanes.rStart, 4);
+    expect(Math.min(...long)).toBeCloseTo(vanes.thickness, 4);
+  });
+
+  it("ohne Wandstärke, ohne Lamellen oder ohne Draufsicht-Layer keine", () => {
+    expect(lines(design({ wall: 0, vanes }))).toHaveLength(0);
+    expect(lines(design({ wall: 6 }))).toHaveLength(0);
+    expect(lines(design({ wall: 6, vanes }), { ...ALL, draufsicht: false })).toHaveLength(0);
   });
 });

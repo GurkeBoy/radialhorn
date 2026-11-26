@@ -32,9 +32,9 @@ export function stlBinary(triangles, header = "Radialhorn") {
  * Flächen des geschlossenen Körpers: Schale bei wall > 0 (ggf. mit Flansch), sonst Luftvolumen.
  * res: Auflösung (Standard wie die 3D-Ansicht; der STL-Export nimmt EXPORT_RES).
  */
-export function hornGeometry({ s, rt, profile, fillet, wall = 0, flange = null, edgeR = 0, morph = null }, res = undefined) {
+export function hornGeometry({ s, rt, profile, fillet, wall = 0, flange = null, edgeR = 0, morph = null, vanes = null }, res = undefined) {
   return wall > 0
-    ? buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, res)
+    ? buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, res, vanes)
     : buildAir(s, rt, profile, fillet, morph, res);
 }
 

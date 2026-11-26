@@ -96,6 +96,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   const tr = (key, params) => translate(lang, key, params);
   const { s, rt, L, hMouth, curve, hypexT, fillet, profile, morph, showRaumecke, showWandstaerke, wandstaerke } = design;
   const wall = design.wall ?? 0, flange = wall > 0 ? design.flange ?? null : null;
+  const vanes = wall > 0 && !s.round && design.vanes?.ok ? design.vanes : null;
   const trakOn = hasTraktrix(s);
   const round = !!s.round;   // rundes Horn: nur ein Längsschnitt (das Draufsicht-Profil), kein Seitenriss
   const wallPts = planOutline(s);
@@ -131,6 +132,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
       <line x1="${dsOX}" y1="${dsOY}" x2="${dsOX}" y2="${dsOY + maxZ}" stroke="${C.axis}" stroke-width="0.2" stroke-dasharray="3 2"/>
       ${opts.draufsicht && planOuter ? cuts(cutSections(wallPts, planOuter, flange), (x, z) => [dsOX + x, dsOY + z]) : ""}
       ${opts.draufsicht ? [1, -1].map(sign => path(wallPts.map(([x, z]) => [dsOX + sign * x, dsOY + z]), C.line)).join("") : ""}
+      ${opts.draufsicht && vanes ? vanes.phis.map(phi => `<line x1="${dsOX + vanes.rStart * Math.sin(phi)}" y1="${dsOY + s.zFocus + vanes.rStart * Math.cos(phi)}" x2="${dsOX + vanes.rEnd * Math.sin(phi)}" y2="${dsOY + s.zFocus + vanes.rEnd * Math.cos(phi)}" stroke="${C.line}" stroke-width="${vanes.thickness}"/>`).join("") : ""}
       ${opts.mundbogen ? path(arcPts, C.arc) : ""}
       ${opts.fokus ? `<circle cx="${dsOX}" cy="${dsOY + s.zFocus}" r="0.7" fill="${C.arc}"/>` : ""}
       ${opts.bemassung ? [
@@ -188,6 +190,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
     [tr("pdf.corner"),         showRaumecke ? tr("pdf.yes") : tr("pdf.no")],
     [tr("pdf.wall"),           showWandstaerke ? wandstaerke + " mm" : "–"],
     ...(flange?.ribs ? [[tr("pdf.ribs"), tr("pdf.ribsValue", { n: flange.holes.count, w: flange.ribs.thickness, l: flange.ribs.length })]] : []),
+    ...(vanes ? [[tr("pdf.vanes"), tr("pdf.vanesValue", { n: vanes.count, t: vanes.thickness, z0: vanes.zStart.toFixed(0), z1: vanes.zEnd.toFixed(0), sectors: vanes.count + 1 })]] : []),
   ];
   const kvRows = kv.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
 

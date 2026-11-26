@@ -9,9 +9,9 @@ import { buildRoundHornGeometry, buildRoundShellGeometry, roundFlangeLayout } fr
 export const buildAir = (s, rt, profile, fillet, morph = null, res = DEFAULT_RES) =>
   s.round ? buildRoundHornGeometry(s, rt, res) : buildHornGeometry(s, rt, profile, fillet, morph, res);
 
-/** Schale mit Wandstärke t, optional mit Flansch (aufgelöst oder als Vorgabe). */
-export const buildShell = (s, rt, profile, fillet, t, flange = null, edgeR = 0, morph = null, res = DEFAULT_RES) =>
-  s.round ? buildRoundShellGeometry(s, rt, t, flange, res) : buildShellGeometry(s, rt, profile, fillet, t, flange, edgeR, morph, res);
+/** Schale mit Wandstärke t, optional mit Flansch (aufgelöst oder als Vorgabe) und Lamellen (nur Radialhorn). */
+export const buildShell = (s, rt, profile, fillet, t, flange = null, edgeR = 0, morph = null, res = DEFAULT_RES, vanes = null) =>
+  s.round ? buildRoundShellGeometry(s, rt, t, flange, res) : buildShellGeometry(s, rt, profile, fillet, t, flange, edgeR, morph, res, vanes);
 
 /** Flansch gegen den Außenkörper auflösen. */
 export const layoutFlange = (s, rt, profile, fillet, t, flange, edgeR = 0, morph = null, res = DEFAULT_RES) =>

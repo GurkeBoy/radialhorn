@@ -13,6 +13,7 @@ const BASE = {
   showRaumecke: true, showWandstaerke: true, wandstaerke: 10, filletOn: true, filletR: 477, clothoidOn: true, clothoidLength: 30,
   morphOn: true, morphLength: 473, mouthRoundOn: false, mouthRoundR: 20, flangeOn: true, flangeD: 120, flangeT: 10, holeCount: 4, holeCircle: 101.6, holeD: 6.6,
   holeAngle: 0, ribsOn: false, ribThickness: 4, ribLength: 30, roundOn: false, roundR: 2, edgeOn: true, edgeR: 10,
+  vanesOn: false, vaneCount: 2, vaneThickness: 2, vaneStartMode: "z", vaneStart: 300, vaneEndMode: "mouth", vaneEnd: 500,
 };
 
 describe("createGeometryEngine", () => {
@@ -182,4 +183,48 @@ describe("Rippen und Verrundung im Flansch", () => {
     expect(renewed({ ribThickness: 6, ribLength: 50, roundR: 3, ribsOn: false })).toBe(true);
     expect(renewed({ ribThickness: 6, ribLength: 50, roundR: 3, ribsOn: false, roundOn: false })).toBe(true);
   }, 120000);
+});
+
+describe("Lamellen", () => {
+  const vanesOf = over => createGeometryEngine()({ ...BASE, ...over }).values.vanes;
+  const ON = { vanesOn: true, vaneCount: 3, vaneThickness: 2, vaneStartMode: "z", vaneStart: 300, vaneEndMode: "mouth" };
+
+  it("aus: keine; an: aufgelöst gegen die Lösung (Winkel, Beginn und Ende)", () => {
+    expect(vanesOf({})).toBeNull();
+    const compute = createGeometryEngine();
+    const { values } = compute({ ...BASE, ...ON });
+    expect(values.vanes.ok).toBe(true);
+    expect(values.vanes.count).toBe(3);
+    expect(values.vanes.zStart).toBeCloseTo(300, 9);
+    expect(values.vanes.rEnd).toBeCloseTo(values.s.arcR, 9);
+    expect(values.vanes.phis[1]).toBeCloseTo(0, 12);
+  });
+
+  it("ohne Wandstärke und beim runden Horn gibt es keine Lamellen", () => {
+    expect(vanesOf({ ...ON, showWandstaerke: false })).toBeNull();
+    expect(vanesOf({ ...ON, hornShape: "round", openingAngle: 70, L: 500, Lt: 60 })).toBeNull();
+  });
+
+  it("Zwischenspeicher: nur Lamellenwerte, Lösung und Wandstärke erneuern die Lamellen", () => {
+    const compute = createGeometryEngine();
+    let prev = compute({ ...BASE, ...ON });
+    const renewed = over => {
+      const next = compute({ ...BASE, ...ON, ...over });
+      const changed = next.versions.vanes !== prev.versions.vanes;
+      prev = next;
+      return changed;
+    };
+    expect(renewed({})).toBe(false);
+    expect(renewed({ hMouth: 250 })).toBe(false);            // Profil hängt nicht an der Lösung
+    expect(renewed({ hMouth: 250, vaneCount: 4 })).toBe(true);
+    expect(renewed({ hMouth: 250, vaneCount: 4, vaneThickness: 3 })).toBe(true);
+    expect(renewed({ hMouth: 250, vaneCount: 4, vaneThickness: 3, vaneStart: 320 })).toBe(true);
+    expect(renewed({ hMouth: 250, vaneCount: 4, vaneThickness: 3, vaneStart: 320, vaneEndMode: "z", vaneEnd: 600 })).toBe(true);
+    expect(renewed({ hMouth: 250, vaneCount: 4, vaneThickness: 3, vaneStart: 320, vaneEndMode: "z", vaneEnd: 600, openingAngle: 120 })).toBe(true);
+  }, 120000);
+
+  it("übertragbar (structuredClone, wie postMessage)", () => {
+    const { values } = createGeometryEngine()({ ...BASE, ...ON });
+    expect(structuredClone(values.vanes)).toEqual(values.vanes);
+  });
 });
