@@ -213,7 +213,7 @@ function frame(camera, controls, object) {
  * @param flange   aufgelöster Throat-Flansch (flangeLayout) oder null, nur mit Schale
  * @param morph    Übergang rund → eckig am Throat (throatMorph) oder null
  * @param vanes    Lamellen (vanes.js, resolveVanes) oder null
- * @param centroid Schwerpunkt [x, h, z] des angezeigten Körpers (Schale bei Wandstärke, sonst Luftvolumen) oder null
+ * @param centroid Schwerpunkt [x, h, z] der Schale (nur mit Wandstärke) oder null – dann ist der Knopf ausgegraut
  */
 export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve, hypexT, fillet, wall, edgeR = 0, flange, morph = null, showRaumecke, centroid = null, vanes = null }) {
   const tr = useT();
@@ -350,7 +350,9 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
         <div style={{ display: "flex", gap: 4, flexShrink: 0, pointerEvents: "auto" }}>
           <ViewButton active={wireframe} onClick={() => setWireframe(v => !v)} title={tr("view.gridTitle")}>{tr("view.grid")}</ViewButton>
           <ViewButton active={showDriver} onClick={() => setShowDriver(v => !v)} title={tr("view.showDriverTitle")}>{tr("view.showDriver")}</ViewButton>
-          {centroid && <ViewButton active={showCentroid} onClick={() => setShowCentroid(v => !v)} title={tr("view.showCentroidTitle")}>{tr("view.showCentroid")}</ViewButton>}
+          {/* ohne Wandstärke gibt es keinen Schwerpunkt: Knopf ausgegraut statt ausgeblendet */}
+          <ViewButton active={!!centroid && showCentroid} disabled={!centroid} onClick={() => setShowCentroid(v => !v)}
+            title={centroid ? tr("view.showCentroidTitle") : tr("view.centroidNeedsWall")}>{tr("view.showCentroid")}</ViewButton>
           {showRaumecke && <ViewButton active={showCorner} onClick={() => setShowCorner(v => !v)} title={tr("view.showCornerTitle")}>{tr("view.showCorner")}</ViewButton>}
           <ViewButton onClick={resetView} title={tr("view.resetView")}>{tr("view.reset")}</ViewButton>
         </div>
@@ -360,11 +362,12 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
   );
 });
 
-function ViewButton({ active, onClick, title, children }) {
+function ViewButton({ active, onClick, title, children, disabled = false }) {
   return (
-    <button type="button" onClick={onClick} title={title} aria-pressed={active} style={{
+    <button type="button" onClick={onClick} title={title} aria-pressed={active} disabled={disabled} style={{
       background: UI.overlay, border: `1px solid ${active ? UI.accent : UI.borderControl}`, borderRadius: 4,
-      color: active ? UI.accent : UI.muted, fontFamily: FONT, fontSize: 10, height: 24, padding: "0 7px", cursor: "pointer",
+      color: active ? UI.accent : UI.muted, fontFamily: FONT, fontSize: 10, height: 24, padding: "0 7px",
+      cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1,
     }}>{children}</button>
   );
 }
