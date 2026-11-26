@@ -108,8 +108,8 @@ describe("buildDatasheet: Lamellen", () => {
     expect(row(buildDatasheet(withWall({ vanes }), ALL, DATE, "en"), "Vanes")).toContain("4 sectors");
   });
 
-  it("ohne Wandstärke oder ohne Lamellen kein Eintrag", () => {
-    expect(row(buildDatasheet(design({ wall: 0, vanes }), ALL, DATE), "Lamellen")).toBeUndefined();
+  it("auch ohne Wandstärke ein Eintrag; ohne Lamellen keiner", () => {
+    expect(row(buildDatasheet(design({ wall: 0, vanes }), ALL, DATE), "Lamellen")).toContain("3 ×");
     expect(row(buildDatasheet(withWall({}), ALL, DATE), "Lamellen")).toBeUndefined();
   });
 });

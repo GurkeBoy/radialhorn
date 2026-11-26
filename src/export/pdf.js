@@ -97,7 +97,7 @@ export function buildDatasheet(design, opts, date = new Date(), lang = "de") {
   const tr = (key, params) => translate(lang, key, params);
   const { s, rt, L, hMouth, curve, hypexT, fillet, profile, morph, showRaumecke, showWandstaerke, wandstaerke } = design;
   const wall = design.wall ?? 0, flange = wall > 0 ? design.flange ?? null : null;
-  const vanes = wall > 0 && !s.round && design.vanes?.ok ? design.vanes : null;
+  const vanes = !s.round && design.vanes?.ok ? design.vanes : null;
   const trakOn = hasTraktrix(s);
   const round = !!s.round;   // rundes Horn: nur ein Längsschnitt (das Draufsicht-Profil), kein Seitenriss
   const wallPts = planOutline(s);

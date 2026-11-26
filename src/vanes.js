@@ -29,6 +29,7 @@ export const TIP_WIDTH = 0.4;         // Breite der Spitze [mm]: eine Düsenbahn
 export const TIP_MAX_SHARE = 0.4;     // eine Spitze nimmt höchstens diesen Anteil der Lamellenlänge ein
 export const VANE_SAMPLES = 32;       // Stützstellen entlang der Lamelle
 const EMBED_MAX = 3;           // Eintauchtiefe in die Wand, höchstens [mm]
+const EMBED_NO_WALL = 0.2;    // Eintauchtiefe ohne Wand [mm]
 const EMBED_FRACTION = 0.4;    // … und höchstens dieser Anteil der Wandstärke
 const SAME_NORMAL = 1e-9;      // Normalen gelten als gleich (ebene Fläche)
 export const AUTO_MAX_STAGES = 4;   // Obergrenze der Stufen bei „automatisch“ (aus 1 Lamelle werden dann 31)
@@ -369,8 +370,9 @@ function volumeOf(tris) {
  */
 export function vaneBodies(s, airTris, vanes, wall) {
   const none = { surfaces: [], overlap: 0, cavity: 0, count: 0 };
-  if (!vanes?.ok || !(wall > 0)) return none;
-  const t = vanes.thickness, e = Math.min(EMBED_MAX, EMBED_FRACTION * wall);
+  if (!vanes?.ok || !(wall >= 0)) return none;
+  // ohne Wandstärke (nur Ansicht und Volumen) bleibt ein Hauch Eintauchtiefe, damit Deckel und Boden nicht mit den Flächen des Luftkanals flimmern
+  const t = vanes.thickness, e = wall > 0 ? Math.min(EMBED_MAX, EMBED_FRACTION * wall) : EMBED_NO_WALL;
   const surfaces = [];
   let overlap = 0, cavity = 0;
 

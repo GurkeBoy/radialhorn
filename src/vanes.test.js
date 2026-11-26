@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet, throatMorph, mouthRounding, focusRadius, createHornMath, wavefrontAtAxis } from "./horn-math.js";
 import { buildShellGeometry, triangulate, gridLines } from "./horn-mesh.js";
 import { buildAir } from "./bodies.js";
+import { meshBuffers } from "./mesh-buffers.js";
 import { computeVolumes } from "./volume.js";
 import { crossSection } from "./horn-math.js";
 import { vaneBlockage } from "./vane-blockage.js";
@@ -222,11 +223,31 @@ describe("vaneBodies: Körper", () => {
     });
   }
 
-  it("ohne Wandstärke oder mit unlösbarer Länge keine Körper", () => {
+  it("mit unlösbarer Länge oder ohne Lamellen keine Körper; ohne Wandstärke (nur Ansicht) Platten mit kleiner Eintauchtiefe", () => {
     const vanes = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } }));
-    expect(vaneBodies(s, airTris(), vanes, 0).count).toBe(0);
     expect(vaneBodies(s, airTris(), { ...vanes, ok: false }, WALL).count).toBe(0);
     expect(vaneBodies(s, airTris(), null, WALL).count).toBe(0);
+    expect(vaneBodies(s, airTris(), vanes, -1).count).toBe(0);
+    const bare = vaneBodies(s, airTris(), vanes, 0), walled = vaneBodies(s, airTris(), vanes, WALL);
+    expect(bare.count).toBe(3);
+    for (const f of bare.surfaces) { expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 }); expect(signedVolume(f.triangles)).toBeGreaterThan(0); }
+    expect(bare.overlap).toBeLessThan(0.1 * walled.overlap);   // 0,2 mm statt bis 2,4 mm
+    expect(bare.cavity).toBeGreaterThan(0.9 * walled.cavity);
+  });
+
+  it("ohne Wandstärke: Lamellen im Luftkörper (Ansicht), Volumen der Luft um ihr Volumen kleiner, Export ohne Lamellen", () => {
+    const vanes = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } }));
+    const plain = buildAir(s, RT, profile, null), withVanes = buildAir(s, RT, profile, null, null, undefined, vanes);
+    expect(withVanes.surfaces.filter(f => f.section === "lamellen")).toHaveLength(3);
+    expect(withVanes.surfaces.filter(f => f.section !== "lamellen")).toHaveLength(plain.surfaces.length);
+    expect(withVanes.vanes.count).toBe(3);
+    const base = { s, rt: RT, hMouth: H_MOUTH, curve: "exponential", hypexT: 0.5, fillet: null, wall: 0 };
+    const a = computeVolumes(base), b = computeVolumes({ ...base, vanes });
+    expect(a.air - b.air).toBeCloseTo(withVanes.vanes.cavity, 3);
+    expect(b.air).toBeLessThan(a.air);
+    expect(b.shell).toBeNull();
+    const buffers = meshBuffers({ ...base, vanes, sections: ["lamellen"] });
+    expect(buffers.sections[0].lines.length).toBeGreaterThan(0);
   });
 
   it("auch mit Verrundung, rundem Throat und gerundeten Mundecken geschlossen, ab dem Throat", () => {

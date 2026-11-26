@@ -847,16 +847,20 @@ function surfacesOf(b, invert = false) {
  *   grid: Zeilen × Spalten von Punkten oder triangles: fertige Dreiecke;
  *   section: "traktrix" | "klothoide" | "linear" | "cap"; outward: Punkt ↦ ungefähre Außenrichtung
  */
-export function buildHornGeometry(s, rt, profile, fillet = null, morph = null, res = DEFAULT_RES) {
+export function buildHornGeometry(s, rt, profile, fillet = null, morph = null, res = DEFAULT_RES, vanes = null) {
   const air = body(s, rt, 0, (x, z) => profile(s.zFocus + focusRadius(s, x, z)), fillet, res, 0, morph);
   const radialOut = ([x, , z]) => [x, 0, z - s.zFocus];
   const capThroat = air.capThroatFan ? { triangles: air.capThroatFan } : { grid: air.capThroat };
+  // Lamellen auch ohne Wandstärke (nur zum Ansehen und für das Volumen): Platten im Luftkanal, ohne Wand zum Verankern (vanes.js)
+  const vaneSet = vanes ? vaneBodies(s, airTriangles(surfacesOf(air)), vanes, 0) : null;
   return {
     surfaces: [
       ...surfacesOf(air),
       { name: "capThroat", section: "cap", ...capThroat, outward: () => [0, 0, -1] },
       { name: "capMouth",  section: "cap", grid: morph?.mouth ? mouthStrip(air.mouthArcs, air.mouth.top, air.mouth.bottom) : air.capMouth, outward: radialOut },
+      ...(vaneSet?.surfaces ?? []),
     ],
+    vanes: vaneSet && vaneSet.count > 0 ? { count: vaneSet.count, overlap: vaneSet.overlap, cavity: vaneSet.cavity, thickness: vanes.thickness } : null,
   };
 }
 

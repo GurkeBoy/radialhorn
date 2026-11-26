@@ -98,7 +98,6 @@ export default {
   "construction.edgeRadius": "Kantenradius",
   "construction.flange": "Flansch am Throat",
   "construction.vanes": "Lamellen",
-  "construction.vanesNeedWall": "Lamellen brauchen eine Wandstärke – erst „Wandstärke“ einschalten.",
   "construction.vanesInfo": "Dünne senkrechte Platten, die den Schall weiter streuen. Sie teilen die Wellenfront in gleiche Winkelsektoren: Jede Lamelle folgt den Wellenfronten, trifft sie überall senkrecht und darf schon am Throat beginnen. Im geraden Bereich der Wand sind es Strahlen vom Fokus, im Eingang laufen sie gekrümmt dorthin. Oben und unten sind sie in Deckel und Boden verankert. Nur beim Radialhorn.",
   "vanes.title": "Lamellen",
   "vanes.count": "Anzahl",

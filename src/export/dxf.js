@@ -82,7 +82,7 @@ export const dxfDocument = entities => `0\nSECTION\n2\nENTITIES\n${entities.join
 /**
  * Erzeugt den DXF-Text.
  * @param design  { s, rt, hMouth, curve, hypexT, fillet, flange, morph, profile, wall, edgeR, vanes } (profile, wall, edgeR
- *                nur für die Stützrippen am Flansch; vanes: aufgelöste Lamellen, nur mit wall > 0)
+ *                nur für die Stützrippen am Flansch; vanes: aufgelöste Lamellen)
  * @param opts    Layer-Auswahl { draufsicht, mundbogen, fokus, seitenprofil, uebergang, flansch }
  */
 export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, morph = null, profile = null, wall = 0, edgeR = 0, vanes = null }, opts) {
@@ -104,7 +104,7 @@ export function buildDXF({ s, rt, hMouth, curve, hypexT, fillet, flange = null, 
       out.push(dxfLine([s.zTrans, sign * s.xTrans], [s.zMouth, sign * s.xMouth], "Draufsicht_Gerade"));
     });
     // Lamellen: Umriss jeder Platte in der Draufsicht (Seitenlinien und Stirnen entlang der Wellenfronten)
-    if (wall > 0 && vanes?.ok && !s.round) {
+    if (vanes?.ok && !s.round) {
       for (const center of vanes.paths) {
         const { left, right } = vaneOutline(center, vanes.widths[vanes.paths.indexOf(center)]);
         const box = [...left, ...right.slice().reverse()].map(([x, z]) => [z, x]);   // DXF der Draufsicht: [z, x]

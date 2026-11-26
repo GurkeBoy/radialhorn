@@ -228,7 +228,7 @@ export const Ansicht3D = memo(function Ansicht3D({ s, rt, dw, dh, hMouth, curve,
 
   const meshInput = useMemo(() => s ? {
     s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, morph,
-    flange: wall > 0 ? flange : null, vanes: wall > 0 ? vanes : null, sections: Object.keys(SECTION_COLOR),
+    flange: wall > 0 ? flange : null, vanes, sections: Object.keys(SECTION_COLOR),
   } : null, [s, rt, hMouth, curve, hypexT, fillet, wall, edgeR, flange, morph, vanes]);
   const sections = useMeshWorker(meshInput);
 

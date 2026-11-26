@@ -42,8 +42,10 @@ const momentsOf = geometry => meshMoments(geometry.surfaces.flatMap(triangulate)
  */
 export function computeVolumes({ s, rt, hMouth, curve, hypexT, fillet, morph = null, wall, flange = null, edgeR = 0, vanes = null }) {
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
-  const airVolume = meshVolume(buildAir(s, rt, profile, fillet, morph).surfaces.flatMap(triangulate));
-  if (!(wall > 0)) return { air: airVolume, shell: null, outer: null, shellCentroid: null };
+  const airBody = buildAir(s, rt, profile, fillet, morph, undefined, wall > 0 ? null : vanes);
+  const airVolume = meshVolume(airBody.surfaces.filter(f => !f.vane).flatMap(triangulate));
+  // ohne Wandstärke nehmen die Lamellen dem Luftkanal ebenfalls ihr Volumen (cavity)
+  if (!(wall > 0)) return { air: airVolume - (airBody.vanes?.cavity ?? 0), shell: null, outer: null, shellCentroid: null };
   const geometry = buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, undefined, vanes);
   const shellMoments = momentsOf(geometry);
   // Rippen und Lamellen reichen in Platte bzw. Wand hinein; Lamellen nehmen dem Luftkanal ihr Volumen

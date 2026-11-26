@@ -19,7 +19,7 @@ export function meshBuffers({ s, rt, hMouth, curve, hypexT, fillet, wall, flange
   const profile = makeProfile(s, rt, hMouth, curve, hypexT, fillet);
   const geometry = wall > 0
     ? buildShell(s, rt, profile, fillet, wall, flange, edgeR, morph, res, vanes)
-    : buildAir(s, rt, profile, fillet, morph, res);
+    : buildAir(s, rt, profile, fillet, morph, res, vanes);
 
   const out = [];
   for (const section of sections) {
