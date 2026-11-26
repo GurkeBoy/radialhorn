@@ -308,6 +308,34 @@ describe("Ende ab Kanalbreite: der Kanal zwischen den Lamellen, die dort laufen"
   });
 });
 
+describe("Grenzfälle: Bereich des Reglers bleibt endlich", () => {
+  it("beginnt die Lamelle erst am Mund (kein Abschnitt bis zum Mund), sind alle Werte endlich – nie ±Infinity", () => {
+    for (const start of [s.zApex, s.zApex + 100, 1e6]) for (const stagger of [undefined, { stages: 2, mode: "channel", channel: 30, z: [] }]) {
+      const v = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: start }, end: { mode: "channel", value: 60 }, stagger }));
+      expect(v.endChannelRange.every(Number.isFinite)).toBe(true);
+      expect(v.endChannelRange[0]).toBeLessThanOrEqual(v.endChannelRange[1]);
+      expect(v.ok).toBe(false);   // zu kurz für eine Lamelle: Warnung, keine Körper
+    }
+  });
+
+  it("zufällige Einstellungen: nichts wird NaN oder unendlich, nichts wirft", () => {
+    let seed = 99;
+    const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const pick = a => a[Math.floor(rnd() * a.length)], between = (a, b) => a + rnd() * (b - a);
+    const finite = o => typeof o === "number" ? Number.isFinite(o) : o && typeof o === "object" ? Object.values(o).every(finite) : true;
+    for (let i = 0; i < 300; i++) {
+      const v = resolveVanes(s, {
+        count: pick([1, 2, 3, 5, 8, 12]), thickness: pick([0.3, 0.5, 2, 5, 10]),
+        start: { mode: pick(["z", "channel", "width"]), value: between(-50, 600) },
+        end: { mode: pick(["mouth", "z", "channel"]), value: between(-50, 600) },
+        tip: { start: pick([true, false]), end: pick([true, false]), length: pick([2, 10, 40]) },
+        stagger: pick([null, { stages: pick([1, 2, 3]), auto: pick([true, false]), mode: pick(["channel", "z"]), channel: between(3, 150), z: [between(0, 500), between(0, 500), between(0, 500)] }]),
+      });
+      expect(finite(v)).toBe(true);
+    }
+  });
+});
+
 describe("Stufen automatisch", () => {
   const auto = (end, over = {}) => spec({ count: 1, start: { mode: "z", value: 0 }, end, stagger: { stages: 1, auto: true, mode: "channel", channel: 35, z: [], ...over } });
   const upTo = z => ({ mode: "z", value: z });

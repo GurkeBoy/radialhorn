@@ -162,7 +162,8 @@ function endByChannel(s, n, t, value, zStart, zMouth, starts) {
   const chan = (z, i) => measures(s, (n + 1) * 2 ** i - 1, t, z).channel;
   const parts = [];
   for (let i = 0; i + 1 < bounds.length; i++) if (bounds[i + 1] > bounds[i]) parts.push({ i, lo: bounds[i], hi: bounds[i + 1] });
-  const values = parts.flatMap(p => [chan(p.lo, p.i), chan(p.hi, p.i)]);
+  // beginnt die Lamelle erst am Mund, gibt es keinen Abschnitt: dann zählt die Breite dort (nie ±Infinity im Bereich des Reglers)
+  const values = parts.length ? parts.flatMap(p => [chan(p.lo, p.i), chan(p.hi, p.i)]) : [chan(zStart, 0)];
   const range = [Math.min(...values), Math.max(...values)];
   for (const { i, lo, hi } of parts) {
     if (chan(hi, i) < value) continue;
