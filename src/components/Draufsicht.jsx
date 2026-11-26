@@ -231,7 +231,19 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           const pt = (ang, rr) => [vx + rr * Math.sin(ang), vy + rr * Math.cos(ang)];
           const [tx, ty] = pt(mid, r + 8), [ax, ay] = pt(hi, r), [bx, by] = pt(lo, r);
           const ext = ang => { const [x0, y0] = pt(ang, R + 2), [x1, y1] = pt(ang, r + 2); return <line key={ang} x1={x0} y1={y0} x2={x1} y2={y1} stroke={COLOR.lamelle} strokeWidth="0.35" strokeDasharray="3 3" />; };
+          // Kanalbreite am Ende: lichte Breite zwischen zwei benachbarten Lamellen (Sehne zwischen den Lamellenmitten − Dicke), auf der
+          // gegenüberliegenden Seite. Maßlinie parallel zur Sehne, 18 px
+          // hinter dem äußersten Punkt (wie der Winkelbogen), Hilfslinien/Text von DimAligned; Wand statt Lamelle als Begrenzung ohne Dickenabzug
+          const kc = k, edge = j => (j === 0 || j === vanes.count + 1 ? 0 : (vanes.thickness * scale) / 2);
+          const pa = pt(-(th - kc * d), R), pb = pt(-(th - (kc + 1) * d), R);
+          const len = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), u = [(pb[0] - pa[0]) / len, (pb[1] - pa[1]) / len];
+          let q1 = [pa[0] + u[0] * edge(kc), pa[1] + u[1] * edge(kc)], q2 = [pb[0] - u[0] * edge(kc + 1), pb[1] - u[1] * edge(kc + 1)];
+          const mx = (pa[0] + pb[0]) / 2 - vx, my = (pa[1] + pb[1]) / 2 - vy;
+          if (u[1] * mx - u[0] * my < 0) [q1, q2] = [q2, q1];   // Normale (uy, −ux) zeigt vom Mittelpunkt weg
+          const off = r - Math.hypot(mx, my);
+          const spanned = Math.hypot(q2[0] - q1[0], q2[1] - q1[1]) / scale;
           return <g>
+            <DimAligned p1={q1} p2={q2} offset={off} color={COLOR.lamelle} marker="url(#arrH)" label={`${spanned.toFixed(1)} mm`} />
             {ext(hi)}{ext(lo)}
             <path d={`M${ax},${ay} A${r},${r} 0 0 1 ${bx},${by}`} fill="none" stroke={COLOR.lamelle} strokeWidth="0.8" />
             <text x={tx} y={ty} transform={`rotate(${-mid * 180 / Math.PI} ${tx} ${ty})`} textAnchor="middle" dominantBaseline="central"
