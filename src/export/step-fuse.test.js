@@ -125,6 +125,19 @@ describe("fuseStepBodies", () => {
     expect(volume / mesh.shell).toBeCloseTo(1, 2);
   });
 
+  it("gestaffelte Lamellen (1 → 3 → 7) mit Spitzen: ein gültiger Körper nach dem Vereinen, Volumen wie das Netz", () => {
+    const s = solveHorn(500, 60, RT, 120, 100), profile = makeProfile(s, RT, H, "exponential", 0.5);
+    const vanes = resolveVanes(s, { count: 1, thickness: 2, start: { mode: "z", value: 0 }, end: { mode: "mouth", value: 0 }, tip: { start: true, end: true, length: 10 }, stagger: { stages: 2, mode: "channel", channel: 35, z: [] } });
+    expect(vanes.count).toBe(7);
+    const step = hornStep({ s, rt: RT, profile, fillet: null, wall: WALL, edgeR: 0, morph: null, flange: null, vanes }, { fileName: "t.step" });
+    const { step: fused, volume } = fuseStepBodies(oc, step, "t.step");
+    const after = bodiesOf(fused);
+    expect(after.volumes).toHaveLength(1);
+    expect(after.valid).toBe(true);
+    const mesh = computeVolumes({ s, rt: RT, hMouth: H, curve: "exponential", hypexT: 0.5, fillet: null, wall: WALL, vanes });
+    expect(volume / mesh.shell).toBeCloseTo(1, 2);
+  });
+
   it("ohne Rippen: ein Körper bleibt unverändert", () => {
     const step = stepOf({});
     const result = fuseStepBodies(oc, step);

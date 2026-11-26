@@ -19,8 +19,9 @@
 import { surfaceTriangles } from "./flange-ribs.js";
 import { wavefrontAtAxis } from "./horn-math.js";
 
-export const VANE_START_MODES = ["z", "width", "channel"];
+export const VANE_START_MODES = ["z", "channel"];   // „Hornbreite“ gibt es nur noch intern (vaneValue): mit gestaffelten Lamellen zählt die Kanalbreite
 export const VANE_END_MODES = ["mouth", "z", "channel"];
+export const VANE_STAGE_MODES = ["channel", "z"];
 
 const MIN_LENGTH = 5;          // kürzeste Lamelle (Unterschied der Achsenstellen) [mm]
 const MIN_CHANNEL = 1;         // kleinste lichte Kanalbreite am Beginn [mm]
@@ -100,20 +101,56 @@ export function vaneRanges(s, count, thickness) {
   return { z: [zFloor, zMax], width: range("width"), channel: range("channel") };
 }
 
+/** Zweierpotenz im Teiler: wie oft 2 in j aufgeht. */
+const twos = j => { let c = 0; while (j > 0 && j % 2 === 0) { j /= 2; c++; } return c; };
+
+/**
+ * Gestaffelter Beginn: Stufe s setzt in jeden Kanal der vorigen Anordnung (K Sektoren) eine Lamelle in die Mitte – danach 2·K
+ * Sektoren. Beginn der Stufe: bei einer lichten Kanalbreite der vorigen Anordnung (mode "channel") oder bei einer festen
+ * Achsenstelle z (mode "z"); nie vor der vorigen Stufe, nie dort, wo der neue Kanal unter MIN_CHANNEL fiele.
+ * @returns {{ starts: number[], limited: boolean }}  Achsenstellen der Stufen 1…S (leer ohne Staffelung)
+ */
+function staggerStarts(s, n, t, stagger, zStart, zEnd) {
+  const stages = Math.min(3, Math.max(0, Math.round(stagger?.stages ?? 0)));
+  const starts = [];
+  let limited = false, prev = zStart;
+  for (let k = 1; k <= stages; k++) {
+    const sectors = (n + 1) * 2 ** (k - 1);
+    const floor = Math.max(prev, axisRange(s, 2 * sectors - 1, t)[0]);
+    let z, lim = false;
+    if (stagger.mode === "z") {
+      const want = stagger.z?.[k - 1] ?? prev;
+      z = Math.min(Math.max(want, floor), zEnd);
+      lim = Math.abs(z - want) > LIMIT_TOLERANCE;
+    } else {
+      const r = axisOf(s, sectors - 1, t, "channel", stagger.channel, axisRange(s, sectors - 1, t));
+      z = Math.min(Math.max(r.z, floor), zEnd);
+      lim = r.limited;
+    }
+    limited = limited || lim;
+    starts.push(z);
+    prev = z;
+  }
+  return { starts, limited };
+}
+
 /**
  * Lamellen zu einer Lösung auflösen und auf das Machbare begrenzen.
  * @param s     Lösung aus solveHorn
- * @param spec  { count, thickness, start: { mode: "z" | "width" | "channel", value }, end: { mode: "mouth" | "z" | "channel", value },
- *              tip?: { start: boolean, end: boolean, length } } – tip: Beginn/Ende laufen in der Draufsicht über length [mm] auf TIP_WIDTH zu
+ * @param spec  { count, thickness, start: { mode: "z" | "channel", value }, end: { mode: "mouth" | "z" | "channel", value } }
  *              Ende "channel": hier ist der Kanal so breit geworden, dass die Lamelle enden darf
+ *              tip?: { start: boolean, end: boolean, length } – Beginn/Ende laufen in der Draufsicht über length [mm] auf TIP_WIDTH zu
+ *              stagger?: { stages: 0…3, mode: "channel" | "z", channel, z: [z1, z2, z3] } – gestaffelter Beginn: count Lamellen
+ *              laufen ab start; jede Stufe setzt in jeden Kanal eine weitere Lamelle in die Mitte (Sektoren verdoppeln sich)
  * @returns {object | null}  null ohne Lamellen (rundes Horn, Anzahl 0, Dicke 0); sonst
- *   { count, thickness, fractions, delta, zStart, zEnd, atThroat, widthStart, widthEnd, channelStart, channelEnd,
- *     startLimited, endLimited, ok, paths } – Winkel im Bogenmaß, Längen in mm; delta = Sektorwinkel am Mund; zStart/zEnd =
- *   Achsenstellen der ersten und letzten Wellenfront; atThroat: die Lamellen beginnen an der Throat-Wellenfront und sind
- *   bis in die Throat-Ebene (z = 0) verlängert; paths = je Lamelle die Mittellinie [[x, z], …] mit VANE_SAMPLES + 1 Punkten
- *   (atThroat: ein Punkt mehr, in der Throat-Ebene; leer, wenn nicht ok); ok = lang genug für eine Lamelle;
- *   widths = je Lamelle die Dicke an jedem Punkt des Weges; tip = { start, end, length } mit der wirksamen Spitzenlänge
- *   (mit Spitze kommen Punkte am Ende der Spitze hinzu)
+ *   { count, baseCount, thickness, fractions, stages, stageStarts, staggerLimited, delta, zStart, zEnd, atThroat, widthStart,
+ *     widthEnd, channelStart, channelEnd, startLimited, endLimited, ok, paths, widths, tip } – Winkel im Bogenmaß, Längen
+ *   in mm; count = tatsächliche Zahl der Lamellen (mit Staffelung (count + 1)·2^Stufen − 1, zu kurze entfallen); baseCount =
+ *   Lamellen ab dem Beginn; stages = je Lamelle die Stufe (0 = ab dem Beginn); delta = Sektorwinkel am Mund; zStart/zEnd =
+ *   Achsenstellen der ersten und letzten Wellenfront; atThroat: die Lamellen der Stufe 0 beginnen an der Throat-Wellenfront und
+ *   sind bis in die Throat-Ebene (z = 0) verlängert; paths = je Lamelle die Mittellinie [[x, z], …] mit VANE_SAMPLES + 1 Punkten
+ *   (atThroat: ein Punkt mehr, in der Throat-Ebene; mit Spitzen Punkte am Spitzenende; leer, wenn nicht ok); ok = lang genug für
+ *   eine Lamelle; widths = je Lamelle die Dicke an jedem Punkt; tip = { start, end, length } mit der wirksamen Spitzenlänge
  */
 export function resolveVanes(s, spec) {
   if (!s || s.round || !spec || !(spec.count >= 1) || !(spec.thickness > 0)) return null;
@@ -121,24 +158,37 @@ export function resolveVanes(s, spec) {
   const start = axisOf(s, n, t, spec.start.mode, spec.start.value, range);
   const end = spec.end.mode === "mouth" ? { z: range[1], limited: false } : axisOf(s, n, t, spec.end.mode, spec.end.value, range);
   const zStart = start.z, zEnd = end.z, ok = zEnd - zStart >= MIN_LENGTH, atThroat = zStart === range[0] && range[2] <= 0;
-  const a = measures(s, n, t, zStart), b = measures(s, n, t, zEnd), f = fractions(n);
+  const stagger = ok ? staggerStarts(s, n, t, spec.stagger, zStart, zEnd) : { starts: [], limited: false };
+  const S = stagger.starts.length, all = fractions((n + 1) * 2 ** S - 1);
+
+  // Lamelle j (1…N): Stufe S − (Zweierpotenz von j), Stufe 0 ab dem Beginn; zu kurze Stufenlamellen entfallen
+  const list = all.map((f, i) => {
+    const stage = S - Math.min(twos(i + 1), S);
+    return { f, stage, z: stage === 0 ? zStart : stagger.starts[stage - 1] };
+  }).filter(v => !ok || zEnd - v.z >= MIN_LENGTH);
+  const count = list.length;
+  const a = measures(s, n, t, zStart), b = measures(s, count, t, zEnd);
 
   let paths = [];
   if (ok) {
-    paths = f.map(() => []);
-    for (let k = 0; k <= VANE_SAMPLES; k++) {
-      const { zCenter, radius, halfAngle } = k === 0 ? a.w : k === VANE_SAMPLES ? b.w : measures(s, n, t, zStart + (zEnd - zStart) * k / VANE_SAMPLES).w;
-      f.forEach((fi, i) => paths[i].push([radius * Math.sin(fi * halfAngle), zCenter + radius * Math.cos(fi * halfAngle)]));
-    }
+    paths = list.map(({ f, z }) => {
+      const p = [];
+      for (let k = 0; k <= VANE_SAMPLES; k++) {
+        const { zCenter, radius, halfAngle } = k === VANE_SAMPLES ? b.w : k === 0 && z === zStart ? a.w : measures(s, n, t, z + (zEnd - z) * k / VANE_SAMPLES).w;
+        p.push([radius * Math.sin(f * halfAngle), zCenter + radius * Math.cos(f * halfAngle)]);
+      }
+      return p;
+    });
     // Die Throat-Wellenfront schneidet die Achse ein paar Millimeter hinter der Throat-Ebene (r0 groß, Bogen flach): bis
     // in die Ebene verlängern, in Richtung des ersten Stücks
-    if (atThroat) for (const p of paths) {
+    if (atThroat) paths.forEach((p, i) => {
+      if (list[i].stage !== 0) return;
       const [x0, z0] = p[0], [x1, z1] = p[1];
       if (z0 > 1e-9) p.unshift([x0 - (x1 - x0) / ((z1 - z0) || 1) * z0, 0]);
-    }
+    });
   }
   const tip = { start: !!spec.tip?.start && t > TIP_WIDTH, end: !!spec.tip?.end && t > TIP_WIDTH, length: 0 };
-  let widths = paths.map(p => p.map(() => t));
+  const widths = paths.map(p => p.map(() => t));
   if (ok && (tip.start || tip.end) && spec.tip.length > 0) {
     let shortest = Infinity;
     paths = paths.map((p, i) => {
@@ -150,7 +200,8 @@ export function resolveVanes(s, spec) {
     tip.length = shortest;
   }
   return {
-    count: n, thickness: t, fractions: f, delta: 2 * s.alpha2 / (n + 1),
+    count, baseCount: n, thickness: t, fractions: list.map(v => v.f), stages: list.map(v => v.stage), stageStarts: stagger.starts,
+    staggerLimited: stagger.limited, delta: 2 * s.alpha2 / (count + 1),
     zStart, zEnd, atThroat, widthStart: a.width, widthEnd: b.width, channelStart: a.channel, channelEnd: b.channel,
     startLimited: start.limited, endLimited: end.limited,
     ok, paths, widths, tip,

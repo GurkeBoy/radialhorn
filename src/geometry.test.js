@@ -14,6 +14,7 @@ const BASE = {
   morphOn: true, morphLength: 473, mouthRoundOn: false, mouthRoundR: 20, flangeOn: true, flangeD: 120, flangeT: 10, holeCount: 4, holeCircle: 101.6, holeD: 6.6,
   holeAngle: 0, ribsOn: false, ribThickness: 4, ribLength: 30, roundOn: false, roundR: 2, edgeOn: true, edgeR: 10,
   vanesOn: false, vaneCount: 2, vaneThickness: 2, vaneStartMode: "z", vaneStart: 300, vaneEndMode: "mouth", vaneEnd: 500, vaneTipStart: false, vaneTipEnd: false, vaneTipLength: 10,
+  vaneStagger: false, vaneStages: 1, vaneStageMode: "channel", vaneStageChannel: 30, vaneStageZ1: 200, vaneStageZ2: 300, vaneStageZ3: 400,
 };
 
 describe("createGeometryEngine", () => {

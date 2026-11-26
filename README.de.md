@@ -39,7 +39,8 @@ Installer für **Windows**, **macOS** (Apple Silicon und Intel) und **Linux** (.
   Treibers – optional mit Stützrippen zwischen den Bohrungen (so viele wie Bohrungen, auf der Hornseite) und
   gerundetem Flanschrand. Optional Lamellen (Radialhorn): dünne senkrechte Platten, die den Wellenfronten vom Throat bis
   zum Mund folgen und sie in gleiche Winkelsektoren teilen, um den Schall weiter zu streuen; Anzahl, Dicke, Beginn und
-  Ende nach z, Hornbreite oder Kanalbreite einstellbar; wahlweise spitze Enden (auf druckbare 0,4 mm zulaufend).
+  Ende nach z oder Kanalbreite einstellbar; wahlweise gestaffelt (neue Lamellen setzen in der Mitte eines Kanals ein, sobald er
+  eine eingestellte Breite erreicht hat oder bei einem festen z) und mit spitzen Enden (auf druckbare 0,4 mm zulaufend).
 - **Frequenzgang (1D-Simulation):** Webster-Horngleichung per Transfermatrizen aus der Wellenfrontfläche S(x);
   Treiber mit Thiele-Small-Parametern und Kompressionskammer; Abstrahlung in 2π (exakt) oder 4π / π / π/2 (Näherung).
   SPL bei 1 m / 2,83 V und elektrische Impedanz als Diagramm, Export als CSV.

@@ -316,6 +316,93 @@ describe("Spitzen (druckbarer Keil an Beginn und Ende)", () => {
   }
 });
 
+describe("gestaffelter Beginn", () => {
+  const stag = (over = {}, stagger = {}) => spec({ count: 1, start: { mode: "z", value: 0 }, stagger: { stages: 1, mode: "channel", channel: 30, z: [200, 300, 400], ...stagger }, ...over });
+
+  it("ohne Staffelung: alle Lamellen Stufe 0, keine Stufenstellen", () => {
+    const v = resolveVanes(s, spec({ count: 2, start: { mode: "z", value: 100 } }));
+    expect(v.stages).toEqual([0, 0]);
+    expect(v.stageStarts).toEqual([]);
+    expect(v.baseCount).toBe(2);
+    expect(resolveVanes(s, stag({}, { stages: 0 })).count).toBe(1);
+  });
+
+  it("eine Stufe, Kanalbreite: aus 1 Lamelle (2 Sektoren) werden 3 (4 Sektoren); die neuen beginnen bei 30 mm lichter Kanalbreite der laufenden", () => {
+    const v = resolveVanes(s, stag());
+    expect(v.count).toBe(3);
+    expect(v.baseCount).toBe(1);
+    expect(v.stages).toEqual([1, 0, 1]);
+    expect(v.fractions[0]).toBeCloseTo(-0.5, 12);
+    expect(v.fractions[1]).toBeCloseTo(0, 12);
+    expect(v.fractions[2]).toBeCloseTo(0.5, 12);
+    expect(v.stageStarts).toHaveLength(1);
+    expect(v.stageStarts[0]).toBeGreaterThan(v.zStart);
+    // lichte Kanalbreite zwischen den zwei laufenden Sektoren (n = 1 Lamelle) = 30 mm an der Stufenstelle
+    expect(vaneValue(s, 1, 2, "channel", v.stageStarts[0])).toBeCloseTo(30, 6);
+    expect(v.staggerLimited).toBe(false);
+    expect(v.delta).toBeCloseTo(2 * s.alpha2 / 4, 12);
+  });
+
+  it("jede Lamelle beginnt auf ihrer Wellenfront bei f·θ, die der Stufen an der Stufenstelle", () => {
+    const v = resolveVanes(s, stag());
+    v.paths.forEach((p, i) => {
+      const z = v.stages[i] ? v.stageStarts[0] : v.zStart, w = wavefrontAtAxis(s, z);
+      if (v.stages[i] || !v.atThroat) expect(p[0][0]).toBeCloseTo(w.radius * Math.sin(v.fractions[i] * w.halfAngle), 6);
+      if (v.stages[i] || !v.atThroat) expect(p[0][1]).toBeCloseTo(w.zCenter + w.radius * Math.cos(v.fractions[i] * w.halfAngle), 6);
+      const end = wavefrontAtAxis(s, v.zEnd);
+      expect(p.at(-1)[0]).toBeCloseTo(end.radius * Math.sin(v.fractions[i] * end.halfAngle), 6);
+    });
+  });
+
+  it("zwei Stufen: 1 → 3 → 7 Lamellen, Stufe 2 bei 35 mm Kanalbreite der vier Sektoren, nach Stufe 1", () => {
+    const v = resolveVanes(s, stag({}, { stages: 2, channel: 35 }));
+    expect(v.count).toBe(7);
+    expect(v.stages).toEqual([2, 1, 2, 0, 2, 1, 2]);
+    expect(v.stageStarts).toHaveLength(2);
+    expect(v.stageStarts[1]).toBeGreaterThanOrEqual(v.stageStarts[0]);
+    expect(vaneValue(s, 1, 2, "channel", v.stageStarts[0])).toBeCloseTo(35, 6);
+    expect(vaneValue(s, 3, 2, "channel", v.stageStarts[1])).toBeCloseTo(35, 6);
+    for (let i = 1; i < 7; i++) expect(v.fractions[i] - v.fractions[i - 1]).toBeCloseTo(0.25, 12);
+  });
+
+  it("mit zwei Lamellen ab dem Beginn: 2 → 5 Lamellen", () => {
+    const v = resolveVanes(s, stag({ count: 2 }));
+    expect(v.count).toBe(5);
+    expect(v.stages).toEqual([1, 0, 1, 0, 1]);
+  });
+
+  it("feste Achsenstellen; Stufen nie vor der vorigen, Begrenzung wird gemeldet", () => {
+    const v = resolveVanes(s, stag({}, { stages: 2, mode: "z", z: [220, 300] }));
+    expect(v.stageStarts).toEqual([220, 300]);
+    expect(v.staggerLimited).toBe(false);
+    const back = resolveVanes(s, stag({}, { stages: 2, mode: "z", z: [300, 220] }));
+    expect(back.stageStarts).toEqual([300, 300]);
+    expect(back.staggerLimited).toBe(true);
+  });
+
+  it("Stufe zu spät: zu kurze Lamellen entfallen, nur die ab dem Beginn bleiben", () => {
+    const late = resolveVanes(s, stag({}, { mode: "z", z: [s.zApex - 2, 0, 0] }));
+    expect(late.count).toBe(1);
+    expect(late.paths).toHaveLength(1);
+    const wide = resolveVanes(s, stag({}, { channel: 5000 }));
+    expect(wide.count).toBe(1);
+    expect(wide.staggerLimited).toBe(true);
+  });
+
+  it("Körper: geschlossen und eben, auch mit Spitzen; Stufenlamellen sind kürzer", () => {
+    const v = resolveVanes(s, stag({ tip: { start: true, end: true, length: 8 } }, { stages: 2, channel: 25 }));
+    const bodies = vaneBodies(s, airTris(), v, WALL);
+    expect(bodies.count).toBe(7);
+    for (const f of bodies.surfaces) {
+      expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 });
+      expect(signedVolume(f.triangles)).toBeGreaterThan(0);
+    }
+    const len = p => p.slice(1).reduce((l, q, k) => l + Math.hypot(q[0] - p[k][0], q[1] - p[k][1]), 0);
+    expect(len(v.paths[1])).toBeLessThan(len(v.paths[3]));
+    expect(len(v.paths[0])).toBeLessThan(len(v.paths[1]));
+  });
+});
+
 describe("Schale und Volumen mit Lamellen", () => {
   const vanes = resolveVanes(s, spec({ count: 2, start: { mode: "z", value: 0 } }));
   const base = { s, rt: RT, hMouth: H_MOUTH, curve: "exponential", hypexT: 0.5, fillet: null, wall: WALL };
