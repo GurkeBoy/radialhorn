@@ -250,9 +250,9 @@ export default function App() {
   // (useSimulation): beim Ziehen folgt die Kurve laufend, der Haupt-Thread zeichnet nur. S(x) hängt
   // nur an der Geometrie (geoKey aus den Versionen der Stufen): Treiber, Abstrahlung und Temperatur
   // rechnen dort nur die Kette neu.
-  const simGeoKey = JSON.stringify([geo.versions.s, geo.versions.fillet, geo.versions.morph, rt, g.hMouth, g.curve, g.hypexT]);
+  const simGeoKey = JSON.stringify([geo.versions.s, geo.versions.fillet, geo.versions.morph, geo.versions.vanes, rt, g.hMouth, g.curve, g.hypexT]);
   const simInput = useMemo(() => s && p.simOn ? {
-    geoKey: simGeoKey, geometry: { s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph },
+    geoKey: simGeoKey, geometry: { s, rt, hMouth: g.hMouth, curve: g.curve, hypexT: g.hypexT, fillet, morph, vanes },
     temp: p.simTemp, mouth: p.mouth, driver: p.driver, freqs: SIM_FREQS,
   } : null, [simGeoKey, p.simOn, p.simTemp, p.mouth, p.driver]);   // eslint-disable-line react-hooks/exhaustive-deps -- Geometrie über simGeoKey
   const sim = useSimulation(simInput);
@@ -383,8 +383,9 @@ export default function App() {
             {!round && <Toggle label={t("construction.roundEdges")} checked={edgeOn} onChange={setEdgeOn} />}
             {!round && edgeOn && <Slider label={t("construction.edgeRadius")} value={Math.min(edgeR ?? wandstaerke, wandstaerke)} min={1} max={wandstaerke} step={1} unit="mm" onChange={setEdgeR} />}
             <Toggle label={t("construction.flange")} checked={flangeOn} onChange={setFlangeOn} />
-            {!round && <Toggle label={t("construction.vanes")} checked={vanesOn} onChange={setVanesOn} info={t("construction.vanesInfo")} />}
           </>}
+          {/* Lamellen: auch ohne Wandstärke zu sehen (wie das Horn selbst); Export (STL, STEP) nur mit Wand */}
+          {!round && <Toggle label={t("construction.vanes")} checked={vanesOn} onChange={setVanesOn} info={t("construction.vanesInfo")} />}
           {!round && vanesOn && vaneLimits && <Group title={t("vanes.title")}>
             <Slider label={t("vanes.count")} value={vaneCount} min={1} max={8} step={1} unit="" onChange={setVaneCount} />
             <Slider label={t("vanes.thickness")} value={vaneThickness} min={0.5} max={10} step={0.5} unit="mm" onChange={setVaneThickness} />
@@ -495,13 +496,13 @@ export default function App() {
             material={wallMaterial} onMaterial={setWallMaterial} customE={wallE} onCustomE={setWallE}
             customRho={wallRho} onCustomRho={setWallRho} limit={wallLimit} onLimit={setWallLimit} />
           <Card title={t("card.crossSection")} id="querschnitt">
-            <Querschnitt s={s} profile={profile} morph={morph} />
+            <Querschnitt s={s} profile={profile} morph={morph} vanes={vanes} />
           </Card>
           <Card title={t("card.export")} id="export">
             <Note>{t("export.dxfHint")}</Note>
             <Toggle label={t("export.dimensions")} checked={pdfDimensions} onChange={setPdfDimensions} hint={t("export.dimensionsHint")} />
             {flange?.invalidHoles > 0 && <Warn>{conflictText(flange.invalidHoles)}: {t("export.conflictCard")}</Warn>}
-            {(flange?.ribs || vanes?.ok) && <Toggle label={t("export.stepFuse")} checked={stepFuse} onChange={setStepFuse} info={t("export.stepFuseInfo")} />}
+            {(flange?.ribs || (wall > 0 && vanes?.ok)) && <Toggle label={t("export.stepFuse")} checked={stepFuse} onChange={setStepFuse} info={t("export.stepFuseInfo")} />}
             <div style={{ marginTop: 4 }}>
               <Button primary onClick={() => reportSave(() => exportDXF(design), "dxf")}>{t("export.dxf")}</Button>
               <Button onClick={() => reportSave(() => exportPDF(design, { ...ALL_LAYERS, bemassung: pdfDimensions }, lang), "pdf")}>{t("export.pdf")}</Button>
@@ -517,11 +518,11 @@ export default function App() {
         <div style={{ flex: 6, display: "flex", gap: 8, minHeight: 0 }}>
           <ViewPanel flex={1}>
             <Draufsicht s={s} rt={rt} dw={s?.round ? 0 : g.dw} dh={s?.round ? 0 : g.dh} L={LClamped}
-              showRaumecke={g.showRaumecke && !s?.round} showWandstaerke={g.showWandstaerke} wandstaerke={g.wandstaerke} flange={flange} shellOuter={shellOuter} vanes={wall > 0 ? vanes : null} />
+              showRaumecke={g.showRaumecke && !s?.round} showWandstaerke={g.showWandstaerke} wandstaerke={g.wandstaerke} flange={flange} shellOuter={shellOuter} vanes={vanes} />
           </ViewPanel>
           <ViewPanel flex={1}>
             <Ansicht3D s={s} rt={rt} dw={s?.round ? 4 * rt : g.dw} dh={s?.round ? 2 * rt + 10 : g.dh} hMouth={s?.round ? 2 * s.xMouth : g.hMouth} curve={g.curve} hypexT={g.hypexT} fillet={fillet} wall={wall} edgeR={edge} flange={flange} morph={morph} showRaumecke={g.showRaumecke && !s?.round} vanes={vanes}
-              centroid={wall > 0 ? volumes?.shellCentroid : volumes?.airCentroid} />
+              centroid={volumes?.shellCentroid} />
           </ViewPanel>
         </div>
         {(!round || sim) && <div style={{ flex: 5, display: "flex", gap: 8, minHeight: 0 }}>
@@ -586,9 +587,7 @@ const Volumes = memo(function Volumes({ volumes, wall, t }) {
         <Stat label={t("volume.air")} value={litres(volumes?.air)} />
         <Stat label={t("volume.shell")} value={litres(volumes?.shell)} />
         <Stat label={t("volume.outer")} value={litres(volumes?.outer)} />
-        {(wall > 0 ? volumes?.shellCentroid : volumes?.airCentroid) && (
-          <Stat label={t(wall > 0 ? "volume.centroidShell" : "volume.centroidAir")} value={"z = " + (wall > 0 ? volumes.shellCentroid : volumes.airCentroid)[2].toFixed(1) + " mm"} />
-        )}
+        {wall > 0 && volumes?.shellCentroid && <Stat label={t("volume.centroidShell")} value={"z = " + volumes.shellCentroid[2].toFixed(1) + " mm"} />}
       </div>
       <Note>{volumes?.shell == null ? t("volume.noWall") : t("volume.hint")}</Note>
     </Card>

@@ -26,6 +26,7 @@
  *   - Verlustfrei (Wandverluste: spätere Erweiterung).
  */
 import { crossSection, cornerRadius, cornerDeficit, makeProfile } from "./horn-math.js";
+import { vaneBlockage } from "./vane-blockage.js";
 
 // ──────────────────────────────────────────────────────────────────
 // LUFT, FREQUENZEN
@@ -390,8 +391,8 @@ export function phaseWithoutDelay(f, phase, tau) {
  * @param stepMm  größte Abtastweite [mm]
  * @param morph   Übergang rund → eckig (throatMorph) oder null
  */
-export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM, morph = null) {
-  const probe = crossSection(s, profile, 64, null, morph).slice(1);   // ohne die bis z = 0 verlängerte Kopie
+export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM, morph = null, blockage = null) {
+  const probe = crossSection(s, profile, 64, null, morph, blockage).slice(1);   // ohne die bis z = 0 verlängerte Kopie
   let walls = [probe[0].zWall];
   for (let i = 1; i < probe.length; i++) {
     const a = probe[i - 1], b = probe[i];
@@ -400,7 +401,7 @@ export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM, morph = nul
   }
   let pts;
   for (let pass = 0; pass < 6; pass++) {
-    pts = crossSection(s, profile, 0, walls, morph).slice(1);
+    pts = crossSection(s, profile, 0, walls, morph, blockage).slice(1);
     const refined = [pts[0].zWall];
     let tooWide = false;
     for (let i = 1; i < pts.length; i++) {
@@ -410,7 +411,8 @@ export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM, morph = nul
     if (!tooWide) break;
     walls = refined;
   }
-  const x = [0], S = [(s.round ? Math.PI * rt * rt : 2 * rt * 2 * profile(0) - cornerDeficit(cornerRadius(0, morph))) * 1e-6];
+  // Hals: Lamellen, die am Throat beginnen, nehmen dort schon Fläche weg (so viel wie an der ersten Wellenfront)
+  const x = [0], S = [(s.round ? Math.PI * rt * rt : 2 * rt * 2 * profile(0) - cornerDeficit(cornerRadius(0, morph)) - (pts[0].B ?? 0)) * 1e-6];
   for (const { z, A } of pts) {
     if (z - x.at(-1) * 1e3 <= 1e-9) continue;   // doppelte Stützstellen (Sektionsgrenzen)
     x.push(z * 1e-3);
@@ -428,7 +430,7 @@ export function areaCurve(s, rt, profile, stepMm = GEOMETRY_STEP_MM, morph = nul
  * Die Eingaben sind reine Daten (klonbar), die Profilfunktion wird hier neu gebaut. S(x) bleibt
  * zwischengespeichert, solange geoKey gleich ist: Treiber, Abstrahlung und Temperatur rechnen nur
  * die Kette neu.
- * @param input  { geoKey, geometry: { s, rt, hMouth, curve, hypexT, fillet, morph }, temp, mouth, driver, freqs }
+ * @param input  { geoKey, geometry: { s, rt, hMouth, curve, hypexT, fillet, morph, vanes? }, temp, mouth, driver, freqs }
  *               driver in Anzeige-Einheiten (PLACEHOLDER_DRIVER)
  * @returns {{ result, fLimit, delay, delayPath }}  result: simulate; fLimit: transverseLimit [Hz];
  *   delay: hornDelay [s], delayPath: derselbe Weg [m]
@@ -438,7 +440,7 @@ export function createSimulationEngine() {
   return function run({ geoKey, geometry: gm, temp, mouth, driver, freqs }) {
     if (geoKey !== key) {
       const profile = makeProfile(gm.s, gm.rt, gm.hMouth, gm.curve, gm.hypexT, gm.fillet);
-      curve = areaCurve(gm.s, gm.rt, profile, GEOMETRY_STEP_MM, gm.morph);
+      curve = areaCurve(gm.s, gm.rt, profile, GEOMETRY_STEP_MM, gm.morph, vaneBlockage(gm.s, gm.vanes, profile));
       key = geoKey;
     }
     const air = airAt(temp), dr = driverSI(driver, air.rho), delay = hornDelay(curve, air, dr);

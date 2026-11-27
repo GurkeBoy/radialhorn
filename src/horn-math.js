@@ -923,10 +923,11 @@ const ARC_SAMPLES = 64;   // Simpson-Intervalle je Halbbogen (gerade Zahl)
  * @param zWallList  statt der gleichmäßigen Abtastung diese Wandpunkte (z, 0 … zMouth); die
  *                   Sektionsgrenzen kommen in jedem Fall dazu (Simulation: gezielt dichter)
  * @param morph    Übergang rund → eckig (throatMorph) oder null
- * @returns {{z: number, A: number, part: "traktrix" | "klothoide" | "linear", zWall: number, cornerR: number}[]}
- *   aufsteigend in z; zWall = zugehöriger Wandpunkt, cornerR = Eckradius dort
+ * @param blockage Fläche [mm²], die Einbauten (Lamellen, vaneBlockage) an einer Wellenfront wegnehmen, oder null
+ * @returns {{z: number, A: number, B: number, part: "traktrix" | "klothoide" | "linear", zWall: number, cornerR: number}[]}
+ *   aufsteigend in z; zWall = zugehöriger Wandpunkt, cornerR = Eckradius dort; B = abgezogene Einbauten (in A schon enthalten)
  */
-export function crossSection(s, profile, n = 100, zWallList = null, morph = null) {
+export function crossSection(s, profile, n = 100, zWallList = null, morph = null, blockage = null) {
   if (s.round) return crossSectionRound(s, n, zWallList);
   const clothoid = denseClothoid(s);
   const zWalls = zWallList ? [...zWallList] : Array.from({ length: n + 1 }, (_, i) => s.zMouth * i / n);
@@ -951,7 +952,8 @@ export function crossSection(s, profile, n = 100, zWallList = null, morph = null
   const pts = zWalls.map(zWall => {
     const wf = wavefrontAt(s, zWall, clothoid);
     const cornerR = cornerRadius(wf.sWall, morph);
-    return { z: wf.zAxis, A: areaOf(wf) - cornerDeficit(cornerR), part: wf.part, zWall, cornerR };
+    const B = blockage ? blockage(wf) : 0;
+    return { z: wf.zAxis, A: areaOf(wf) - cornerDeficit(cornerR) - B, B, part: wf.part, zWall, cornerR };
   });
   return [{ ...pts[0], z: 0 }, ...pts];
 }

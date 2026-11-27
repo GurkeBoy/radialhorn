@@ -5,9 +5,9 @@
 import { buildHornGeometry, buildShellGeometry, flangeLayout, DEFAULT_RES } from "./horn-mesh.js";
 import { buildRoundHornGeometry, buildRoundShellGeometry, roundFlangeLayout } from "./round-mesh.js";
 
-/** Luftvolumen als geschlossener Körper. */
-export const buildAir = (s, rt, profile, fillet, morph = null, res = DEFAULT_RES) =>
-  s.round ? buildRoundHornGeometry(s, rt, res) : buildHornGeometry(s, rt, profile, fillet, morph, res);
+/** Luftvolumen als geschlossener Körper; vanes (nur Radialhorn): Lamellen als Platten im Luftkanal, ohne Wand (Ansicht, Volumen). */
+export const buildAir = (s, rt, profile, fillet, morph = null, res = DEFAULT_RES, vanes = null) =>
+  s.round ? buildRoundHornGeometry(s, rt, res) : buildHornGeometry(s, rt, profile, fillet, morph, res, vanes);
 
 /** Schale mit Wandstärke t, optional mit Flansch (aufgelöst oder als Vorgabe) und Lamellen (nur Radialhorn). */
 export const buildShell = (s, rt, profile, fillet, t, flange = null, edgeR = 0, morph = null, res = DEFAULT_RES, vanes = null) =>

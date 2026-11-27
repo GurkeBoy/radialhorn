@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import { createHornMath, makeProfile, computeFillet } from "./horn-math.js";
 import { buildHornGeometry, buildShellGeometry, triangulate } from "./horn-mesh.js";
 import { meshVolume, meshMoments, computeVolumes } from "./volume.js";
+import { buildAir } from "./bodies.js";
 import { entrancePoints, linearWallPoints } from "./horn-math.js";
 
 /** Würfel der Kantenlänge a bei (x0, y0, z0), Dreiecke nach außen orientiert. */
@@ -95,25 +96,24 @@ describe("Schwerpunkt des Horns", () => {
   const radial = createHornMath(140).solveHorn(500, 60, RT, 182, 90);
   const radialInput = extra => ({ s: radial, rt: RT, hMouth: 200, curve: "exponential", hypexT: 0.5, fillet: null, ...extra });
 
-  it("Radialhorn: auf der Achse (x = h = 0, symmetrisch), z zwischen Throat und Mund – für Luft und Schale", () => {
-    const v = computeVolumes(radialInput({ wall: 10 }));
-    for (const c of [v.airCentroid, v.shellCentroid]) {
-      expect(Math.abs(c[0])).toBeLessThan(1e-3);   // Rundung der Netzpunkte, nicht exakt 0
-      expect(Math.abs(c[1])).toBeLessThan(1e-3);
-      expect(c[2]).toBeGreaterThan(0);
-      expect(c[2]).toBeLessThan(radial.zApex);
-    }
+  it("Radialhorn: Schwerpunkt der Schale auf der Achse (x = h = 0, symmetrisch), z zwischen Throat und Mund", () => {
+    const c = computeVolumes(radialInput({ wall: 10 })).shellCentroid;
+    expect(Math.abs(c[0])).toBeLessThan(1e-3);   // Rundung der Netzpunkte, nicht exakt 0
+    expect(Math.abs(c[1])).toBeLessThan(1e-3);
+    expect(c[2]).toBeGreaterThan(0);
+    expect(c[2]).toBeLessThan(radial.zApex);
   });
 
-  it("ohne Wandstärke nur der Luftschwerpunkt, keiner für die Schale", () => {
+  it("ohne Wandstärke kein Schwerpunkt (auch kein Luftschwerpunkt), das Luftvolumen bleibt", () => {
     const v = computeVolumes(radialInput({ wall: 0 }));
-    expect(v.airCentroid).toHaveLength(3);
     expect(v.shellCentroid).toBeNull();
+    expect(v.airCentroid).toBeUndefined();
+    expect(v.air).toBeGreaterThan(0);
   });
 
-  it("rundes Horn: z des Luftschwerpunkts = ∫ π·x²·z dz / ∫ π·x² dz (Wand) plus Kugelkappe am Mund", () => {
+  it("rundes Horn: z des Schwerpunkts des Luftnetzes (meshMoments) = ∫ π·x²·z dz / ∫ π·x² dz (Wand) plus Kugelkappe am Mund", () => {
     const s = { ...createHornMath(70).solveHorn(500, 60, RT, 0, 0), round: true };
-    const v = computeVolumes({ s, rt: RT, hMouth: 0, curve: "exponential", hypexT: 0.5, fillet: null, wall: 0 });
+    const air = meshMoments(buildAir(s, RT, makeProfile(s, RT, 0, "exponential", 0.5, null), null, null).surfaces.flatMap(triangulate));
     const pts = [...entrancePoints(s, 4000, 4000), ...linearWallPoints(s, 4000)].filter((p, i, a) => i === 0 || p[1] > a[i - 1][1]);
     let vol = 0, moment = 0;
     for (let i = 1; i < pts.length; i++) {
@@ -126,7 +126,7 @@ describe("Schwerpunkt des Horns", () => {
     // Schwerpunkt der Kappe (Kugelsegment): Abstand vom Kugelmittelpunkt = 3·(2R − h)²/(4·(3R − h)); Kugelmittelpunkt bei zFocus
     const capCentre = s.zFocus + 3 * (2 * R - h) ** 2 / (4 * (3 * R - h));
     const expected = (moment + capV * capCentre) / (vol + capV);
-    expect(v.airCentroid[2] / expected).toBeCloseTo(1, 3);
-    expect(Math.abs(v.airCentroid[0])).toBeLessThan(1e-3);
+    expect(air.centroid[2] / expected).toBeCloseTo(1, 3);
+    expect(Math.abs(air.centroid[0])).toBeLessThan(1e-3);
   });
 });

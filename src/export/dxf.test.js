@@ -169,8 +169,8 @@ describe("buildDXF: Lamellen", () => {
     expect(widths.some(w => Math.abs(w - vanes.thickness) < 1e-3)).toBe(true);
   });
 
-  it("ohne Wandstärke, ohne Lamellen oder ohne Draufsicht-Layer keine", () => {
-    expect(lines(design({ wall: 0, vanes }))).toHaveLength(0);
+  it("auch ohne Wandstärke gezeichnet (Draufsicht); ohne Lamellen oder ohne Draufsicht-Layer keine", () => {
+    expect(lines(design({ wall: 0, vanes })).length).toBeGreaterThan(0);
     expect(lines(design({ wall: 6 }))).toHaveLength(0);
     expect(lines(design({ wall: 6, vanes }), { ...ALL, draufsicht: false })).toHaveLength(0);
   });

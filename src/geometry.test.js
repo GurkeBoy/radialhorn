@@ -218,8 +218,8 @@ describe("Lamellen", () => {
     expect(values.vanes.paths).toHaveLength(3);
   });
 
-  it("ohne Wandstärke und beim runden Horn gibt es keine Lamellen", () => {
-    expect(vanesOf({ ...ON, showWandstaerke: false })).toBeNull();
+  it("Lamellen gibt es auch ohne Wandstärke (wie das Horn selbst), beim runden Horn keine", () => {
+    expect(vanesOf({ ...ON, showWandstaerke: false })?.ok).toBe(true);
     expect(vanesOf({ ...ON, hornShape: "round", openingAngle: 70, L: 500, Lt: 60 })).toBeNull();
   });
 

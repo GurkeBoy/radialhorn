@@ -9,6 +9,9 @@ import { svgPath } from "../utils.js";
  * @param map          (halbe Breite, z) ↦ Bildschirmpunkt
  */
 export function WandSchnitt({ inner, outer, closeThroat, map }) {
+  // Sehr kurzes Horn mit Flansch: die Innenwand hat hinter der Flanschebene keinen Punkt mehr – dann gibt es nichts zu zeichnen
+  // (vorher: Absturz der ganzen Oberfläche)
+  if (!inner?.length || !outer?.length) return null;
   return [1, -1].map(sign => {
     const pt = ([a, z]) => map(sign * a, z);
     const area = [...inner, ...[...outer].reverse()].map(pt);

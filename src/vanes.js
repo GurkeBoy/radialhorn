@@ -29,6 +29,7 @@ export const TIP_WIDTH = 0.4;         // Breite der Spitze [mm]: eine Düsenbahn
 export const TIP_MAX_SHARE = 0.4;     // eine Spitze nimmt höchstens diesen Anteil der Lamellenlänge ein
 export const VANE_SAMPLES = 32;       // Stützstellen entlang der Lamelle
 const EMBED_MAX = 3;           // Eintauchtiefe in die Wand, höchstens [mm]
+const EMBED_NO_WALL = 0.2;    // Eintauchtiefe ohne Wand [mm]
 const EMBED_FRACTION = 0.4;    // … und höchstens dieser Anteil der Wandstärke
 const SAME_NORMAL = 1e-9;      // Normalen gelten als gleich (ebene Fläche)
 export const AUTO_MAX_STAGES = 4;   // Obergrenze der Stufen bei „automatisch“ (aus 1 Lamelle werden dann 31)
@@ -162,7 +163,8 @@ function endByChannel(s, n, t, value, zStart, zMouth, starts) {
   const chan = (z, i) => measures(s, (n + 1) * 2 ** i - 1, t, z).channel;
   const parts = [];
   for (let i = 0; i + 1 < bounds.length; i++) if (bounds[i + 1] > bounds[i]) parts.push({ i, lo: bounds[i], hi: bounds[i + 1] });
-  const values = parts.flatMap(p => [chan(p.lo, p.i), chan(p.hi, p.i)]);
+  // beginnt die Lamelle erst am Mund, gibt es keinen Abschnitt: dann zählt die Breite dort (nie ±Infinity im Bereich des Reglers)
+  const values = parts.length ? parts.flatMap(p => [chan(p.lo, p.i), chan(p.hi, p.i)]) : [chan(zStart, 0)];
   const range = [Math.min(...values), Math.max(...values)];
   for (const { i, lo, hi } of parts) {
     if (chan(hi, i) < value) continue;
@@ -188,7 +190,7 @@ function endByChannel(s, n, t, value, zStart, zMouth, starts) {
  *              Kanalbreite gilt dessen Wert auch für die Stufen, mode/channel sind dann ohne Wirkung): count Lamellen
  *              laufen ab start; jede Stufe setzt in jeden Kanal eine weitere Lamelle in die Mitte (Sektoren verdoppeln sich)
  * @returns {object | null}  null ohne Lamellen (rundes Horn, Anzahl 0, Dicke 0); sonst
- *   { count, baseCount, thickness, fractions, stages, stageStarts, staggerLimited, delta, zStart, zEnd, atThroat, widthStart,
+ *   { count, baseCount, thickness, fractions, stages, stageStarts, starts (Achsenstelle des Beginns je Lamelle), staggerLimited, delta, zStart, zEnd, atThroat, widthStart,
  *     widthEnd, channelStart, channelEnd, startLimited, endLimited, endChannelRange, ok, paths, widths, tip } – Winkel im Bogenmaß, Längen
  *   in mm; count = tatsächliche Zahl der Lamellen (mit Staffelung (count + 1)·2^Stufen − 1, zu kurze entfallen); baseCount =
  *   Lamellen ab dem Beginn; stages = je Lamelle die Stufe (0 = ab dem Beginn); delta = Sektorwinkel am Mund; endAngle =
@@ -254,7 +256,7 @@ export function resolveVanes(s, spec) {
     tip.length = shortest;
   }
   return {
-    count, baseCount: n, thickness: t, fractions: list.map(v => v.f), stages: list.map(v => v.stage), stageStarts: stagger.starts,
+    count, baseCount: n, thickness: t, fractions: list.map(v => v.f), stages: list.map(v => v.stage), stageStarts: stagger.starts, starts: list.map(v => v.z),
     staggerLimited: stagger.limited, delta: 2 * s.alpha2 / (count + 1),
     endAngle: 2 * b.w.halfAngle / (count + 1), endWave: { zCenter: b.w.zCenter, radius: b.w.radius, halfAngle: b.w.halfAngle },
     zStart, zEnd, atThroat, widthStart: a.width, widthEnd: b.width, channelStart: a.channel, channelEnd: b.channel,
@@ -368,8 +370,9 @@ function volumeOf(tris) {
  */
 export function vaneBodies(s, airTris, vanes, wall) {
   const none = { surfaces: [], overlap: 0, cavity: 0, count: 0 };
-  if (!vanes?.ok || !(wall > 0)) return none;
-  const t = vanes.thickness, e = Math.min(EMBED_MAX, EMBED_FRACTION * wall);
+  if (!vanes?.ok || !(wall >= 0)) return none;
+  // ohne Wandstärke (nur Ansicht und Volumen) bleibt ein Hauch Eintauchtiefe, damit Deckel und Boden nicht mit den Flächen des Luftkanals flimmern
+  const t = vanes.thickness, e = wall > 0 ? Math.min(EMBED_MAX, EMBED_FRACTION * wall) : EMBED_NO_WALL;
   const surfaces = [];
   let overlap = 0, cavity = 0;
 

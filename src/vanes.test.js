@@ -6,7 +6,11 @@ import { describe, it, expect } from "vitest";
 import { solveHorn, makeProfile, computeFillet, throatMorph, mouthRounding, focusRadius, createHornMath, wavefrontAtAxis } from "./horn-math.js";
 import { buildShellGeometry, triangulate, gridLines } from "./horn-mesh.js";
 import { buildAir } from "./bodies.js";
+import { meshBuffers } from "./mesh-buffers.js";
 import { computeVolumes } from "./volume.js";
+import { crossSection } from "./horn-math.js";
+import { vaneBlockage } from "./vane-blockage.js";
+import { areaCurve, createSimulationEngine, PLACEHOLDER_DRIVER } from "./simulation.js";
 import { resolveVanes, vaneBodies, vaneValue, vaneRanges, vaneOutline, airTriangles, VANE_SAMPLES, TIP_WIDTH } from "./vanes.js";
 import { edgeCheck, signedVolume } from "./test-helpers.js";
 
@@ -219,11 +223,31 @@ describe("vaneBodies: Körper", () => {
     });
   }
 
-  it("ohne Wandstärke oder mit unlösbarer Länge keine Körper", () => {
+  it("mit unlösbarer Länge oder ohne Lamellen keine Körper; ohne Wandstärke (nur Ansicht) Platten mit kleiner Eintauchtiefe", () => {
     const vanes = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } }));
-    expect(vaneBodies(s, airTris(), vanes, 0).count).toBe(0);
     expect(vaneBodies(s, airTris(), { ...vanes, ok: false }, WALL).count).toBe(0);
     expect(vaneBodies(s, airTris(), null, WALL).count).toBe(0);
+    expect(vaneBodies(s, airTris(), vanes, -1).count).toBe(0);
+    const bare = vaneBodies(s, airTris(), vanes, 0), walled = vaneBodies(s, airTris(), vanes, WALL);
+    expect(bare.count).toBe(3);
+    for (const f of bare.surfaces) { expect(edgeCheck(f.triangles)).toEqual({ open: 0, flipped: 0 }); expect(signedVolume(f.triangles)).toBeGreaterThan(0); }
+    expect(bare.overlap).toBeLessThan(0.1 * walled.overlap);   // 0,2 mm statt bis 2,4 mm
+    expect(bare.cavity).toBeGreaterThan(0.9 * walled.cavity);
+  });
+
+  it("ohne Wandstärke: Lamellen im Luftkörper (Ansicht), Volumen der Luft um ihr Volumen kleiner, Export ohne Lamellen", () => {
+    const vanes = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: 160 } }));
+    const plain = buildAir(s, RT, profile, null), withVanes = buildAir(s, RT, profile, null, null, undefined, vanes);
+    expect(withVanes.surfaces.filter(f => f.section === "lamellen")).toHaveLength(3);
+    expect(withVanes.surfaces.filter(f => f.section !== "lamellen")).toHaveLength(plain.surfaces.length);
+    expect(withVanes.vanes.count).toBe(3);
+    const base = { s, rt: RT, hMouth: H_MOUTH, curve: "exponential", hypexT: 0.5, fillet: null, wall: 0 };
+    const a = computeVolumes(base), b = computeVolumes({ ...base, vanes });
+    expect(a.air - b.air).toBeCloseTo(withVanes.vanes.cavity, 3);
+    expect(b.air).toBeLessThan(a.air);
+    expect(b.shell).toBeNull();
+    const buffers = meshBuffers({ ...base, vanes, sections: ["lamellen"] });
+    expect(buffers.sections[0].lines.length).toBeGreaterThan(0);
   });
 
   it("auch mit Verrundung, rundem Throat und gerundeten Mundecken geschlossen, ab dem Throat", () => {
@@ -305,6 +329,91 @@ describe("Ende ab Kanalbreite: der Kanal zwischen den Lamellen, die dort laufen"
     const never = resolveVanes(s, withEnd(hi + 50, stg));
     expect(never.zEnd).toBeCloseTo(s.zApex, 9);
     expect(never.endLimited).toBe(true);
+  });
+});
+
+describe("Querschnitt mit Lamellen", () => {
+  const vanes = resolveVanes(s, spec({ count: 3, thickness: 2, start: { mode: "z", value: 160 } }));
+  const block = vaneBlockage(s, vanes, profile);
+
+  it("ohne Lamellen keine Abzugsfunktion", () => {
+    expect(vaneBlockage(s, null, profile)).toBeNull();
+    expect(vaneBlockage(s, resolveVanes(s, spec({ start: { mode: "z", value: 1e6 } })), profile)).toBeNull();
+  });
+
+  it("im geraden Bereich nehmen n Lamellen n·Dicke·2h weg (h konstant auf dem Bogen um den Fokus)", () => {
+    const wf = wavefrontAtAxis(s, 0.9 * s.zApex);
+    expect(wf.zCenter).toBeCloseTo(s.zFocus, 9);
+    expect(block(wf)).toBeCloseTo(3 * 2 * 2 * profile(s.zFocus + wf.radius), 6);
+  });
+
+  it("nur dort, wo die Lamellen laufen: davor und dahinter nichts; A + B ist die Fläche ohne Lamellen", () => {
+    const bare = crossSection(s, profile, 80), cut = crossSection(s, profile, 80, null, null, block);
+    expect(cut).toHaveLength(bare.length);
+    let inside = 0;
+    cut.forEach((p, i) => {
+      expect(p.A + p.B).toBeCloseTo(bare[i].A, 6);
+      if (p.z < vanes.zStart - 1e-6) expect(p.B).toBe(0);
+      if (p.z > vanes.zStart + 1 && p.z <= vanes.zEnd) { expect(p.B).toBeGreaterThan(0); inside++; }
+    });
+    expect(inside).toBeGreaterThan(10);
+    expect(Math.max(...cut.map(p => p.B / bare[cut.indexOf(p)].A))).toBeLessThan(0.1);   // wenige Prozent der Fläche
+  });
+
+  it("Spitzen: am Beginn nehmen die Lamellen weniger weg als weiter hinten", () => {
+    const tip = resolveVanes(s, spec({ count: 3, thickness: 4, start: { mode: "z", value: 160 }, tip: { start: true, end: true, length: 30 } }));
+    const b = vaneBlockage(s, tip, profile);
+    const early = b(wavefrontAtAxis(s, tip.zStart + 3)), late = b(wavefrontAtAxis(s, (tip.zStart + tip.zEnd) / 2));
+    expect(early).toBeGreaterThan(0);
+    expect(early).toBeLessThan(0.6 * late);
+  });
+
+  it("Flächenkurve der Simulation: kleiner mit Lamellen, am Hals schon abgezogen, wenn sie am Throat beginnen", () => {
+    const throat = resolveVanes(s, spec({ count: 3, thickness: 2, start: { mode: "z", value: 0 } }));
+    const plain = areaCurve(s, RT, profile), cut = areaCurve(s, RT, profile, undefined, null, vaneBlockage(s, throat, profile));
+    expect(cut.S[0]).toBeLessThan(plain.S[0]);
+    expect(cut.S.at(-1)).toBeLessThan(plain.S.at(-1));
+    expect(cut.S.every((v, i) => v <= plain.S[Math.min(i, plain.S.length - 1)] + 1e-9 || cut.x.length !== plain.x.length)).toBe(true);
+    expect(cut.S.every(v => v > 0 && Number.isFinite(v))).toBe(true);
+  });
+
+  it("Frequenzgang rechnet mit den Lamellen und ändert sich (leicht)", () => {
+    const geometry = { s, rt: RT, hMouth: H_MOUTH, curve: "exponential", hypexT: 0.5, fillet: null, morph: null };
+    const freqs = [200, 500, 1000, 2000, 5000];
+    const run = createSimulationEngine();
+    const a = run({ geoKey: "a", geometry, temp: 20, mouth: "2pi", driver: PLACEHOLDER_DRIVER, freqs }).result;
+    const b = run({ geoKey: "b", geometry: { ...geometry, vanes: resolveVanes(s, spec({ count: 3, thickness: 2, start: { mode: "z", value: 0 } })) }, temp: 20, mouth: "2pi", driver: PLACEHOLDER_DRIVER, freqs }).result;
+    expect(b.spl.every(Number.isFinite)).toBe(true);
+    expect(b.spl).not.toEqual(a.spl);
+    expect(Math.max(...b.spl.map((v, i) => Math.abs(v - a.spl[i])))).toBeLessThan(3);   // dB: eine kleine Wirkung, kein Umsturz
+  });
+});
+
+describe("Grenzfälle: Bereich des Reglers bleibt endlich", () => {
+  it("beginnt die Lamelle erst am Mund (kein Abschnitt bis zum Mund), sind alle Werte endlich – nie ±Infinity", () => {
+    for (const start of [s.zApex, s.zApex + 100, 1e6]) for (const stagger of [undefined, { stages: 2, mode: "channel", channel: 30, z: [] }]) {
+      const v = resolveVanes(s, spec({ count: 3, start: { mode: "z", value: start }, end: { mode: "channel", value: 60 }, stagger }));
+      expect(v.endChannelRange.every(Number.isFinite)).toBe(true);
+      expect(v.endChannelRange[0]).toBeLessThanOrEqual(v.endChannelRange[1]);
+      expect(v.ok).toBe(false);   // zu kurz für eine Lamelle: Warnung, keine Körper
+    }
+  });
+
+  it("zufällige Einstellungen: nichts wird NaN oder unendlich, nichts wirft", () => {
+    let seed = 99;
+    const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const pick = a => a[Math.floor(rnd() * a.length)], between = (a, b) => a + rnd() * (b - a);
+    const finite = o => typeof o === "number" ? Number.isFinite(o) : o && typeof o === "object" ? Object.values(o).every(finite) : true;
+    for (let i = 0; i < 300; i++) {
+      const v = resolveVanes(s, {
+        count: pick([1, 2, 3, 5, 8, 12]), thickness: pick([0.3, 0.5, 2, 5, 10]),
+        start: { mode: pick(["z", "channel", "width"]), value: between(-50, 600) },
+        end: { mode: pick(["mouth", "z", "channel"]), value: between(-50, 600) },
+        tip: { start: pick([true, false]), end: pick([true, false]), length: pick([2, 10, 40]) },
+        stagger: pick([null, { stages: pick([1, 2, 3]), auto: pick([true, false]), mode: pick(["channel", "z"]), channel: between(3, 150), z: [between(0, 500), between(0, 500), between(0, 500)] }]),
+      });
+      expect(finite(v)).toBe(true);
+    }
   });
 });
 
