@@ -12,6 +12,8 @@ import { computeVolumes } from "./volume.js";
 import { meshBuffers } from "./mesh-buffers.js";
 import { buildDXF, ALL_LAYERS } from "./export/dxf.js";
 import { buildDatasheet } from "./export/pdf.js";
+import { hornStep } from "./export/step.js";
+import { hornGeometry } from "./export/stl.js";
 
 const RT = 25.4;
 const BASE = {
@@ -24,11 +26,22 @@ const BASE = {
 describe("Geometrie-Kern, Bauform rund", () => {
   const { values: v, params } = createGeometryEngine()(BASE);
 
-  it("löst mit dem Throat als Beginn von L: Mundscheitel bei z = L, kennzeichnet s.round", () => {
+  it("löst mit dem Throat als Beginn von L: Mundkante (offener Mund, kein Scheitel) bei z = L, kennzeichnet s.round", () => {
     expect(v.s.round).toBe(true);
-    expect(v.s.zApex).toBeCloseTo(500, 6);
-    expect(v.LClamped).toBe(500);
+    expect(v.s.zMouth).toBeCloseTo(500, 5);
+    expect(v.LClamped).toBeCloseTo(500, 5);
+    expect(v.s.zApex).toBeGreaterThan(500);
     expect(v.s.openingAngle).toBe(70);
+  });
+
+  it("L ist über den ganzen Regler die Lage der Mundkante; die Grenzen gelten angezeigt", () => {
+    const compute = createGeometryEngine();
+    for (const L of [60, 150, 400, 900]) expect(compute({ ...BASE, L }).values.s.zMouth).toBeCloseTo(L, 5);
+    const w = compute({ ...BASE, L: 1 }).values;                  // zu kurz: kürzestes Horn, Mundkante bei Lmin
+    expect(w.LClamped).toBeCloseTo(w.Lmin, 5);
+    expect(w.s.zMouth).toBeCloseTo(w.Lmin, 5);
+    const x = compute({ ...BASE, L: 5000 }).values;               // zu lang: Obergrenze des Reglers
+    expect(x.LClamped).toBeCloseTo(x.Lmax, 3);
   });
 
   it("ignoriert Raumecke, Treibermaße, vertikales Profil, Übergang, Mundecken und Kantenrundung; params bleiben die Eingabe", () => {
@@ -174,5 +187,40 @@ describe("Projektdatei, Bauform", () => {
     const result = parseProject(JSON.stringify(old));
     expect(result.design.hornShape).toBe("radial");
     expect(JSON.stringify(result.missing)).not.toContain("hornShape");
+  });
+});
+
+describe("Rundes Horn mit größter Traktrix (Lₜ am Maximum, keine gerade Wand)", () => {
+  // Ohne gerade Wand lagen zwei Ringe aufeinander (Fläche 0): das STEP-B-Rep wurde nicht geschlossen, der Export brach nach dem
+  // Speichern-Dialog ab und hinterließ eine Datei mit 0 KB. Jetzt entfällt der Streifen, die Kontur endet im Mundpunkt.
+  const compute = createGeometryEngine();
+  const build = o => {
+    const v = compute({ ...DESIGN_DEFAULTS, hornShape: "round", ...o }).values;
+    const design = { s: v.s, rt: 25.4, profile: v.profile, fillet: null, wall: v.wall, edgeR: 0, morph: null, vanes: null, flange: v.flange };
+    return { v, design };
+  };
+  const CASES = [[10, 60], [30, 60], [60, 300], [60, 60], [60, 150], [100, 60], [140, 150], [160, 60], [160, 150]];
+
+  it("Lₜ weit über dem Maximum: die Traktrix reicht bis zum Mund, ohne gerade Wand im Netz", () => {
+    for (const [angle, L] of CASES) {
+      const { v, design } = build({ openingAngle: angle, roundAngle: angle, L, roundL: L, Lt: 5000, roundLt: 5000 });
+      expect(v.s.zMouth - v.s.zTrans, JSON.stringify([angle, L])).toBeLessThan(1e-3);
+      const names = hornGeometry(design).surfaces.map(f => f.name);
+      expect(names.some(n => n.includes("linWall")), JSON.stringify([angle, L])).toBe(false);
+      expect(names.some(n => n.includes("trakWall"))).toBe(true);
+    }
+  });
+
+  it("mit gerader Wand bleibt der Streifen", () => {
+    const { design } = build({ openingAngle: 60, roundAngle: 60, L: 300, roundL: 300, Lt: 60, roundLt: 60 });
+    expect(hornGeometry(design).surfaces.some(f => f.name.includes("linWall"))).toBe(true);
+  });
+
+  it("STEP-Export gelingt: Luftvolumen und Schale, mit und ohne Flansch", () => {
+    for (const [angle, L] of CASES) for (const wall of [0, 3, 12]) {
+      const o = { openingAngle: angle, roundAngle: angle, L, roundL: L, Lt: 5000, roundLt: 5000, showWandstaerke: wall > 0, wandstaerke: wall || 3, flangeOn: wall > 0, ribsOn: wall > 0 };
+      const { design } = build(o);
+      expect(() => hornStep(design, { fileName: "x.step" }), JSON.stringify(o)).not.toThrow();
+    }
   });
 });

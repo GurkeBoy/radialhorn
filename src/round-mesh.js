@@ -46,8 +46,13 @@ const part = (points, from, to) => points.slice(from, to + 1);
  * @param lineStart  Index des ersten Punkts der geraden Wand
  * @param kloStart   Index, an dem die Klothoide beginnt (null ohne Klothoide)
  */
-function wallSurfaces(points, lineStart, kloStart, steps, prefix, outward) {
+function wallSurfaces(allPoints, lineStart, kloStart, steps, prefix, outward) {
   const out = [];
+  // Hat die gerade Wand keine Länge (Lₜ am Maximum), entfällt sie samt ihres Streifens – zwei (fast) deckungsgleiche Ringe belegten im
+  // STEP-B-Rep Kanten vierfach bzw. verfehlten den Mundring der Kappe um Rundungsreste. Die Kontur endet dann im Mundpunkt selbst
+  const lastOf = allPoints.length - 1;
+  const noLine = lastOf > lineStart && Math.hypot(allPoints[lastOf][0] - allPoints[lineStart][0], allPoints[lastOf][1] - allPoints[lineStart][1]) <= 1e-3;
+  const points = noLine ? [...allPoints.slice(0, lineStart), allPoints[lastOf]] : allPoints;
   const last = points.length - 1;
   const trakEnd = kloStart ?? lineStart;
   if (trakEnd > 0) out.push(...revolved(part(points, 0, trakEnd), steps, `${prefix}trakWall`, "traktrix", outward));

@@ -49,7 +49,7 @@ export default {
   "geometry.length": "Gesamtlänge L",
   "geometry.lengthFromCorner": "ab der Spitze der Raumecke",
   "geometry.lengthFromFlange": "ab dem Flansch (Throat-Ebene)",
-  "geometry.lengthFromThroat": "ab dem Throat bis zum Mundscheitel",
+  "geometry.lengthFromThroat": "ab dem Throat bis zum Mund",
   "geometry.tractrixLength": "Traktrix-Länge Lₜ",
   "geometry.clothoid": "Krümmungsstetiger Übergang",
   "geometry.blend": "Übergang Traktrix → Gerade",
@@ -173,6 +173,8 @@ export default {
   // Kennwerte
   "key.mouthWidth": "Mundbreite",
   "key.mouthDiameter": "Munddurchmesser",
+  "key.outerWidth": "Außenbreite Mund",
+  "key.outerDiameter": "Außen-Ø Mund",
   "key.openingAngle": "Öffnungswinkel",
   "key.length": "Länge",
   "key.mouthHeight": "Mund-Höhe",

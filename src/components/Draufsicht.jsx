@@ -44,7 +44,8 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
   // ── Abbildung Geometrie (x, z) → Bildschirm ───────────────────────
   const raumeckeEndX = cornerEndX(s, dw, dh);
   const zMin = s.hatTipZ - 140;
-  const zMax = s.zApex + Math.max(16, Math.ceil((s.zApex - zMin) * 30 / 432));
+  const zEnd = s.round ? s.zMouth : s.zApex;   // rundes Horn: Mundkante, kein Scheitel
+  const zMax = zEnd + Math.max(16, Math.ceil((zEnd - zMin) * 30 / 432));
   // Schale: Schnitt zwischen Innenwand und Außenkontur, mit Flansch erst ab dessen Dicke
   const { innerWall } = curves;
   const xMax = Math.max(s.xMouth, dw / 2, flange ? flange.diameter / 2 : 0, shellOuter ? shellOuter[shellOuter.length - 1][0] : 0,
@@ -121,7 +122,7 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
       <svg width="100%" height="100%" viewBox={`0 0 ${VW} ${VH}`} style={{ display: "block" }}>
         <defs><ArrowMarker id="arrH" /></defs>
 
-        <line x1={cx} y1={toY((showRaumecke ? s.hatTipZ : -dh) - 6)} x2={cx} y2={toY(s.zApex) + 6} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
+        <line x1={cx} y1={toY((showRaumecke ? s.hatTipZ : -dh) - 6)} x2={cx} y2={toY(zEnd) + 6} stroke={COLOR.axis} strokeWidth="0.6" strokeDasharray="5 4" />
 
         {showRaumecke && <>
           {[reRx, reLx].map(x => (
@@ -137,7 +138,13 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
 
         {/* Sektionsflächen wie im 3D-Körper: Eingang bis zum inneren Bogen (Radius rInner um den
             Fokus), linearer Bereich vom inneren Bogen bis zum Mundbogen */}
-        {hasTraktrix(s) && (() => {
+        {/* Rundes Horn: der innere Bogen ist Konstruktion des Radialhorns und kommt im Rotationskörper nicht vor – eine Fläche, kein Bogen */}
+        {hasTraktrix(s) && s.round && (() => {
+          const [tRx, tRy] = entrance.right[entrance.right.length - 1];
+          const back = svgPath([...entrance.right].reverse()).replace(/^M/, "L");
+          return <path d={`${svgPath(entrance.left)} L${mLx},${mY} L${mRx},${mY} L${tRx},${tRy} ${back} Z`} fill={COLOR.fillHorn} />;
+        })()}
+        {hasTraktrix(s) && !s.round && (() => {
           const irp = s.rInner * scale, [tRx, tRy] = entrance.right[entrance.right.length - 1];
           const back = svgPath([...entrance.right].reverse()).replace(/^M/, "L");
           return <>
@@ -147,21 +154,22 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           </>;
         })()}
         {!hasTraktrix(s) &&
-          <path d={`M${wall.right[0][0]},${wall.right[0][1]} L${mRx},${mY} A${rp},${rp} 0 0 1 ${mLx},${mY} L${wall.left[0][0]},${wall.left[0][1]} Z`}
+          <path d={`M${wall.right[0][0]},${wall.right[0][1]} L${mRx},${mY} ${s.round ? `L${mLx},${mY}` : `A${rp},${rp} 0 0 1 ${mLx},${mY}`} L${wall.left[0][0]},${wall.left[0][1]} Z`}
             fill={COLOR.fillHorn} />}
-        <path d={`M${mRx},${mY} A${rp},${rp} 0 0 1 ${mLx},${mY}`} fill="none" stroke={COLOR.arc} strokeWidth="1.4" />
+        {/* Rundes Horn: Mundbogen, Fokusstrahlen, Fokus und rechter Winkel sind Konstruktion des Radialhorns – der Mund ist offen, Wand endet an der Kante */}
+        {!s.round && <path d={`M${mRx},${mY} A${rp},${rp} 0 0 1 ${mLx},${mY}`} fill="none" stroke={COLOR.arc} strokeWidth="1.4" />}
 
-        {hasTraktrix(s) && (() => {
+        {hasTraktrix(s) && !s.round && (() => {
           const irp = s.rInner * scale;
           return <path d={`M${toX(s.xTrans)},${tLy} A${irp},${irp} 0 0 1 ${tLx},${tLy}`}
             fill="none" stroke={COLOR.trak} strokeWidth="0.9" strokeDasharray="6 3" />;
         })()}
 
-        {[mRx, mLx].map(x => <line key={x} x1={cx} y1={fy} x2={x} y2={mY} stroke={COLOR.arc} strokeWidth="0.7" strokeDasharray="4 3" />)}
-        <circle cx={cx} cy={fy} r={DOT} fill={COLOR.arc} />
-        <circle cx={cx} cy={toY(s.zApex)} r={DOT} fill={COLOR.arc} />
+        {!s.round && [mRx, mLx].map(x => <line key={x} x1={cx} y1={fy} x2={x} y2={mY} stroke={COLOR.arc} strokeWidth="0.7" strokeDasharray="4 3" />)}
+        {!s.round && <circle cx={cx} cy={fy} r={DOT} fill={COLOR.arc} />}
+        {!s.round && <circle cx={cx} cy={toY(s.zApex)} r={DOT} fill={COLOR.arc} />}
         {/* rechter Winkel zwischen Fokusstrahl und Mundbogen */}
-        {(() => {
+        {!s.round && (() => {
           const len = Math.hypot(mRx - cx, mY - fy);
           const wx = (mRx - cx) / len, wy = (mY - fy) / len;
           return <path d={`M${mRx-wx*7},${mY-wy*7} L${mRx-wx*7-wy*7},${mY-wy*7+wx*7} L${mRx-wy*7},${mY+wx*7}`}
@@ -208,9 +216,11 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
           return <circle key={`${x},${y}`} cx={x} cy={y} r={DOT} fill={COLOR.trans} />;
         })}
 
+        {!s.round && <>
         <path d={`M${cx+angleR*sinA},${fy+angleR*cosA} A${angleR},${angleR} 0 0 1 ${cx-angleR*sinA},${fy+angleR*cosA}`}
           fill="none" stroke={COLOR.dim} strokeWidth="0.8" />
         <text x={cx} y={fy + angleR * 0.5} textAnchor="middle" fontSize="9" fill={COLOR.dim} fontFamily={FONT}>{s.openingAngle}°</text>
+        </>}
 
         {/* Kanalwinkel am Ende der Lamellen: der Winkel, in dem sich ein Kanal dort öffnet (2θ/(n + 1) der Wellenfront bei zEnd – am Mund
             und im geraden Bereich der Sektorwinkel, im Traktrix-Eingang kleiner). Winkelmaß um den Mittelpunkt dieser Wellenfront
@@ -259,8 +269,8 @@ export const Draufsicht = memo(function Draufsicht({ s, rt, dw, dh, L, showRaume
             Teilkreis-Radius steht am schrägen Maß Fokus → Mund */}
         <DimAligned p1={[mLx, mY]} p2={[tLx, tLy]} offset={wallDimOff}
           color={COLOR.horn} marker="url(#arrH)" label={`${(s.arcR - s.rInner).toFixed(1)} mm`} />
-        <DimAligned p1={[mLx, mY]} p2={[cx, fy]} offset={wallDimOff + DIM_STEP}
-          color={COLOR.arc} marker="url(#arrH)" label={`R ${s.arcR.toFixed(1)} mm`} />
+        {!s.round && <DimAligned p1={[mLx, mY]} p2={[cx, fy]} offset={wallDimOff + DIM_STEP}
+          color={COLOR.arc} marker="url(#arrH)" label={`R ${s.arcR.toFixed(1)} mm`} />}
       </svg>
 
       <Legend showWandstaerke={showWandstaerke} blend={hasClothoid(s) ? s.clothoid.kind ?? "clothoid" : null} showFlange={!!flange} showVanes={!!vanes?.ok} />
