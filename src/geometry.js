@@ -63,20 +63,35 @@ export function createGeometryEngine() {
     const geo = [math.version, rt, p.dw, p.dh];
     // Angezeigtes L beginnt ohne Raumecke am Flansch (Throat-Ebene), gerechnet wird ab der Hut-Spitze
     // (dh + dw/2 dahinter): L hier intern, Grenzen und LClamped gehen angezeigt zurück
+    // Untergrenze des Übergangsstücks (Klothoide passt, Kreisbogen beginnt hinter dem Throat) und Obergrenze (nur
+    // Kreisbogen: er schrumpft sonst auf 0); gibt es für den Kreisbogen kein Fenster, bleibt Lₜ = 0 (keine Traktrix)
+    const blendLimits = stage("ltBlend", [math.version, rt], () => ({ min: m.minLtForClothoid(rt), max: m.maxLtForBlend(rt) })).value;
+    const LtMinClothoid = Number.isFinite(blendLimits.min) ? blendLimits.min : 0;
     const off = lengthOffset(p.dw, p.dh, p.showRaumecke);
-    const L = p.L + off;
+    const ltMaxOf = Li => m.maxLt(Li, rt, p.dw, p.dh);
+    // Rundes Horn: angezeigtes L reicht bis zur Mundkante (offener Mund, kein Scheitel); gerechnet wird mit dem Scheitel-L der Lösung.
+    // zMouth wächst mit L – gesucht wird das Scheitel-L, dessen Mundkante bei p.L liegt (Halbieren; zu kurz → kürzestes Horn)
+    const mouthOf = Li => {
+      const lt = Math.min(Math.max(p.Lt, LtMinClothoid), Math.min(ltMaxOf(Li), blendLimits.max));
+      return m.solveHorn(Li, lt, rt, 0, 0)?.zMouth ?? null;
+    };
+    const roundL = round ? stage("roundL", [...geo, p.L, p.Lt, LtMinClothoid, blendLimits.max], () => {
+      const lo0 = m.minL(LtMinClothoid, rt, 0, 0);
+      let lo = lo0, hi = L_MAX;
+      if (mouthOf(hi) === null || mouthOf(hi) < p.L) return { L: hi, lo: lo0 };
+      if ((mouthOf(lo) ?? -Infinity) >= p.L) return { L: lo, lo: lo0 };
+      for (let i = 0; i < 50 && hi - lo > 1e-6; i++) { const mid = (lo + hi) / 2, z = mouthOf(mid); if (z !== null && z >= p.L) hi = mid; else lo = mid; }
+      return { L: hi, lo: lo0 };
+    }).value : null;
+    const L = round ? roundL.L : p.L + off;
 
     // Grenzen für Lₜ hängen an L, nicht an Lₜ; die Klothoiden-Grenze nur an rt. Lₜ folgt der
     // Raumecke: wächst L, steigt die Untergrenze so, dass die Mundkante an der Wand bleibt – das
     // eingestellte Lₜ bleibt gespeichert und gilt wieder, sobald L kleiner wird
     const { LtMax, LtMinRaumecke } = stage("ltLimits", [...geo, L, p.showRaumecke, extraBreite], () => ({
-      LtMax:         m.maxLt(L, rt, p.dw, p.dh),
+      LtMax:         ltMaxOf(L),
       LtMinRaumecke: p.showRaumecke ? m.minLtForRaumecke(L, rt, p.dw, p.dh, extraBreite) : null,
     })).value;
-    // Untergrenze des Übergangsstücks (Klothoide passt, Kreisbogen beginnt hinter dem Throat) und Obergrenze (nur
-    // Kreisbogen: er schrumpft sonst auf 0); gibt es für den Kreisbogen kein Fenster, bleibt Lₜ = 0 (keine Traktrix)
-    const blendLimits = stage("ltBlend", [math.version, rt], () => ({ min: m.minLtForClothoid(rt), max: m.maxLtForBlend(rt) })).value;
-    const LtMinClothoid = Number.isFinite(blendLimits.min) ? blendLimits.min : 0;
     const LtMaxAll   = Math.min(LtMax, blendLimits.max);
     const LtMin     = Math.min(Math.max(LtMinRaumecke ?? 0, LtMinClothoid), LtMaxAll);
     const LtClamped = Math.min(Math.max(p.Lt, LtMin), LtMaxAll);
@@ -148,8 +163,8 @@ export function createGeometryEngine() {
       values: {
         ...Object.fromEntries(VERSIONED.map(k => [k, stages[k].value])),
         // Längen angezeigt (ohne Raumecke ab der Treiberrückseite); LMaxRaumecke nur mit Raumecke, dort ist off = 0
-        LtMin, LtMax: LtMaxAll, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin: Lmin - off, Lmax: LMaxRaumecke ?? L_MAX,
-        LClamped: LClamped - off, wall, edge,
+        LtMin, LtMax: LtMaxAll, LtClamped, LtMinClothoid, LMaxRaumecke, Lmin: round ? mouthOf(Lmin) ?? Lmin : Lmin - off, Lmax: LMaxRaumecke ?? (round ? mouthOf(L_MAX) ?? L_MAX : L_MAX),
+        LClamped: round ? sv?.zMouth ?? LClamped : LClamped - off, wall, edge,
         warnings: {
           raumecke:  LMaxRaumecke !== null && LMaxRaumecke < L_MAX && p.L >= LMaxRaumecke - 1,
           ltMax:     p.Lt > LtMaxAll,

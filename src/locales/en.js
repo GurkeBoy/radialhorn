@@ -49,7 +49,7 @@ export default {
   "geometry.length": "Total length L",
   "geometry.lengthFromCorner": "from the tip of the room corner",
   "geometry.lengthFromFlange": "from the flange (throat plane)",
-  "geometry.lengthFromThroat": "from the throat to the mouth apex",
+  "geometry.lengthFromThroat": "from the throat to the mouth",
   "geometry.tractrixLength": "Tractrix length Lₜ",
   "geometry.blend": "Transition tractrix → straight",
   "geometry.arcRadius": "Arc r",
@@ -173,6 +173,8 @@ export default {
   // Key figures
   "key.mouthWidth": "Mouth width",
   "key.mouthDiameter": "Mouth diameter",
+  "key.outerWidth": "Outer mouth width",
+  "key.outerDiameter": "Outer mouth Ø",
   "key.openingAngle": "Opening angle",
   "key.length": "Length",
   "key.mouthHeight": "Mouth height",

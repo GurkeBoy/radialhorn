@@ -490,7 +490,7 @@ export default function App() {
         </Card>
 
         {s && <>
-          <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={morph?.r > 0} morph={morph} vanes={vanes} t={t} />
+          <KeyFigures s={s} rt={rt} hMouth={g.hMouth} profile={profile} roundThroat={morph?.r > 0} morph={morph} vanes={vanes} t={t} outerWidth={shellOuter?.length ? 2 * Math.max(...shellOuter.map(p => p[0])) : null} />
           <Volumes volumes={volumes} wall={wall} t={t} />
           <WallAdvice advice={advice} wall={wall} t={t} onApply={applyWallAdvice}
             material={wallMaterial} onMaterial={setWallMaterial} customE={wallE} onCustomE={setWallE}
@@ -549,18 +549,20 @@ function ViewPanel({ flex, children }) {
 }
 
 /** Kennwerte des Horns und grobe Grenzfrequenzen in einer Karte. */
-const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroat, morph, vanes, t }) {
+const KeyFigures = memo(function KeyFigures({ s, rt, hMouth, profile, roundThroat, morph, vanes, t, outerWidth }) {
   const { fcLow, fcCut, fcHigh } = frequencyEstimates(s, rt, hMouth, roundThroat, morph);
   return (
     <Card title={t("card.keyFigures")} id="kennwerte">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 12 }}>
         {s.round ? <>
           <Stat label={t("key.mouthDiameter")} value={(2 * s.xMouth).toFixed(1) + " mm"} />
+          {outerWidth && <Stat label={t("key.outerDiameter")} value={outerWidth.toFixed(1) + " mm"} />}
           <Stat label={t("key.mouthArea")} value={(mouthArea(s, hMouth, morph) / 1e6).toFixed(4) + " m²"} />
           <Stat label={t("key.openingAngle")} value={s.openingAngle + "°"} />
-          <Stat label={t("key.length")} value={s.zApex.toFixed(1) + " mm"} />
+          <Stat label={t("key.length")} value={(s.round ? s.zMouth : s.zApex).toFixed(1) + " mm"} />
         </> : <>
           <Stat label={t("key.mouthWidth")} value={(2 * s.xMouth).toFixed(1) + " mm"} />
+          {outerWidth && <Stat label={t("key.outerWidth")} value={outerWidth.toFixed(1) + " mm"} />}
           <Stat label={t("key.mouthHeight")} value={hMouth + " mm"} />
           <Stat label={t("key.mouthArea")} value={(mouthArea(s, hMouth, morph) / 1e6).toFixed(4) + " m²"} />
           <Stat label={t("key.arcLength")} value={s.arcLen.toFixed(1) + " mm"} />

@@ -28,9 +28,20 @@ export async function downloadFile(content, filename, mime) {
       // sonst (Dialog nicht erlaubt …) wie bisher als Download
     }
     if (handle) {
-      const writable = await handle.createWritable();
-      await writable.write(new Blob([await make()], { type: mime }));
-      await writable.close();
+      // Der Dialog legt die Datei sofort an (leer). Scheitert danach die Rechnung oder das Schreiben, bliebe eine Datei mit 0 KB
+      // zurück, die wie ein gespeicherter Export aussieht – deshalb wieder entfernen (wo der Browser es erlaubt) und den Fehler weitergeben
+      const discard = async () => { try { await handle.remove?.(); } catch { /* nicht erlaubt: die leere Datei bleibt, der Fehler wird trotzdem gemeldet */ } };
+      let data;
+      try {
+        data = await make();
+        if (!data || (data.length ?? data.byteLength ?? data.size) === 0) throw new Error("Leerer Inhalt – nichts zu speichern");
+      } catch (err) { await discard(); throw err; }
+      let writable = null;
+      try {
+        writable = await handle.createWritable();
+        await writable.write(new Blob([data], { type: mime }));
+        await writable.close();
+      } catch (err) { try { await writable?.abort(); } catch { /* schon geschlossen */ } await discard(); throw err; }
       return { status: "saved", name: handle.name ?? filename };
     }
   }

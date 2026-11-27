@@ -48,6 +48,38 @@ describe("downloadFile", () => {
   });
 });
 
+describe("downloadFile: Fehler nach dem Dialog", () => {
+  const handle = log => ({
+    remove: async () => log.push("entfernt"),
+    createWritable: async () => ({ write: async () => log.push("geschrieben"), close: async () => log.push("geschlossen"), abort: async () => log.push("abgebrochen") }),
+  });
+
+  it("scheitert die Rechnung, wird die vom Dialog angelegte leere Datei entfernt und der Fehler weitergegeben", async () => {
+    const log = [];
+    globalThis.showSaveFilePicker = async () => handle(log);
+    await expect(downloadFile(() => { throw new Error("STEP: Körper nicht geschlossen"); }, "horn.step", "model/step")).rejects.toThrow("nicht geschlossen");
+    expect(log).toEqual(["entfernt"]);
+  });
+
+  it("leerer Inhalt wird nicht als 0-KB-Datei gespeichert", async () => {
+    for (const empty of ["", new ArrayBuffer(0), undefined]) {
+      const log = [];
+      globalThis.showSaveFilePicker = async () => handle(log);
+      await expect(downloadFile(() => empty, "horn.step", "model/step")).rejects.toThrow("Leerer Inhalt");
+      expect(log).toEqual(["entfernt"]);
+    }
+  });
+
+  it("scheitert das Schreiben: Schreiber abgebrochen, Datei entfernt, Fehler weitergegeben; ohne remove() kein Absturz", async () => {
+    const log = [];
+    globalThis.showSaveFilePicker = async () => ({
+      createWritable: async () => ({ write: async () => { throw new Error("Platte voll"); }, close: async () => {}, abort: async () => log.push("abgebrochen") }),
+    });
+    await expect(downloadFile("x", "a.step", "model/step")).rejects.toThrow("Platte voll");
+    expect(log).toEqual(["abgebrochen"]);
+  });
+});
+
 describe("fileExtension", () => {
   it("letzte Endung, klein geschrieben", () => {
     expect(fileExtension("x.radialhorn.json")).toBe(".json");
